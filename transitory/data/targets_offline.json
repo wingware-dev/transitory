@@ -1,0 +1,211 @@
+{
+ "description": "Validation targets bundled for offline use: identifiers and positions from the TESS Input Catalog (MAST), published planets from the NASA Exoplanet Archive pscomppars table. Regenerate with python -m transitory.catalog.build_offline.",
+ "retrieved": "2026-10-29",
+ "credit": "This research has made use of the NASA Exoplanet Archive, which is operated by the California Institute of Technology, under contract with the National Aeronautics and Space Administration under the Exoplanet Exploration Program.",
+ "targets": [
+  {
+   "name": "Kepler-10",
+   "role": "planet-host",
+   "tic": 377780790,
+   "kic": 11904151,
+   "ra": 285.679422,
+   "dec": 50.241306,
+   "tmag": 10.477,
+   "radius_rsun": 1.0897,
+   "mission_hint": "Kepler",
+   "planets": [
+    {
+     "name": "Kepler-10 b",
+     "period": 0.8374907,
+     "duration_h": 1.811,
+     "depth": 0.0001919,
+     "rp_rs": 0.01268,
+     "ref": "Bonomo et al. 2025 (https://ui.adsabs.harvard.edu/abs/2025A&A...696A.233B/abstract)"
+    },
+    {
+     "name": "Kepler-10 c",
+     "period": 45.294301,
+     "duration_h": 6.8714,
+     "depth": 0.0004768,
+     "rp_rs": 0.020414,
+     "ref": "Bonomo et al. 2025 (https://ui.adsabs.harvard.edu/abs/2025A&A...696A.233B/abstract)"
+    }
+   ]
+  },
+  {
+   "name": "Kepler-7",
+   "role": "planet-host",
+   "tic": 121660904,
+   "kic": 5780885,
+   "ra": 288.58151,
+   "dec": 41.089824,
+   "tmag": 12.453,
+   "radius_rsun": 2.0812,
+   "mission_hint": "Kepler",
+   "planets": [
+    {
+     "name": "Kepler-7 b",
+     "period": 4.8854892,
+     "duration_h": 5.1313,
+     "depth": 0.0075693,
+     "rp_rs": 0.08294,
+     "ref": "Esteves et al. 2015 (https://ui.adsabs.harvard.edu/abs/2015ApJ...804..150E/abstract)"
+    }
+   ]
+  },
+  {
+   "name": "Kepler-2",
+   "role": "planet-host",
+   "tic": 424865156,
+   "kic": 10666592,
+   "ra": 292.247308,
+   "dec": 47.969505,
+   "tmag": 10.027,
+   "radius_rsun": 1.9936,
+   "mission_hint": "Kepler",
+   "planets": [
+    {
+     "name": "HAT-P-7 b",
+     "period": 2.20474,
+     "duration_h": 3.88216,
+     "depth": 0.006,
+     "rp_rs": 0.075408,
+     "ref": "Stassun et al. 2017 (https://ui.adsabs.harvard.edu/abs/2017AJ....153..136S/abstract)"
+    }
+   ]
+  },
+  {
+   "name": "Kepler-22",
+   "role": "planet-host",
+   "tic": 158984573,
+   "kic": 10593626,
+   "ra": 289.21746,
+   "dec": 47.88443,
+   "tmag": 11.189,
+   "radius_rsun": 0.8552,
+   "mission_hint": "Kepler",
+   "planets": [
+    {
+     "name": "Kepler-22 b",
+     "period": 289.863876,
+     "duration_h": 7.415,
+     "depth": 0.0005019,
+     "rp_rs": 0.020319,
+     "ref": "Bonomo et al. 2023 (https://ui.adsabs.harvard.edu/abs/2023A&A...677A..33B/abstract)"
+    }
+   ]
+  },
+  {
+   "name": "pi Men",
+   "role": "planet-host",
+   "tic": 261136679,
+   "kic": null,
+   "ra": 84.291188,
+   "dec": -80.46912,
+   "tmag": 5.105,
+   "radius_rsun": 1.1489,
+   "mission_hint": "TESS",
+   "planets": [
+    {
+     "name": "pi Men c",
+     "period": 6.2678399,
+     "duration_h": 2.952024,
+     "depth": 0.00026759,
+     "rp_rs": 0.015844,
+     "ref": "Kunovac Hodžić et al. 2021 (https://ui.adsabs.harvard.edu/abs/2021MNRAS.502.2893K/abstract)"
+    }
+   ]
+  },
+  {
+   "name": "LHS 3844",
+   "role": "planet-host",
+   "tic": 410153553,
+   "kic": null,
+   "ra": 340.492156,
+   "dec": -69.168978,
+   "tmag": 11.924,
+   "radius_rsun": 0.1886,
+   "mission_hint": "TESS",
+   "planets": [
+    {
+     "name": "LHS 3844 b",
+     "period": 0.462929709,
+     "duration_h": 0.5242,
+     "depth": 0.000696,
+     "rp_rs": 0.06262,
+     "ref": "Nagel et al. 2026 (https://ui.adsabs.harvard.edu/abs/2026A&A...710A.311N/abstract)"
+    }
+   ]
+  },
+  {
+   "name": "WASP-18",
+   "role": "planet-host",
+   "tic": 100100827,
+   "kic": null,
+   "ra": 24.354306,
+   "dec": -45.677882,
+   "tmag": 8.829,
+   "radius_rsun": 1.3466,
+   "mission_hint": "TESS",
+   "planets": [
+    {
+     "name": "WASP-18 b",
+     "period": 0.94145223,
+     "duration_h": 2.21,
+     "depth": 0.01041,
+     "rp_rs": 0.1018,
+     "ref": "Cortés-Zuleta et al. 2020 (https://ui.adsabs.harvard.edu/abs/2020A&A...636A..98C/abstract)"
+    }
+   ]
+  },
+  {
+   "name": "TOI-270",
+   "role": "planet-host",
+   "tic": 259377017,
+   "kic": null,
+   "ra": 68.415501,
+   "dec": -51.956232,
+   "tmag": 10.498,
+   "radius_rsun": 0.3744,
+   "mission_hint": "TESS",
+   "planets": [
+    {
+     "name": "TOI-270 b",
+     "period": 3.35992,
+     "duration_h": 1.294,
+     "depth": 0.0009766941,
+     "rp_rs": 0.0307,
+     "ref": "Kaye et al. 2022 (https://ui.adsabs.harvard.edu/abs/2022MNRAS.510.5464K/abstract)"
+    },
+    {
+     "name": "TOI-270 c",
+     "period": 5.66051,
+     "duration_h": 1.682,
+     "depth": 0.003451844,
+     "rp_rs": 0.056,
+     "ref": "Kaye et al. 2022 (https://ui.adsabs.harvard.edu/abs/2022MNRAS.510.5464K/abstract)"
+    },
+    {
+     "name": "TOI-270 d",
+     "period": 11.38194,
+     "duration_h": 2.117,
+     "depth": 0.002645,
+     "rp_rs": 0.0491,
+     "ref": "Kaye et al. 2022 (https://ui.adsabs.harvard.edu/abs/2022MNRAS.510.5464K/abstract)"
+    }
+   ]
+  },
+  {
+   "name": "KIC 8006161",
+   "role": "null",
+   "tic": 123234496,
+   "kic": 8006161,
+   "ra": 281.14633,
+   "dec": 43.833275,
+   "tmag": 6.804,
+   "radius_rsun": 0.9594,
+   "mission_hint": "Kepler",
+   "planets": []
+  }
+ ]
+}
