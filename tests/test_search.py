@@ -90,7 +90,50 @@ def test_too_shallow_gives_no_detection():
 def test_single_transit_is_not_a_periodic_detection():
     # P=30 d: transits at 10 and 40 d, the second lost in a gap -> one event.
     lc = flat_cleaned([InjectedPlanet(30.0, 10.0, 0.004, 5.0)], gaps=[(35.0, 45.0)])
-    assert not [c for c in found(search_transits(lc)) if c.n_transits >= 2]
+    assert not found(search_transits(lc))
+
+
+def test_single_dip_does_not_take_a_pass_from_a_planet():
+    # TOI-270-like: a deep one-off dip (from systematics, say) at 30.2 d folds
+    # with one of d's transits into a 2-event peak at ~26 d.  It used to take
+    # pass 2, so b (3.36 d, weakest) was never searched for.
+    b = InjectedPlanet(3.36, 1.1, 0.0010, 1.3)
+    c = InjectedPlanet(5.66, 2.3, 0.0030, 1.7)
+    d = InjectedPlanet(11.38, 4.0, 0.0025, 2.1)
+    dip = InjectedPlanet(500.0, 30.2, 0.0060, 4.0)
+    results = search_transits(flat_cleaned([b, c, d, dip]))
+    cands = sorted(found(results), key=lambda k: k.period)
+    assert len(results) == 3 and len(cands) == 3
+    for cand, planet in zip(cands, [b, c, d], strict=True):
+        assert_recovered(cand, planet)
+
+
+def test_hot_jupiter_secondary_does_not_take_a_pass():
+    # The secondary eclipse used to come back in pass 2 at P/2, so the
+    # 4.1 d planet was missed.
+    hj = InjectedPlanet(1.53, 0.4, 0.010, 2.6, secondary_depth=0.0005)
+    small = [InjectedPlanet(4.1, 1.0, 0.0008, 2.5), InjectedPlanet(7.7, 2.2, 0.0012, 3.0)]
+    results = search_transits(flat_cleaned([hj, *small]))
+    cands = sorted(found(results), key=lambda k: k.period)
+    assert len(results) == 3 and len(cands) == 3
+    for cand, planet in zip(cands, [hj, *small], strict=True):
+        assert_recovered(cand, planet)
+
+
+def test_rejected_peaks_are_capped(monkeypatch):
+    # Many one-off dips: each is masked and searched past, but only up to
+    # MAX_REJECTED_PEAKS extra BLS runs, and none becomes a candidate.  Depths
+    # differ by 2.2x so no two dips pass as a 2-transit planet.
+    from transitory.pipeline import search
+    dips = [InjectedPlanet(500.0, t, 0.0015 * 2.2 ** k, 4.0)
+            for k, t in enumerate((3.0, 11.2, 15.9, 27.4, 33.1, 41.8, 46.3))]
+    calls = []
+    real_pass = search._search_pass
+    monkeypatch.setattr(search, "_search_pass", lambda *a: calls.append(1) or real_pass(*a))
+    results = search_transits(flat_cleaned(dips))
+    assert not found(results)
+    assert len(results) == 1
+    assert len(calls) <= 1 + search.MAX_REJECTED_PEAKS
 
 
 def test_two_transits_at_the_grid_edge_unaliased():

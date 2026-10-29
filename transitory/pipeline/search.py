@@ -2,9 +2,15 @@
 
 Each pass runs astropy's ``BoxLeastSquares`` over a log-spaced period grid.
 It takes the highest peak of the SDE-normalised power and keeps it as a
-candidate when both its SDE and its SNR clear the detection thresholds.
-Then it masks that signal's transits and searches again, up to
+candidate when both its SDE and its SNR clear the detection thresholds
+and enough transits back it.  Then it masks that signal's transits, and
+its secondary eclipse when there is one, and searches again, up to
 ``max_planets`` passes.
+
+A peak backed by fewer transits (a single dip from systematics or
+variability, which BLS can fold at many long periods) doesn't end the
+pass or use it up: its events are masked and the pass searches again, up
+to ``MAX_REJECTED_PEAKS`` times per search.
 
 The period range is split into octaves.  Each octave gets its own set of
 trial durations, from the shortest plausible transit at that period up to
@@ -38,6 +44,16 @@ GRID_OVERSAMPLE = 3.0
 # Cap on trial periods per pass, so multi-year Kepler curves stay tractable;
 # when it applies, the grid is coarser than GRID_OVERSAMPLE asks for.
 MAX_GRID_PERIODS = 120_000
+# A peak needs this many covered transits to count as a detection, with the
+# dip in most of them, or two with SDE >= SDE_TWO_TRANSITS whose dips agree.
+MIN_TRANSITS = 3
+SDE_TWO_TRANSITS = 10.0
+# Single-event peaks masked and searched past per search; each costs a BLS run.
+MAX_REJECTED_PEAKS = 5
+# Signals with at least this SNR leave residuals beyond the box: mask
+# DEEP_MASK_WIDTH box durations either side of each transit instead of one.
+DEEP_SNR = 100.0
+DEEP_MASK_WIDTH = 1.5
 # A transit epoch counts when it has at least this fraction of the points a
 # fully sampled transit would have (and at least one).
 MIN_TRANSIT_COVERAGE = 0.5
@@ -95,16 +111,21 @@ def robust_std(values: np.ndarray) -> float:
     return float(1.4826 * np.median(np.abs(values - np.median(values))))
 
 
-def count_transits(time: np.ndarray, period: float, t0: float, duration: float) -> int:
-    """Number of distinct epochs with data covering at least MIN_TRANSIT_COVERAGE of the transit."""
+def covered_epochs(time: np.ndarray, period: float, t0: float, duration: float) -> np.ndarray:
+    """Epochs with data covering at least MIN_TRANSIT_COVERAGE of the transit."""
     epoch = np.round((time - t0) / period)
     in_transit = np.abs(time - (t0 + epoch * period)) < 0.5 * duration
     if not np.any(in_transit):
-        return 0
+        return np.empty(0)
     cadence = float(np.median(np.diff(np.sort(time)))) if len(time) > 1 else duration
     min_points = max(1, int(MIN_TRANSIT_COVERAGE * duration / cadence))
-    _, counts = np.unique(epoch[in_transit], return_counts=True)
-    return int(np.sum(counts >= min_points))
+    epochs, counts = np.unique(epoch[in_transit], return_counts=True)
+    return epochs[counts >= min_points]
+
+
+def count_transits(time: np.ndarray, period: float, t0: float, duration: float) -> int:
+    """Number of distinct epochs with data covering at least MIN_TRANSIT_COVERAGE of the transit."""
+    return len(covered_epochs(time, period, t0, duration))
 
 
 def transit_snr(time: np.ndarray, flux: np.ndarray, period: float, t0: float,
@@ -171,6 +192,83 @@ def _unalias(time, flux, sigma, period, t0, duration, max_period) -> tuple[float
     return period, t0
 
 
+def _event_depths(time, flux, sigma, period, t0, duration) -> tuple[np.ndarray, np.ndarray]:
+    """(depth, error) of the dip in each covered transit on its own.
+
+    The baseline is the median flux out of transit, so this is one pass
+    over the data however many epochs there are.
+    """
+    epochs = covered_epochs(time, period, t0, duration)
+    if not len(epochs):
+        return np.empty(0), np.empty(0)
+    epoch = np.round((time - t0) / period)
+    dt = np.abs(time - (t0 + epoch * period))
+    level = np.median(flux[dt > duration]) if np.any(dt > duration) else np.median(flux)
+    inner = dt < 0.5 * duration
+    index = np.searchsorted(epochs, epoch[inner])
+    index = np.clip(index, 0, len(epochs) - 1)
+    covered = epochs[index] == epoch[inner]
+    n = np.bincount(index[covered], minlength=len(epochs))
+    total = np.bincount(index[covered], weights=flux[inner][covered], minlength=len(epochs))
+    return level - total / n, sigma / np.sqrt(n)
+
+
+def _dip_in_most_events(time, flux, sigma, cand: TransitCandidate) -> bool:
+    """Whether the typical covered transit shows the dip, not just a few deep ones.
+
+    A covered epoch with no dip still counts as a transit, so one or two
+    deep events folded with empty epochs can look like a periodic signal.
+    """
+    depths, _ = _event_depths(time, flux, sigma, cand.period, cand.t0, cand.duration)
+    return bool(len(depths)) and float(np.median(depths)) >= 0.5 * cand.depth
+
+
+def _events_agree(time, flux, sigma, cand: TransitCandidate) -> bool:
+    """Whether every covered transit shows the dip on its own, at similar depths.
+
+    One deep dip can line up with an empty epoch or another planet's
+    transit at some period; with only two events that passes as periodic.
+    """
+    depths, errors = _event_depths(time, flux, sigma, cand.period, cand.t0, cand.duration)
+    return (bool(len(depths)) and bool(np.all(depths > 3.0 * errors))
+            and depths.min() >= 0.5 * depths.max())
+
+
+def _enough_transits(time, flux, sigma, cand: TransitCandidate) -> bool:
+    if cand.n_transits >= MIN_TRANSITS:
+        return _dip_in_most_events(time, flux, sigma, cand)
+    return (cand.n_transits == 2 and cand.sde >= SDE_TWO_TRANSITS
+            and _events_agree(time, flux, sigma, cand))
+
+
+def _near(time: np.ndarray, period: float, centre: float, half_width: float) -> np.ndarray:
+    epoch = np.round((time - centre) / period)
+    return np.abs(time - (centre + epoch * period)) < half_width
+
+
+def _signal_mask(time, flux, keep, sigma, cand: TransitCandidate) -> np.ndarray:
+    """Points a found signal accounts for: its transits, and its secondary eclipse if seen.
+
+    The secondary is measured on the points in ``keep`` (not yet masked).
+
+    Deep transits are masked wider, since a box fit leaves residuals in
+    the wings and any period error shifts the transits against the mask.
+    The secondary is masked only when it shows, so a hot Jupiter's
+    eclipse isn't found again at P or P/2 in the next pass.
+    """
+    half = cand.duration * (DEEP_MASK_WIDTH if cand.snr >= DEEP_SNR else 1.0)
+    mask = _near(time, cand.period, cand.t0, half)
+    t_sec = cand.t0 + 0.5 * cand.period
+    use = keep & ~mask
+    sec_depth, sec_err = box_depth(time[use], flux[use], cand.period, t_sec,
+                                   cand.duration, sigma)
+    if np.isfinite(sec_depth) and sec_depth > 3.0 * sec_err:
+        log.info("BLS: masking the secondary eclipse of P=%.5f d (%.0f ppm)",
+                 cand.period, sec_depth * 1e6)
+        mask |= _near(time, cand.period, t_sec, half)
+    return mask
+
+
 def _sde(power: np.ndarray) -> np.ndarray:
     """Signal detection efficiency: power with its slow trend removed, in units of its scatter."""
     width = max(len(power) // 100, 51) | 1
@@ -228,37 +326,50 @@ def search_transits(
 
     results: list[PeriodogramResult] = []
     keep = np.ones(len(time), dtype=bool)
+    n_rejected = 0
     for n_pass in range(max_planets):
+        attempt = 0
+
         def progress(frac: float, n_pass=n_pass) -> None:
+            # Each search after a rejected peak takes half the pass's remaining share.
+            frac = 1.0 - 0.5 ** attempt * (1.0 - frac)
             if progress_cb:
                 progress_cb(f"BLS pass {n_pass + 1}", (n_pass + frac) / max_planets)
 
-        t, f = time[keep], flux[keep]
-        sigma = robust_std(f)
-        if len(t) < 10 or not np.isfinite(sigma) or sigma <= 0:
-            break
-        periods, power, extra = _search_pass(t, f, np.full_like(t, sigma), grid, progress)
-        sde = _sde(power)
-        i = int(np.argmax(sde))
-        period, t0 = float(periods[i]), float(extra["t0"][i])
-        duration, depth = float(extra["duration"][i]), float(extra["depth"][i])
-        if depth > 0:
-            unaliased = _unalias(t, f, sigma, period, t0, duration, baseline)
-            if unaliased[0] != period:
-                period, t0 = unaliased
-                depth = box_depth(t, f, period, t0, duration, sigma)[0]
-        snr = transit_snr(t, f, period, t0, duration, depth)
-        n_transits = count_transits(t, period, t0, duration)
-        cand = TransitCandidate(period=period, t0=t0, duration=duration, depth=depth,
-                                snr=snr, sde=float(sde[i]), n_transits=n_transits)
-        significant = depth > 0 and cand.sde >= SDE_THRESHOLD and snr >= SNR_THRESHOLD
-        log.info("BLS pass %d: P=%.5f d depth=%.0f ppm SDE=%.1f SNR=%.1f n=%d%s",
-                 n_pass + 1, period, depth * 1e6, cand.sde, snr, n_transits,
-                 "" if significant else " (not significant)")
+        while True:
+            t, f = time[keep], flux[keep]
+            sigma = robust_std(f)
+            if len(t) < 10 or not np.isfinite(sigma) or sigma <= 0:
+                return results
+            periods, power, extra = _search_pass(t, f, np.full_like(t, sigma), grid, progress)
+            sde = _sde(power)
+            i = int(np.argmax(sde))
+            period, t0 = float(periods[i]), float(extra["t0"][i])
+            duration, depth = float(extra["duration"][i]), float(extra["depth"][i])
+            if depth > 0:
+                unaliased = _unalias(t, f, sigma, period, t0, duration, baseline)
+                if unaliased[0] != period:
+                    period, t0 = unaliased
+                    depth = box_depth(t, f, period, t0, duration, sigma)[0]
+            snr = transit_snr(t, f, period, t0, duration, depth)
+            n_transits = count_transits(t, period, t0, duration)
+            cand = TransitCandidate(period=period, t0=t0, duration=duration, depth=depth,
+                                    snr=snr, sde=float(sde[i]), n_transits=n_transits)
+            peak = depth > 0 and cand.sde >= SDE_THRESHOLD and snr >= SNR_THRESHOLD
+            significant = peak and _enough_transits(t, f, sigma, cand)
+            log.info("BLS pass %d: P=%.5f d depth=%.0f ppm SDE=%.1f SNR=%.1f n=%d%s",
+                     n_pass + 1, period, depth * 1e6, cand.sde, snr, n_transits,
+                     "" if significant else " (too few transits show it)" if peak else " (not significant)")
+            if significant or not peak or n_rejected >= MAX_REJECTED_PEAKS:
+                break
+            # Too few transits show it: mask its events and search this pass again.
+            n_rejected += 1
+            attempt += 1
+            keep &= ~_near(time, period, t0, duration)
+
         results.append(PeriodogramResult(periods=periods, power=sde,
                                          best=cand if significant else None))
         if not significant:
             break
-        epoch = np.round((time - t0) / period)
-        keep &= np.abs(time - (t0 + epoch * period)) >= duration
+        keep &= ~_signal_mask(time, flux, keep, sigma, cand)
     return results
