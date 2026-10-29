@@ -1,0 +1,424 @@
+"""Sky view: an RA/Dec map of planet hosts and, zoomed in, TIC field stars.
+
+RA increases to the left, as on the sky.  Drag pans, the wheel zooms.  A
+click selects the nearest star (within a few pixels), highlights it and
+emits ``starClicked``.  Zoomed in below ``FIELD_ZOOM_DEG``, TIC stars in
+view are loaded from MAST in a worker thread.  The Kepler field (approx.)
+and the TESS continuous viewing zones are outlined.
+
+Positions are plotted as plain RA/Dec degrees, which stretches RA near
+the poles; the nearest-star search measures in screen pixels, so clicks
+still pick what the user sees.
+"""
+
+from __future__ import annotations
+
+import logging
+import math
+
+import numpy as np
+import pyqtgraph as pg
+from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
+
+from ..catalog import skycatalog
+from ..catalog.client import CatalogClient, CatalogError
+from ..catalog.skycatalog import SkyCatalog, SkyStar
+from ..catalog.tic import MAX_CONE_RADIUS_DEG
+from ..models import StarTarget
+from .catalog_jobs import JobRunner
+
+log = logging.getLogger(__name__)
+
+FIELD_ZOOM_DEG = 2.0  # view size (true degrees) below which TIC field stars load
+FIELD_MAX_TMAG = 13.0
+FIELD_DEBOUNCE_MS = 400
+CLICK_PIXELS = 12  # how far from a star a click may land
+
+# Kepler: 21 CCD modules (a 5x5 grid less its corners) centred on
+# RA 19h22m40s, Dec +44.5; module pitch and roll are approximate.
+KEPLER_CENTER = (290.6667, 44.5)
+KEPLER_MODULE_DEG = 2.6
+KEPLER_ROLL_DEG = 61.5
+# TESS continuous viewing zones: within 12 deg of the ecliptic poles.
+ECLIPTIC_POLES = ((270.0, 66.5607), (90.0, -66.5607))
+CVZ_RADIUS_DEG = 12.0
+
+HOST_COLOR = QColor(255, 170, 60)
+NULL_COLOR = QColor(110, 170, 255)
+FIELD_COLOR = QColor(170, 170, 170)
+SELECTED_COLOR = QColor(255, 70, 70)
+CURRENT_COLOR = QColor(255, 255, 90)
+OUTLINE_COLORS = {"Kepler": QColor(120, 200, 255), "TESS": QColor(150, 230, 150)}
+
+
+# -- sky geometry ----------------------------------------------------------------
+
+def small_circle(ra0: float, dec0: float, radius_deg: float, n: int = 181) -> tuple[np.ndarray, np.ndarray]:
+    """Points on the circle ``radius_deg`` from (ra0, dec0), as RA/Dec degrees."""
+    r, d0 = math.radians(radius_deg), math.radians(dec0)
+    theta = np.linspace(0.0, 2.0 * np.pi, n)
+    dec = np.arcsin(np.sin(d0) * np.cos(r) + np.cos(d0) * np.sin(r) * np.cos(theta))
+    dra = np.arctan2(np.sin(theta) * np.sin(r) * np.cos(d0), np.cos(r) - np.sin(d0) * np.sin(dec))
+    return (ra0 + np.degrees(dra)) % 360.0, np.degrees(dec)
+
+
+def from_tangent(ra0: float, dec0: float, xi_deg: np.ndarray, eta_deg: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Inverse gnomonic projection of tangent-plane offsets around (ra0, dec0)."""
+    xi, eta = np.radians(xi_deg), np.radians(eta_deg)
+    d0 = math.radians(dec0)
+    denom = np.cos(d0) - eta * np.sin(d0)
+    ra = ra0 + np.degrees(np.arctan2(xi, denom))
+    dec = np.degrees(np.arctan2(np.sin(d0) + eta * np.cos(d0), np.hypot(xi, denom)))
+    return ra % 360.0, dec
+
+
+def kepler_outline() -> tuple[np.ndarray, np.ndarray]:
+    """The Kepler field's outer edge (approximate), as a closed RA/Dec polyline."""
+    # Corners of a 5x5 module square with the corner modules removed, in module units.
+    a, b = 2.5, 1.5
+    u = np.array([-b, b, b, a, a, b, b, -b, -b, -a, -a, -b, -b])
+    v = np.array([a, a, b, b, -b, -b, -a, -a, -b, -b, b, b, a])
+    # Densify the edges so they curve properly on the RA/Dec plot.
+    t = np.linspace(0.0, 1.0, 12)[:-1]
+    u = np.concatenate([u[i] + (u[i + 1] - u[i]) * t for i in range(len(u) - 1)] + [u[-1:]])
+    v = np.concatenate([v[i] + (v[i + 1] - v[i]) * t for i in range(len(v) - 1)] + [v[-1:]])
+    roll = math.radians(KEPLER_ROLL_DEG)
+    xi = KEPLER_MODULE_DEG * (u * math.cos(roll) - v * math.sin(roll))
+    eta = KEPLER_MODULE_DEG * (u * math.sin(roll) + v * math.cos(roll))
+    return from_tangent(*KEPLER_CENTER, xi, eta)
+
+
+def in_kepler_field(ra: float, dec: float) -> bool:
+    """Whether (ra, dec) lies inside the approximate Kepler outline."""
+    from matplotlib.path import Path
+
+    xs, ys = kepler_outline()
+    return bool(Path(np.column_stack([xs, ys])).contains_point((ra, dec)))
+
+
+def separation_deg(ra1, dec1, ra2, dec2):
+    """Angular distance in degrees (haversine; arrays allowed)."""
+    ra1, dec1, ra2, dec2 = (np.radians(x) for x in (ra1, dec1, ra2, dec2))
+    h = np.sin((dec2 - dec1) / 2) ** 2 + np.cos(dec1) * np.cos(dec2) * np.sin((ra2 - ra1) / 2) ** 2
+    return np.degrees(2 * np.arcsin(np.sqrt(np.clip(h, 0.0, 1.0))))
+
+
+def _marker_size(tmag: float | None, brightest: float = 17.0, low: float = 4.0, high: float = 13.0) -> float:
+    return 6.0 if tmag is None else float(np.clip(brightest - tmag, low, high))
+
+
+# -- the widget --------------------------------------------------------------------
+
+class SkyView(QWidget):
+    starClicked = Signal(object)  # SkyStar
+    catalogLoaded = Signal(object)  # SkyCatalog
+    fieldLoaded = Signal(list)  # list[SkyStar]
+
+    def __init__(self, client: CatalogClient | None = None, parent: QWidget | None = None,
+                 field_zoom_deg: float = FIELD_ZOOM_DEG):
+        super().__init__(parent)
+        self.client = client
+        self.field_zoom_deg = field_zoom_deg
+        self.catalog: SkyCatalog | None = None
+        self.hosts: list[SkyStar] = []
+        self.field: list[SkyStar] = []
+        self.field_region: tuple[float, float, float] | None = None  # (ra, dec, radius) loaded
+        self.current: SkyStar | None = None
+        self.selected: list[StarTarget] = []
+        self._pending_field: tuple[float, float, float] | None = None
+        self._catalog_status = "No catalog loaded"
+        self._field_status = ""
+        self._stars: list[SkyStar] = []
+        self._ra = np.empty(0)
+        self._dec = np.empty(0)
+        self.runner = JobRunner(self)
+
+        self.plot = pg.PlotWidget(background="#0b1020")
+        self.plot.setObjectName("skyPlot")
+        self.view_box = self.plot.getViewBox()
+        self.view_box.invertX(True)
+        self.view_box.setMenuEnabled(False)
+        self.view_box.setLimits(xMin=-5, xMax=365, yMin=-92, yMax=92, minXRange=0.01, minYRange=0.01)
+        self.plot.setLabel("bottom", "RA (deg)")
+        self.plot.setLabel("left", "Dec (deg)")
+        self.plot.showGrid(x=True, y=True, alpha=0.15)
+        self.plot.hideButtons()
+
+        self._add_outlines()
+        self.host_item = pg.ScatterPlotItem(pen=None, brush=pg.mkBrush(HOST_COLOR), size=6)
+        self.field_item = pg.ScatterPlotItem(pen=None, brush=pg.mkBrush(FIELD_COLOR), size=4)
+        self.selected_item = pg.ScatterPlotItem(pen=pg.mkPen(SELECTED_COLOR, width=2), brush=None,
+                                                size=18, symbol="o")
+        self.current_item = pg.ScatterPlotItem(pen=pg.mkPen(CURRENT_COLOR, width=2), brush=None,
+                                               size=24, symbol="s")
+        for item, z in ((self.field_item, 1), (self.host_item, 2), (self.selected_item, 3),
+                        (self.current_item, 4)):
+            item.setZValue(z)
+            self.plot.addItem(item)
+        self._labels: list[pg.TextItem] = []
+
+        self.status_label = QLabel()
+        self.status_label.setObjectName("skyStatus")
+        self.status_label.setWordWrap(True)
+        self.coord_label = QLabel()
+        self.coord_label.setObjectName("skyCoords")
+        self.coord_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        footer = QHBoxLayout()
+        footer.addWidget(self.status_label, 1)
+        footer.addWidget(self.coord_label)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.plot, 1)
+        layout.addLayout(footer)
+
+        self._field_timer = QTimer(self)
+        self._field_timer.setSingleShot(True)
+        self._field_timer.setInterval(FIELD_DEBOUNCE_MS)
+        self._field_timer.timeout.connect(self._maybe_load_field)
+        self.view_box.sigRangeChanged.connect(lambda *_: self._field_timer.start())
+        self.plot.scene().sigMouseClicked.connect(self._on_mouse_clicked)
+        self.plot.scene().sigMouseMoved.connect(self._on_mouse_moved)
+
+        self.show_all_sky()
+        self._update_status()
+
+    # -- outlines ----------------------------------------------------------------
+
+    def _add_outlines(self) -> None:
+        ra, dec = kepler_outline()
+        self._add_outline(ra, dec, "Kepler field", OUTLINE_COLORS["Kepler"])
+        for ra0, dec0 in ECLIPTIC_POLES:
+            ra, dec = small_circle(ra0, dec0, CVZ_RADIUS_DEG)
+            self._add_outline(ra, dec, "TESS CVZ", OUTLINE_COLORS["TESS"])
+
+    def _add_outline(self, ra: np.ndarray, dec: np.ndarray, label: str, color: QColor) -> None:
+        curve = pg.PlotCurveItem(ra, dec, pen=pg.mkPen(color, width=1.5, style=Qt.PenStyle.DashLine))
+        curve.setZValue(2.5)  # above the host markers, which crowd the Kepler field
+        self.plot.addItem(curve)
+        top = int(np.argmax(dec))
+        text = pg.TextItem(label, color=color, anchor=(0.5, 1.2))
+        text.setPos(float(ra[top]), float(dec[top]))
+        text.setZValue(2.5)
+        self.plot.addItem(text)
+
+    # -- catalogs ------------------------------------------------------------------
+
+    def load_hosts(self, refresh: bool = False) -> None:
+        """Fetch the planet-host catalog in the background, then show it."""
+        self._catalog_status = "Loading planet hosts from the NASA Exoplanet Archive…"
+        self._update_status()
+        client = self.client
+        self.runner.submit(lambda: skycatalog.host_stars(client=client, refresh=refresh),
+                           self.set_catalog, self._catalog_failed)
+
+    def set_catalog(self, catalog: SkyCatalog) -> None:
+        self.catalog = catalog
+        self.hosts = list(catalog.stars)
+        spots = [{"pos": (s.ra, s.dec), "size": _marker_size(s.tmag),
+                  "brush": pg.mkBrush(NULL_COLOR if s.kind == "null" else HOST_COLOR)}
+                 for s in self.hosts]
+        self.host_item.setData(spots)
+        what = "bundled targets" if catalog.offline else "planet hosts"
+        status = f"{len(self.hosts):,} {what}"
+        if catalog.offline:
+            status = f"Offline: {status}"
+            if catalog.retrieved:
+                status += f" (archive data of {catalog.retrieved})"
+            if catalog.note:
+                status += f" — {catalog.note}"
+        else:
+            status += " · NASA Exoplanet Archive"
+            if catalog.retrieved:
+                status += f", retrieved {catalog.retrieved}"
+        self._catalog_status = status
+        self._rebuild_index()
+        self._update_status()
+        self.catalogLoaded.emit(catalog)
+
+    def _catalog_failed(self, exc: Exception) -> None:
+        if not isinstance(exc, CatalogError):
+            log.error("loading planet hosts failed", exc_info=exc)
+        self._catalog_status = f"Planet hosts unavailable: {exc}"
+        self._update_status()
+
+    def load_field(self, ra: float, dec: float, radius_deg: float) -> None:
+        """Fetch TIC stars around (ra, dec) in the background, then show them."""
+        request = (ra, dec, min(radius_deg, MAX_CONE_RADIUS_DEG))
+        self._pending_field = request
+        self._field_status = "Loading TIC stars…"
+        self._update_status()
+        client = self.client
+        self.runner.submit(
+            lambda: skycatalog.field_stars(*request, max_tmag=FIELD_MAX_TMAG, client=client),
+            lambda stars: self._field_done(request, stars),
+            lambda exc: self._field_failed(request, exc))
+
+    def _field_done(self, request, stars: list[SkyStar]) -> None:
+        if request != self._pending_field:
+            return  # the view moved on; a newer request is coming
+        self._pending_field = None
+        self.set_field(stars, request)
+
+    def _field_failed(self, request, exc: Exception) -> None:
+        if request != self._pending_field:
+            return
+        self._pending_field = None
+        if not isinstance(exc, CatalogError):
+            log.error("loading TIC field stars failed", exc_info=exc)
+        self._field_status = f"TIC stars unavailable: {exc}"
+        self._update_status()
+
+    def set_field(self, stars: list[SkyStar], region: tuple[float, float, float] | None = None) -> None:
+        """Show ``stars`` as field stars; ``region`` is the (ra, dec, radius) they cover."""
+        host_tics = {s.tic for s in self.hosts if s.tic is not None}
+        self.field = [s for s in stars if s.tic not in host_tics]
+        self.field_region = region
+        self.field_item.setData([{"pos": (s.ra, s.dec), "size": _marker_size(s.tmag, 15.0, 3.0, 9.0)}
+                                 for s in self.field])
+        if region is None:
+            self._field_status = ""
+        else:
+            self._field_status = (f"{len(self.field):,} TIC stars (Tmag ≤ {FIELD_MAX_TMAG:g}) "
+                                  f"within {region[2]:.2f}°")
+        self._rebuild_index()
+        self._update_status()
+        self.fieldLoaded.emit(self.field)
+
+    def clear_field(self) -> None:
+        self._pending_field = None
+        self.set_field([], None)
+
+    # -- view ----------------------------------------------------------------------------
+
+    def show_all_sky(self) -> None:
+        self.view_box.setRange(xRange=(0, 360), yRange=(-90, 90), padding=0.01)
+
+    def center_on(self, ra: float, dec: float, size_deg: float | None = None) -> None:
+        """Centre the view on (ra, dec); ``size_deg`` sets the visible height in degrees."""
+        (x0, x1), (y0, y1) = self.view_box.viewRange()
+        if size_deg is None:
+            width, height = abs(x1 - x0), abs(y1 - y0)
+        else:
+            height = size_deg
+            width = size_deg / max(math.cos(math.radians(dec)), 0.05)
+        self.view_box.setRange(xRange=(ra - width / 2, ra + width / 2),
+                               yRange=(dec - height / 2, dec + height / 2), padding=0)
+
+    def view_region(self) -> tuple[float, float, float, float]:
+        """(ra, dec, true width, height) of the visible area, in degrees."""
+        (x0, x1), (y0, y1) = self.view_box.viewRange()
+        ra, dec = (x0 + x1) / 2, (y0 + y1) / 2
+        width = abs(x1 - x0) * math.cos(math.radians(max(-89.9, min(89.9, dec))))
+        return ra, dec, width, abs(y1 - y0)
+
+    def _maybe_load_field(self) -> None:
+        ra, dec, width, height = self.view_region()
+        if max(width, height) > self.field_zoom_deg:
+            if self.field or self._pending_field:
+                self.clear_field()
+            return
+        radius = min(0.5 * math.hypot(width, height), MAX_CONE_RADIUS_DEG)
+        loaded = self._pending_field or self.field_region
+        if loaded is not None:
+            lra, ldec, lradius = loaded
+            if separation_deg(ra, dec, lra, ldec) + radius <= lradius * 1.001:
+                return  # the view is inside what is (being) loaded
+        self.load_field(round(ra, 4), round(dec, 4), radius * 1.25)
+
+    # -- picking ---------------------------------------------------------------------
+
+    def _rebuild_index(self) -> None:
+        self._stars = self.hosts + self.field
+        self._ra = np.array([s.ra for s in self._stars], dtype=float)
+        self._dec = np.array([s.dec for s in self._stars], dtype=float)
+
+    def nearest_star(self, ra: float, dec: float, max_pixels: float = CLICK_PIXELS) -> SkyStar | None:
+        """The displayed star nearest (ra, dec) on screen, if within ``max_pixels``."""
+        if not self._stars:
+            return None
+        px, py = self.view_box.viewPixelSize()
+        if not px or not py:
+            return None
+        dx = ((self._ra - ra + 180.0) % 360.0 - 180.0) / px
+        dy = (self._dec - dec) / py
+        dist = np.hypot(dx, dy)
+        i = int(np.argmin(dist))
+        return self._stars[i] if dist[i] <= max_pixels else None
+
+    def click_at(self, ra: float, dec: float) -> SkyStar | None:
+        """Select the star nearest (ra, dec), as a click there would."""
+        star = self.nearest_star(ra, dec)
+        if star is not None:
+            self.select_star(star)
+        return star
+
+    def select_star(self, star: SkyStar) -> None:
+        self.current = star
+        self.current_item.setData([{"pos": (star.ra, star.dec)}])
+        self.coord_label.setText(self._describe(star))
+        self.starClicked.emit(star)
+
+    def set_selected(self, targets: list[StarTarget]) -> None:
+        """Mark the stars in the selection list (those with a position)."""
+        self.selected = [t for t in targets if t.ra is not None and t.dec is not None]
+        self.selected_item.setData([{"pos": (t.ra, t.dec)} for t in self.selected])
+        for label in self._labels:
+            self.plot.removeItem(label)
+        self._labels = []
+        for target in self.selected:
+            label = pg.TextItem(target.name, color=SELECTED_COLOR, anchor=(-0.15, 0.5),
+                                fill=pg.mkBrush(11, 16, 32, 210))
+            label.setPos(target.ra, target.dec)
+            label.setZValue(5)
+            self.plot.addItem(label)
+            self._labels.append(label)
+
+    def _on_mouse_clicked(self, event) -> None:
+        if event.button() != Qt.MouseButton.LeftButton or event.double():
+            return
+        pos = event.scenePos()
+        if not self.view_box.sceneBoundingRect().contains(pos):
+            return
+        point = self.view_box.mapSceneToView(pos)
+        self.click_at(point.x(), point.y())
+
+    def _on_mouse_moved(self, pos) -> None:
+        if not self.view_box.sceneBoundingRect().contains(pos):
+            return
+        point = self.view_box.mapSceneToView(pos)
+        ra, dec = point.x() % 360.0, point.y()
+        star = self.nearest_star(ra, dec)
+        text = f"RA {ra:.3f}°  Dec {dec:+.3f}°"
+        self.coord_label.setText(f"{text}  —  {self._describe(star)}" if star else text)
+
+    @staticmethod
+    def _describe(star: SkyStar) -> str:
+        text = star.name
+        if star.tic is not None and str(star.tic) not in star.name:
+            text += f" (TIC {star.tic})"
+        if star.tmag is not None:
+            text += f", Tmag {star.tmag:.1f}"
+        if star.planets:
+            text += f", {star.n_planets} planet{'s' if star.n_planets != 1 else ''}"
+        elif star.kind == "null":
+            text += ", no known planets"
+        return text
+
+    # -- status ------------------------------------------------------------------------
+
+    @property
+    def status_text(self) -> str:
+        return self.status_label.text()
+
+    def _update_status(self) -> None:
+        parts = [self._catalog_status]
+        if self._field_status:
+            parts.append(self._field_status)
+        self.status_label.setText("  ·  ".join(parts))
+
+    def closeEvent(self, event) -> None:
+        self._field_timer.stop()
+        self.runner.wait()
+        super().closeEvent(event)

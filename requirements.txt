@@ -8,6 +8,7 @@ lightkurve>=2.4
 matplotlib>=3.8
 PySide6>=6.7
 pyqtgraph>=0.13.7
+requests>=2.31
 
 # Development / tests
 pytest>=8
