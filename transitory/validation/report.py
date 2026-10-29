@@ -220,17 +220,20 @@ def run_findings(run: ValidationRun) -> list[str]:
         n_rejected = sum(1 for _, o, _ in few if o.kind == "rejected")
         n_duo = sum(1 for _, o, _ in few if o.kind == DUO_TRANSIT)
         text = (f"{len(few)} of {len(extra)} extra candidates cover at most 2 transits, at periods of "
-                f"{periods[0]:.0f}–{periods[-1]:.0f} d: dips from systematics or variability")
+                f"{periods[0]:.0f}–{periods[-1]:.0f} d"
+                + (", too few to show periodicity on their own" if n_duo
+                   else ": dips from systematics or variability"))
         if any(p.candidate.n_transits == 2 for _, _, p in few):
-            text += (f", which the search accepts as periodic when 2 dips agree at SDE ≥ "
-                     f"{SDE_TWO_TRANSITS:g}")
+            text += ((", though the search accepts them" if n_duo else ", which the search accepts")
+                     + f" as periodic when 2 dips agree at SDE ≥ {SDE_TWO_TRANSITS:g}")
         missed = any(c.found_index is None for _, c in comps)
         text += (" (on " + ", ".join(stars) + "). "
                  + ("They take search passes from real planets; " if exhausted else
                     "" if missed else "No planet was missed for them, but they fill the remaining "
                     "search passes; ")
                  + f"the vetting rejects {n_rejected} of them afterwards"
-                 + (f" and lists {n_duo} as duo-transits" if n_duo else "") + ".")
+                 + (f" and lists {n_duo} as duo-transits, which may be long-period planets "
+                    "(next item)" if n_duo else "") + ".")
         findings.append(text)
     duos = [(r, o, p) for r, o, p in extra if o.kind == DUO_TRANSIT]
     if duos:
@@ -250,15 +253,21 @@ def run_findings(run: ValidationRun) -> list[str]:
         ratings = sorted({p.vetting.confidence for _, _, p in spurious if p.vetting is not None})
         n_few = sum(1 for _, _, p in spurious if p.candidate.n_transits <= 3)
         n_sys = sum(1 for _, o, _ in spurious if "near " in o.explanation)
+        one = len(spurious) == 1
+        max_snr = max(p.candidate.snr for _, _, p in spurious)
         findings.append(
-            f"{len(spurious)} spurious detection{'s' if len(spurious) != 1 else ''} passed vetting as "
+            f"{_count(len(spurious), 'spurious detection')} passed vetting as "
             + " or ".join(f"'{c}'" for c in ratings) + " ("
             + ", ".join(sorted({r.name for r, _, _ in spurious})) + "); "
-            + f"{n_few} of them cover at most 3 transits"
-            + (f" and {n_sys} lie near an instrumental period" if n_sys else "")
-            + f". Their SNRs (up to {max(p.candidate.snr for _, _, p in spurious):.0f}) already allow "
-            "for correlated noise (the red-noise beta factor), so the SNR cannot tell them from planets: "
-            "with so few events, a recurring instrumental or stellar dip looks like a transit.")
+            + (("it covers at most 3 transits" if n_few else "it covers more than 3 transits") if one
+               else f"{n_few} of them cover at most 3 transits")
+            + ((" and lies" if one else f" and {n_sys}" + (" lies" if n_sys == 1 else " lie"))
+               + " near an instrumental period" if n_sys else "")
+            + (f". Its SNR ({max_snr:.0f}) already allows" if one
+               else f". Their SNRs (up to {max_snr:.0f}) already allow")
+            + " for correlated noise (the red-noise beta factor), so the SNR cannot tell "
+            + ("it" if one else "them") + " from a planet: with so few events, a recurring instrumental "
+            "or stellar dip looks like a transit.")
     dups = [(r, o, p) for r, o, p in others if o.kind == "duplicate"]
     if dups:
         findings.append("Found again by a later search pass: "

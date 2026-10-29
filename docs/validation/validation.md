@@ -1,10 +1,10 @@
 # Known-planet validation
 
-Run 2026-10-29 21:31 UTC (37 min) on **MAST** light curves, using all sectors / quarters.
+Run 2026-10-29 23:23 UTC (34 min) on **MAST** light curves, using all sectors / quarters.
 
 Published values: NASA Exoplanet Archive, retrieved 2026-10-29 (pscomppars for planets; pscomppars, the cumulative KOI table and the TOI table to check that the null stars have no published signal).
 
-Pipeline: BLS search from 0.3 d to half the baseline, up to 3 passes per star, detection at SDE ≥ 7 and SNR ≥ 7 (red-noise scaled), backed by 3+ transits or 2 agreeing ones at SDE ≥ 10; a peak with fewer is masked and the pass searches again. A found period matches a published one within 1%, also at the 1/2× and 2× aliases; period differences are in units of the fit's and the published errors combined.
+Pipeline: BLS search from 0.3 d to half the baseline, up to 3 passes per star, detection at SDE ≥ 9 and SNR ≥ 10 (red-noise scaled), backed by 3+ transits or 2 agreeing ones at SDE ≥ 10; a peak with fewer is masked and the pass searches again. A found period matches a published one within 1%, also at the 1/2× and 2× aliases; period differences are in units of the fit's and the published errors combined.
 
 ## Summary
 
@@ -15,22 +15,21 @@ Pipeline: BLS search from 0.3 d to half the baseline, up to 3 passes per star, d
 | Recovered at the published period | 11 |
 | Recovered at an alias | 0 |
 | Missed | 0 |
-| Spurious detections on null stars | 3 |
+| Spurious detections on null stars | 1 |
 | Spurious detections on planet hosts | 0 |
 | Duo-transit signals (2 transits, not candidates) on null stars | 0 |
 | Duo-transit signals on planet hosts | 4 |
-| Extra candidates rejected by vetting | 9 |
-| Planets found twice (duplicates) | 1 |
+| Extra candidates rejected by vetting | 10 |
+| Planets found twice (duplicates) | 0 |
 | Targets with errors | 0 |
 
 ![Summary](summary.png)
 
 ## What the run shows
 
-- 12 of 16 extra candidates cover at most 2 transits, at periods of 22–733 d: dips from systematics or variability, which the search accepts as periodic when 2 dips agree at SDE ≥ 10 (on KIC 6106415, Kepler-10, Kepler-2, Kepler-22, Kepler-7, LHS 3844, WASP-18). No planet was missed for them, but they fill the remaining search passes; the vetting rejects 8 of them afterwards and lists 4 as duo-transits.
+- 14 of 15 extra candidates cover at most 2 transits, at periods of 22–733 d, too few to show periodicity on their own, though the search accepts them as periodic when 2 dips agree at SDE ≥ 10 (on KIC 6106415, Kepler-10, Kepler-2, Kepler-22, Kepler-7, LHS 3844, WASP-18). No planet was missed for them, but they fill the remaining search passes; the vetting rejects 10 of them afterwards and lists 4 as duo-transits, which may be long-period planets (next item).
 - 4 duo-transit signals (Kepler-7 c at 720 d, Kepler-7 d at 435 d, Kepler-22 c at 477 d, Kepler-22 d at 733 d): 2 transits that pass every vetting check, including a fitted T14 that agrees with the dip's width. A real planet on a long period can show only two transits, so they are kept, but two dips can't show periodicity: they are counted neither as recoveries nor as spurious detections; 2 lie near an instrumental period, which makes systematics the likelier cause.
-- 3 spurious detections passed vetting as 'weak' (KIC 8006161, TIC 31410749); 2 of them cover at most 3 transits. Their SNRs (up to 102) already allow for correlated noise (the red-noise beta factor), so the SNR cannot tell them from planets: with so few events, a recurring instrumental or stellar dip looks like a transit.
-- Found again by a later search pass: HAT-P-7 b on Kepler-2 (13 ppm). The search masks a detected planet's transits, and its secondary eclipse when it sees one, but signal left in or around the masked transits remains at the same period.
+- 1 spurious detection passed vetting as 'weak' (KIC 8006161); it covers at most 3 transits. Its SNR (102) already allows for correlated noise (the red-noise beta factor), so the SNR cannot tell it from a planet: with so few events, a recurring instrumental or stellar dip looks like a transit.
 - Found periods differ from the published ones by more than 5σ (the fit's and the published errors combined) for TOI-270 d (20σ). The fit's errors already allow for red noise and transit-timing scatter; the published period comes from a different time span, and transit-timing variations shift the mean period with the span observed (TOI-270 c and d are near a 2:1 resonance).
 - Rp/Rs agrees with the published value within a median of 3.4%; beyond 10%: Kepler-22 b (+14%), TOI-270 c (+15%), TOI-270 d (+15%). The fit takes limb darkening for the mission's bandpass and the star's Teff and constrains a/Rs by the stellar density, but shallow transits still leave Rp/Rs degenerate with the impact parameter; for TOI-270 c, TOI-270 d T14 is also off by more than 10%, so the fitted transit shape differs from the published one; limb darkening is least certain for M dwarfs (the host of TOI-270 c, TOI-270 d).
 
@@ -60,23 +59,21 @@ Candidates that match no published planet. *Spurious* ones passed vetting (weak 
 
 | Star | Candidate | P (d) | Depth (ppm) | SNR | SDE | Transits | Confidence | Kind | Explanation |
 |---|---|---|---|---|---|---|---|---|---|
-| Kepler-10 | d | 385.1092 | 256 | 14.7 | 17.0 | 2 | none | rejected | near 1× the Kepler orbit (372.5 d); only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: only 2 transits observed, and they fail the checks; odd/even depths differ by 5.8 sigma (281 vs 14 ppm): likely eclipsing binary. |
+| Kepler-10 | d | 385.1092 | 256 | 14.7 | 17.0 | 2 | none | rejected | near 1× the Kepler orbit (372.5 d); only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: only 2 transits observed, and they fail the checks; odd/even depths differ by 5.8 sigma (281 vs 14 ppm): likely eclipsing binary; marginal SNR 14.7. |
 | Kepler-7 | c | 719.9761 | 664 | 30.7 | 35.9 | 2 | duo-transit | duo-transit | near 2× the Kepler orbit (372.5 d); only 2 events covered, passing every vetting check: a duo-transit, which may be a planet on a long period or two unrelated dips from systematics or stellar variability; more data must show a third transit; vetting: only 2 transits observed (SNR 30.7, SDE 35.9, odd/even consistent): a possible long-period planet, not a planet candidate until more transits confirm it. |
 | Kepler-7 | d | 434.9402 | 242 | 16.9 | 25.9 | 2 | duo-transit | duo-transit | only 2 events covered, passing every vetting check: a duo-transit, which may be a planet on a long period or two unrelated dips from systematics or stellar variability; more data must show a third transit; vetting: only 2 transits observed (SNR 16.9, SDE 25.9, odd/even consistent): a possible long-period planet, not a planet candidate until more transits confirm it. |
-| Kepler-2 | c | 360.0051 | 309 | 18.4 | 17.1 | 2 | none | rejected | near 1× the Kepler orbit (372.5 d); only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: only 2 transits observed, and they fail the checks; odd/even depths differ by 8.2 sigma (425 vs -45 ppm): likely eclipsing binary. |
-| Kepler-2 | d | 2.2047 | 13 | 12.3 | 24.6 | 614 | none | duplicate | HAT-P-7 b found again in a later search pass (at 1× its period): what the masking after its detection left behind (residual transit signal, or the planet's secondary eclipse); vetting: repeat of the P=2.2047 d signal, not a separate planet. |
+| Kepler-2 | c | 360.0051 | 309 | 18.4 | 17.1 | 2 | none | rejected | near 1× the Kepler orbit (372.5 d); only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: only 2 transits observed, and they fail the checks; odd/even depths differ by 8.0 sigma (404 vs -44 ppm): likely eclipsing binary. |
+| Kepler-2 | d | 162.7295 | 242 | 11.3 | 17.3 | 2 | none | rejected | only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: only 2 transits observed, and they fail the checks; marginal SNR 11.3. |
 | Kepler-22 | c | 476.9100 | 182 | 19.2 | 20.9 | 2 | duo-transit | duo-transit | only 2 events covered, passing every vetting check: a duo-transit, which may be a planet on a long period or two unrelated dips from systematics or stellar variability; more data must show a third transit; vetting: only 2 transits observed (SNR 19.2, SDE 20.9, odd/even consistent): a possible long-period planet, not a planet candidate until more transits confirm it. |
 | Kepler-22 | d | 732.5321 | 233 | 17.9 | 20.0 | 2 | duo-transit | duo-transit | near 2× the Kepler orbit (372.5 d); only 2 events covered, passing every vetting check: a duo-transit, which may be a planet on a long period or two unrelated dips from systematics or stellar variability; more data must show a third transit; vetting: only 2 transits observed (SNR 17.9, SDE 20.0, odd/even consistent): a possible long-period planet, not a planet candidate until more transits confirm it. |
 | LHS 3844 | c | 114.6287 | 9561 | 35.7 | 17.9 | 2 | none | rejected | only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: only 2 transits observed, and they fail the checks; odd/even depths differ by 3.9 sigma (8973 vs 12343 ppm): likely eclipsing binary. |
-| LHS 3844 | d | 64.3335 | 3557 | 21.4 | 10.1 | 2 | none | rejected | only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: only 2 transits observed, and they fail the checks; odd/even depths differ by 4.3 sigma (2541 vs 4964 ppm): likely eclipsing binary. |
-| WASP-18 | c | 0.3138 | 109 | 15.1 | 14.6 | 352 | none | rejected | a 1/3× alias of WASP-18 b (P = 0.9415 d); vetting: third-period alias of the P=0.9414 d signal, not a separate planet. |
-| WASP-18 | d | 21.9292 | 992 | 15.9 | 11.9 | 2 | none | rejected | only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: only 2 transits observed, and they fail the checks; fitted T14 13.9 h is much longer than the 3.6 h detected dip: not transit-shaped. |
+| LHS 3844 | d | 64.3335 | 3557 | 21.4 | 10.1 | 2 | none | rejected | only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: only 2 transits observed, and they fail the checks; odd/even depths differ by 4.3 sigma (2541 vs 4964 ppm): likely eclipsing binary; marginal SDE 10.1. |
+| WASP-18 | c | 21.9292 | 992 | 15.9 | 11.9 | 2 | none | rejected | only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: only 2 transits observed, and they fail the checks; marginal SDE 11.9; fitted T14 13.9 h is much longer than the 3.6 h detected dip: not transit-shaped. |
+| WASP-18 | d | 37.7283 | 882 | 13.0 | 10.0 | 2 | none | rejected | only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: only 2 transits observed, and they fail the checks; marginal SNR 13.0; marginal SDE 10.0; rp/rs 0.34 is large for a planet. |
 | KIC 8006161 | b | 442.3361 | 1092 | 102.2 | 33.4 | 3 | weak | spurious | only 3 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: rp/rs 0.31 is large for a planet. |
 | KIC 6106415 | b | 554.7304 | 1217 | 128.0 | 29.4 | 2 | none | rejected | only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: only 2 transits observed, and they fail the checks; odd/even depths differ by 49.9 sigma (6747 vs 4070 ppm): likely eclipsing binary; rp/rs 0.30 is large for a planet; fitted T14 1.0 h disagrees with the 3.4 h detected dip: not transit-shaped. |
 | KIC 6106415 | c | 486.0703 | 976 | 86.5 | 25.6 | 2 | none | rejected | only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: only 2 transits observed, and they fail the checks; rp/rs 0.31 is large for a planet; fitted T14 1.2 h disagrees with the 3.4 h detected dip: not transit-shaped. |
 | KIC 6106415 | d | 700.9178 | 700 | 80.9 | 19.4 | 2 | none | rejected | only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: only 2 transits observed, and they fail the checks; odd/even depths differ by 23.1 sigma (626 vs 1465 ppm): likely eclipsing binary. |
-| TIC 31410749 | b | 57.6336 | 145 | 9.4 | 10.5 | 4 | weak | spurious | not an alias or a known systematic period; correlated noise or stellar variability beyond what the red-noise-scaled SNR allows for is the likely cause; vetting: marginal SNR 9.4. |
-| TIC 31410749 | c | 96.6325 | 142 | 8.3 | 8.8 | 3 | weak | spurious | only 3 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: marginal SNR 8.3; marginal SDE 8.8. |
 
 ## Null stars
 
@@ -84,23 +81,23 @@ Candidates that match no published planet. *Spurious* ones passed vetting (weak 
 |---|---|---|---|---|
 | KIC 8006161 | Bright (Tmag 6.8), quiet dwarf (HD 173701), Kepler asteroseismology target, 18 quarters. | none | Kepler 18 quarters, 65,262 points, 1,470 d baseline | b: spurious |
 | KIC 6106415 | Bright (Tmag 6.7) dwarf, Kepler asteroseismology target, 14 long-cadence quarters. | none | Kepler 14 quarters, 50,642 points, 1,437 d baseline | b: rejected, c: rejected, d: rejected |
-| TIC 31410749 | Tmag 8.3 dwarf in the southern TESS continuous viewing zone, 13 sectors (SPOC 2-min and TESS-SPOC full-frame-image light curves). | none | TESS SPOC+TESS-SPOC 13 sectors, 143,305 points, 1,852 d baseline | b: spurious, c: spurious |
+| TIC 31410749 | Tmag 8.3 dwarf in the southern TESS continuous viewing zone, 13 sectors (SPOC 2-min and TESS-SPOC full-frame-image light curves). | none | TESS SPOC+TESS-SPOC 13 sectors, 143,305 points, 1,852 d baseline | none |
 
 ## Targets
 
 | Star | Role | Data | Time (s) | Errors |
 |---|---|---|---|---|
-| Kepler-10 | planet-host | Kepler 15 quarters, 51,973 points, 1,470 d baseline | 97 |  |
+| Kepler-10 | planet-host | Kepler 15 quarters, 51,973 points, 1,470 d baseline | 93 |  |
 | Kepler-7 | planet-host | Kepler 18 quarters, 65,263 points, 1,470 d baseline | 103 |  |
-| Kepler-2 | planet-host | Kepler 18 quarters, 65,283 points, 1,470 d baseline | 122 |  |
+| Kepler-2 | planet-host | Kepler 18 quarters, 65,283 points, 1,470 d baseline | 111 |  |
 | Kepler-22 | planet-host | Kepler 18 quarters, 65,262 points, 1,470 d baseline | 146 |  |
-| pi Men | planet-host | TESS SPOC 24 sectors, 393,701 points, 2,582 d baseline | 699 |  |
+| pi Men | planet-host | TESS SPOC 24 sectors, 393,701 points, 2,582 d baseline | 707 |  |
 | LHS 3844 | planet-host | TESS SPOC 11 sectors, 168,801 points, 2,879 d baseline | 147 |  |
-| WASP-18 | planet-host | TESS SPOC 10 sectors, 151,222 points, 2,906 d baseline | 156 |  |
-| TOI-270 | planet-host | TESS SPOC 7 sectors, 137,828 points, 2,660 d baseline | 167 |  |
+| WASP-18 | planet-host | TESS SPOC 10 sectors, 151,222 points, 2,906 d baseline | 133 |  |
+| TOI-270 | planet-host | TESS SPOC 7 sectors, 137,828 points, 2,660 d baseline | 169 |  |
 | KIC 8006161 | null | Kepler 18 quarters, 65,262 points, 1,470 d baseline | 138 |  |
 | KIC 6106415 | null | Kepler 14 quarters, 50,642 points, 1,437 d baseline | 104 |  |
-| TIC 31410749 | null | TESS SPOC+TESS-SPOC 13 sectors, 143,305 points, 1,852 d baseline | 326 |  |
+| TIC 31410749 | null | TESS SPOC+TESS-SPOC 13 sectors, 143,305 points, 1,852 d baseline | 166 |  |
 
 ## Folded light curves
 
@@ -130,8 +127,6 @@ Candidates that match no published planet. *Spurious* ones passed vetting (weak 
 ![KIC 6106415 b](figures/kic-6106415-b.png)
 ![KIC 6106415 c](figures/kic-6106415-c.png)
 ![KIC 6106415 d](figures/kic-6106415-d.png)
-![TIC 31410749 b](figures/tic-31410749-b.png)
-![TIC 31410749 c](figures/tic-31410749-c.png)
 
 ## References for published values
 

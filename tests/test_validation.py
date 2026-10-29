@@ -140,7 +140,8 @@ def test_findings_summarise_patterns(tmp_path):
     assert "when 2 dips agree at SDE ≥ 10" in findings and "the vetting rejects 1 of them" in findings
     assert "No planet was missed for them" not in findings  # Star c is missed
     assert "1 spurious detection passed vetting as 'weak'" in findings
-    assert "1 of them cover at most 3 transits" in findings and "red-noise beta factor" in findings
+    assert "it covers at most 3 transits" in findings and "Its SNR (" in findings
+    assert "red-noise beta factor" in findings
     assert "white noise" not in findings
     assert "Star b rated only 'weak' because the vetting detected a secondary eclipse" in findings
     assert "Star b (+25%)" in findings and "the host of Star b" in findings
@@ -213,6 +214,8 @@ def test_duo_transits_counted_apart_from_recoveries_and_spurious():
 
     findings = " ".join(report.run_findings(run))
     assert "the vetting rejects 0 of them afterwards and lists 2 as duo-transits" in findings
+    assert "may be long-period planets" in findings and "systematics or variability" not in findings
+    assert "too few to show periodicity on their own, though the search accepts them as periodic" in findings
     assert "2 duo-transit signals (Host c at 720 d, Quiet b at 486 d)" in findings
     assert "counted neither as recoveries nor as spurious detections" in findings
     assert "1 lie near an instrumental period" in findings
