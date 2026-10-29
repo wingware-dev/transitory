@@ -13,7 +13,7 @@ from astropy.table import Table
 from transitory.config import USER_AGENT, cache_dir
 from transitory.models import LightCurve, StarTarget
 from transitory.pipeline import cache as cache_mod
-from transitory.pipeline import fetch
+from transitory.pipeline import fetch, run
 from transitory.pipeline.cache import CacheIndex, cache_key, load_json, save_json
 from transitory.pipeline.fetch import DOIS, MastSource, mission_credits, select_products
 from transitory.sources import LightCurveSource, SourceError
@@ -372,9 +372,8 @@ def test_search_timing_out_twice_fails_the_star_without_caching(fake_lk):
 
 
 def test_timed_out_star_is_a_per_star_error_in_the_analysis(fake_lk):
-    from transitory.pipeline.run import analyze_star
     fake_lk.search_errors = [_read_timeout(), _read_timeout()]
-    result = analyze_star(StarTarget("Kepler-22", kic=10593626, mission_hint="Kepler"), MastSource())
+    result = run.analyze_star(StarTarget("Kepler-22", kic=10593626, mission_hint="Kepler"), MastSource())
     assert result.raw is None and not result.ok
     assert len(result.errors) == 1
     assert result.errors[0].startswith("fetch: MAST search for 'KIC 10593626' timed out")
@@ -414,19 +413,81 @@ def test_retry_waits_the_backoff(fake_lk, monkeypatch):
     assert sleeps == [7.0]
 
 
-def test_mast_requests_get_a_timeout(fake_lk, monkeypatch):
+@pytest.fixture
+def fresh_timeouts(monkeypatch):
+    """Lets _ensure_timeouts run again, undoing what it changes afterwards."""
     from astroquery.mast import Observations
     from astroquery.mast import utils as mast_utils
     session = Observations._session
     monkeypatch.setattr(fetch, "_timeouts_set", False)
     monkeypatch.setattr(session, "adapters", type(session.adapters)(session.adapters))
     monkeypatch.setattr(mast_utils, "requests", requests)
+    monkeypatch.setattr(Observations._portal_api_connection, "TIMEOUT",
+                        Observations._portal_api_connection.TIMEOUT)
+    return Observations
+
+
+def test_mast_requests_get_a_timeout(fake_lk, fresh_timeouts):
+    from astroquery.mast import utils as mast_utils
+    session = fresh_timeouts._session
     tess_setup(fake_lk)
     MastSource().fetch(StarTarget("x", tic=261136679, mission_hint="TESS"))
     for url in ("https://mast.stsci.edu/api/v0/invoke", "http://mastresolver.stsci.edu/x"):
         assert session.get_adapter(url).timeout == fetch.MAST_TIMEOUT_SECONDS
     assert mast_utils.requests.timeout == fetch.MAST_TIMEOUT_SECONDS
     assert mast_utils.requests.Session is requests.Session
+    assert fresh_timeouts._portal_api_connection.TIMEOUT == fetch.MAST_PORTAL_TIMEOUT_SECONDS
+
+
+class _ExecutingAdapter(requests.adapters.BaseAdapter):
+    """A MAST portal that answers every request "still executing"."""
+
+    def __init__(self):
+        super().__init__()
+        self.sent = 0
+
+    def send(self, request, **kwargs):
+        self.sent += 1
+        reply = requests.Response()
+        reply.status_code = 200
+        reply._content = b'{"status": "EXECUTING"}'
+        reply.request = request
+        reply.url = request.url
+        return reply
+
+    def close(self):
+        pass
+
+
+def test_search_stuck_executing_fails_the_star_after_the_portal_limit(
+        fake_lk, fresh_timeouts, monkeypatch):
+    from astroquery.mast import discovery_portal
+    portal = fresh_timeouts._portal_api_connection
+    session = requests.Session()
+    adapter = _ExecutingAdapter()
+    session.mount("https://", adapter)
+    monkeypatch.setattr(portal, "_session", session)
+    clock = [0.0]
+
+    def fake_time():  # each poll takes 20 s of MAST's time
+        clock[0] += 20.0
+        return clock[0]
+
+    monkeypatch.setattr(discovery_portal, "time", type("FakeTime", (), {"time": staticmethod(fake_time)}))
+
+    def search_lightcurve(target, **kw):  # lightkurve's search, as far as the portal
+        fake_lk.searches.append((target, kw))
+        portal._request("POST", portal.MAST_REQUEST_URL, data="request=x")
+
+    monkeypatch.setattr(fake_lk, "search_lightcurve", search_lightcurve)
+    target = StarTarget("Kepler-22", kic=10593626, mission_hint="Kepler")
+    result = run.analyze_star(target, MastSource())
+    assert result.raw is None and not result.ok
+    assert result.errors == ["fetch: MAST search for 'KIC 10593626' timed out: "
+                             "Timeout limit of 180.0 exceeded."]
+    assert len(fake_lk.searches) == 1  # not tried again
+    assert adapter.sent == 9
+    assert CacheIndex().keys() == []
 
 
 class _SlowHandler(http.server.BaseHTTPRequestHandler):

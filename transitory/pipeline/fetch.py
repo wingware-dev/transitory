@@ -19,6 +19,8 @@ MAST is sometimes slow for minutes at a time.  astroquery sends its requests
 with no timeout, so each one here gets ``MAST_TIMEOUT_SECONDS``, and a search
 or download that times out or cannot connect is tried once more after
 ``MAST_RETRY_BACKOFF_SECONDS`` before the star fails with a ``SourceError``.
+A search MAST keeps answering "still executing" is given up after
+``MAST_PORTAL_TIMEOUT_SECONDS`` in all, without another try.
 """
 
 from __future__ import annotations
@@ -77,6 +79,8 @@ _timeouts_set = False
 
 # Seconds to wait for MAST to connect or to send more of a reply.
 MAST_TIMEOUT_SECONDS = 120.0
+# Seconds in all astroquery keeps asking about a search MAST is still executing.
+MAST_PORTAL_TIMEOUT_SECONDS = 180.0
 # A failed search or download is tried once more after this pause.
 MAST_RETRY_BACKOFF_SECONDS = 10.0
 
@@ -135,6 +139,8 @@ def _ensure_timeouts() -> None:
 
     Searches and downloads go through the ``Observations`` session; name
     resolution calls ``requests.get`` directly from ``astroquery.mast.utils``.
+    The portal API polls a search that is still executing for up to its
+    ``TIMEOUT`` (600 s by default), then raises ``TimeoutError``.
     """
     global _timeouts_set
     if _timeouts_set:
@@ -152,14 +158,21 @@ def _ensure_timeouts() -> None:
         mast_utils.requests = _TimeoutRequests(MAST_TIMEOUT_SECONDS)
     else:
         log.warning("MAST name resolution keeps astroquery's default (no) timeout")
+    portal = getattr(Observations, "_portal_api_connection", None)
+    if hasattr(portal, "TIMEOUT"):
+        portal.TIMEOUT = MAST_PORTAL_TIMEOUT_SECONDS
+    else:
+        log.warning("MAST searches keep astroquery's default polling limit")
     _timeouts_set = True
 
 
 def _is_transient(exc: BaseException) -> bool:
-    """Whether ``exc`` is MAST being slow or unreachable, worth one more try."""
+    """Whether ``exc`` is MAST being slow or unreachable, worth one more try.
+
+    Not the portal's ``TimeoutError``: that search already ran its full time.
+    """
     while exc is not None:
-        if isinstance(exc, (requests.Timeout, requests.ConnectionError, TimeoutError,
-                            ConnectionError)):
+        if isinstance(exc, (requests.Timeout, requests.ConnectionError, ConnectionError)):
             return True
         if isinstance(exc, requests.HTTPError) and exc.response is not None \
                 and exc.response.status_code in (500, 502, 503, 504):
@@ -188,6 +201,8 @@ def _with_retry(what: str, call, on_retry=None):
 def _failure(what: str, exc: Exception) -> SourceError:
     if _is_transient(exc):
         return SourceError(f"{what} timed out or could not connect (tried twice): {exc}")
+    if isinstance(exc, TimeoutError):
+        return SourceError(f"{what} timed out: {exc}")
     return SourceError(f"{what} failed: {exc}")
 
 
