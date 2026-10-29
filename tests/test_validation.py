@@ -137,9 +137,43 @@ def test_findings_summarise_patterns(tmp_path):
     run = ValidationRun(results=[result], source_name="MAST", max_products=None, started=datetime.now(UTC))
     findings = " ".join(report.run_findings(run))
     assert "2 of 2 extra candidates cover at most 2 transits" in findings
+    assert "when 2 dips agree at SDE ≥ 10" in findings and "the vetting rejects 1 of them" in findings
+    assert "No planet was missed for them" not in findings  # Star c is missed
     assert "1 spurious detection passed vetting as 'weak'" in findings
+    assert "1 of them cover at most 3 transits" in findings and "red-noise beta factor" in findings
+    assert "white noise" not in findings
     assert "Star b rated only 'weak' because the vetting detected a secondary eclipse" in findings
-    assert "Star b (+25%)" in findings and "M-dwarf host of Star b" in findings
+    assert "Star b (+25%)" in findings and "the host of Star b" in findings
+    assert "Sun-like" not in findings
+
+
+def test_period_difference_counts_the_published_error():
+    from datetime import UTC, datetime
+
+    from transitory.validation.validate import TargetResult, ValidationRun
+
+    vt = ValidationTarget(target=StarTarget(name="Star"), role="planet-host")
+    # Found 3.0005 ± 0.0001 d: 5σ from 3.0 by the fit's error alone, 1σ with a rounded
+    # published period's 0.00049 d error.
+    published = PublishedSet(planets=[Published("Star b", 3.0, period_err=0.00049),
+                                      Published("Star c", 7.0)])
+    analysis = _analysis([_planet(3.0005), _planet(7.002)])
+    result = TargetResult(vt=vt, analysis=analysis, published=published)
+    result.comparisons, result.others = compare(vt, analysis, published)
+    cells = [report._period_cell(report._planet_values(result, c)) for c in result.comparisons]
+    assert cells[0].endswith(", 1.0σ)") and cells[1].endswith(", 20.0σ)")
+    run = ValidationRun(results=[result], source_name="MAST", max_products=None, started=datetime.now(UTC))
+    findings = " ".join(report.run_findings(run))
+    assert "more than 5σ (the fit's and the published errors combined) for Star c (20σ)" in findings
+    assert "Star b (" not in findings
+
+
+def test_alias_of_a_found_planet_is_named_once():
+    vt = ValidationTarget(target=StarTarget(name="Star"), role="planet-host")
+    published = PublishedSet(planets=[Published("Star b", 0.9)])
+    _, others = compare(vt, _analysis([_planet(0.9), _planet(0.3, "none", reasons=["alias"])]), published)
+    assert others[0].explanation.count("alias of Star b") == 1
+    assert "a 1/3× alias of Star b (P = 0.9000 d)" in others[0].explanation
 
 
 def test_spurious_signal_near_tess_orbit_is_explained():

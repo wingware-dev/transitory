@@ -20,7 +20,7 @@ from matplotlib.ticker import NullFormatter, ScalarFormatter
 from .. import plots
 from ..catalog.archive import ARCHIVE_CREDIT
 from ..config import MAX_PLANETS_PER_STAR, MIN_PERIOD_DAYS, PROJECT_ROOT, reports_dir
-from ..pipeline.search import SDE_THRESHOLD, SNR_THRESHOLD
+from ..pipeline.search import MIN_TRANSITS, SDE_THRESHOLD, SDE_TWO_TRANSITS, SNR_THRESHOLD
 from .validate import PlanetComparison, TargetResult, ValidationRun, found_period
 
 REPORT_NAME = "validation.md"
@@ -69,8 +69,8 @@ def _planet_values(result: TargetResult, comp: PlanetComparison) -> dict:
     pub = comp.published
     values = {
         "star": result.name, "planet": pub.name, "status": comp.status, "factor": comp.factor,
-        "period_pub": pub.period, "rp_rs_pub": pub.rp_rs, "t14_pub": pub.duration_h,
-        "depth_pub": pub.depth, "ref": pub.ref, "explanation": comp.explanation,
+        "period_pub": pub.period, "period_err_pub": pub.period_err, "rp_rs_pub": pub.rp_rs,
+        "t14_pub": pub.duration_h, "depth_pub": pub.depth, "ref": pub.ref, "explanation": comp.explanation,
         "period": None, "period_err": None, "rp_rs": None, "rp_rs_err": None, "t14": None,
         "t14_err": None, "snr": None, "sde": None, "confidence": None, "letter": None,
     }
@@ -87,6 +87,19 @@ def _planet_values(result: TargetResult, comp: PlanetComparison) -> dict:
     return {k: (None if isinstance(v, float) and not math.isfinite(v) else v) for k, v in values.items()}
 
 
+def _period_sigma(v: dict) -> float | None:
+    """|found − published period| in units of the fit's and the published errors combined.
+
+    Published periods are often rounded and less precise than a fit over
+    years of data, so the fit's error alone overstates the difference.
+    """
+    if v["period"] is None or not (_ok(v["period_err"]) and v["period_err"] > 0):
+        return None
+    factor = v["factor"] or 1.0
+    pub_err = factor * v["period_err_pub"] if _ok(v["period_err_pub"]) and v["period_err_pub"] > 0 else 0.0
+    return abs(v["period"] - v["period_pub"] * factor) / math.hypot(v["period_err"], pub_err)
+
+
 def _period_cell(v: dict) -> str:
     if v["period"] is None:
         return "—"
@@ -96,8 +109,8 @@ def _period_cell(v: dict) -> str:
     # Enough decimals for two significant digits of the error (at least 5).
     digits = max(5, min(8, 1 - int(math.floor(math.log10(err))))) if err else 5
     text = f"{v['period']:.{digits}f}" + (f" ± {err:.{digits}f}" if err else "")
-    sigma = f", {abs(diff) / err:.1f}σ" if err else ""
-    return f"{text} ({diff:+.{digits}f} d{sigma})"
+    sigma = _period_sigma(v)
+    return f"{text} ({diff:+.{digits}f} d" + (f", {sigma:.1f}σ" if sigma is not None else "") + ")"
 
 
 # -- figures -----------------------------------------------------------------------
@@ -202,27 +215,41 @@ def run_findings(run: ValidationRun) -> list[str]:
     if few:
         stars = sorted({r.name for r, _, _ in few})
         periods = sorted(found_period(p) for _, _, p in few)
-        findings.append(
-            f"{len(few)} of {len(extra)} extra candidates cover at most 2 transits, at periods of "
-            f"{periods[0]:.0f}–{periods[-1]:.0f} d: single dips from systematics or variability that "
-            "the search accepts as "
-            "periodic. They take search passes from real planets (on " + ", ".join(stars) + "); the "
-            "vetting rejects most of them afterwards.")
+        n_rejected = sum(1 for _, o, _ in few if o.kind == "rejected")
+        text = (f"{len(few)} of {len(extra)} extra candidates cover at most 2 transits, at periods of "
+                f"{periods[0]:.0f}–{periods[-1]:.0f} d: dips from systematics or variability")
+        if any(p.candidate.n_transits == 2 for _, _, p in few):
+            text += (f", which the search accepts as periodic when 2 dips agree at SDE ≥ "
+                     f"{SDE_TWO_TRANSITS:g}")
+        missed = any(c.found_index is None for _, c in comps)
+        text += (" (on " + ", ".join(stars) + "). "
+                 + ("They take search passes from real planets; " if exhausted else
+                    "" if missed else "No planet was missed for them, but they fill the remaining "
+                    "search passes; ")
+                 + f"the vetting rejects {n_rejected} of them afterwards.")
+        findings.append(text)
     spurious = [(r, o, p) for r, o, p in extra if o.kind == "spurious"]
     if spurious:
         ratings = sorted({p.vetting.confidence for _, _, p in spurious if p.vetting is not None})
+        n_few = sum(1 for _, _, p in spurious if p.candidate.n_transits <= 3)
+        n_sys = sum(1 for _, o, _ in spurious if "near " in o.explanation)
         findings.append(
             f"{len(spurious)} spurious detection{'s' if len(spurious) != 1 else ''} passed vetting as "
             + " or ".join(f"'{c}'" for c in ratings) + " ("
-            + ", ".join(sorted({r.name for r, _, _ in spurious})) + "). Their SNRs (up to "
-            f"{max(p.candidate.snr for _, _, p in spurious):.0f}) assume white noise; the correlated "
-            "noise and instrumental dips behind them make that SNR far too optimistic.")
-    dups = [(r, o) for r, o, _ in others if o.kind == "duplicate"]
+            + ", ".join(sorted({r.name for r, _, _ in spurious})) + "); "
+            + f"{n_few} of them cover at most 3 transits"
+            + (f" and {n_sys} lie near an instrumental period" if n_sys else "")
+            + f". Their SNRs (up to {max(p.candidate.snr for _, _, p in spurious):.0f}) already allow "
+            "for correlated noise (the red-noise beta factor), so the SNR cannot tell them from planets: "
+            "with so few events, a recurring instrumental or stellar dip looks like a transit.")
+    dups = [(r, o, p) for r, o, p in others if o.kind == "duplicate"]
     if dups:
         findings.append("Found again by a later search pass: "
-                        + "; ".join(f"{o.explanation.split(' found again')[0]} on {r.name}" for r, o in dups)
-                        + ". Masking a deep transit leaves residual signal, or its secondary eclipse, "
-                        "at the same period.")
+                        + "; ".join(f"{o.explanation.split(' found again')[0]} on {r.name} "
+                                    f"({p.candidate.depth * 1e6:.0f} ppm)" for r, o, p in dups)
+                        + ". The search masks a detected planet's transits, and its secondary eclipse "
+                        "when it sees one, but signal left in or around the masked transits remains at "
+                        "the same period.")
     eclipse_only = [c.published.name for r, c in comps if c.found_index is not None
                     and (p := r.planet(c.found_index)).vetting is not None
                     and p.vetting.confidence == "weak" and p.vetting.reasons
@@ -233,30 +260,35 @@ def run_findings(run: ValidationRun) -> list[str]:
                         "own emission (as published for hot Jupiters such as these). A planetary-size "
                         "secondary eclipse should not lower the confidence of a deep, many-transit signal.")
     values = [(r, c, _planet_values(r, c)) for r, c in comps if c.found_index is not None]
-    off_p = [(c.published.name, abs(v["period"] - v["period_pub"] * (v["factor"] or 1.0)) / v["period_err"])
-             for r, c, v in values if _ok(v["period_err"]) and v["period_err"] > 0]
-    off_p = [(n, s) for n, s in off_p if s > 5]
+    off_p = [(c.published.name, s) for r, c, v in values
+             if (s := _period_sigma(v)) is not None and s > 5]
     if off_p:
-        findings.append("Found periods differ from the published ones by more than 5σ for "
+        findings.append("Found periods differ from the published ones by more than 5σ (the fit's and "
+                        "the published errors combined) for "
                         + ", ".join(f"{n} ({s:.0f}σ)" for n, s in off_p)
-                        + ": the fit's period errors assume white noise and a strictly periodic orbit, "
-                        "so they are too small, and transit-timing variations shift the mean period "
-                        "with the time span observed"
+                        + ". The fit's errors already allow for red noise and transit-timing scatter; "
+                        "the published period comes from a different time span, and transit-timing "
+                        "variations shift the mean period with the span observed"
                         + (" (TOI-270 c and d are near a 2:1 resonance)"
                            if any(n.startswith("TOI-270") for n, _ in off_p) else "") + ".")
-    rp = [(c.published.name, r.vt.target.radius_rsun, (v["rp_rs"] - v["rp_rs_pub"]) / v["rp_rs_pub"])
+    rp = [(c.published.name, r.vt.target.radius_rsun, (v["rp_rs"] - v["rp_rs_pub"]) / v["rp_rs_pub"], v)
           for r, c, v in values if v["rp_rs"] is not None and v["rp_rs_pub"]]
     if rp:
-        off = [(name, rs, d) for name, rs, d in rp if abs(d) > 0.10]
+        off = [(name, rs, d, v) for name, rs, d, v in rp if abs(d) > 0.10]
         text = (f"Rp/Rs agrees with the published value within a median of "
-                f"{100 * float(np.median([abs(d) for _, _, d in rp])):.1f}%")
+                f"{100 * float(np.median([abs(d) for _, _, d, _ in rp])):.1f}%")
         if off:
-            small = [n for n, rs, _ in off if rs is not None and rs < 0.6]
-            text += ("; beyond 10%: " + ", ".join(f"{n} ({100 * d:+.0f}%)" for n, _, d in off)
-                     + ". The fit fixes limb darkening at Sun-like values, which biases Rp/Rs for "
-                     "stars unlike the Sun"
-                     + (f" (the M-dwarf host of {', '.join(small)})" if small else "")
-                     + ", and shallow transits leave Rp/Rs degenerate with the impact parameter")
+            small = [n for n, rs, _, _ in off if rs is not None and rs < 0.6]
+            long_t14 = [n for n, _, _, v in off if _ok(v["t14"]) and _ok(v["t14_pub"]) and v["t14_pub"]
+                        and abs(v["t14"] / v["t14_pub"] - 1.0) > 0.10]
+            text += ("; beyond 10%: " + ", ".join(f"{n} ({100 * d:+.0f}%)" for n, _, d, _ in off)
+                     + ". The fit takes limb darkening for the mission's bandpass and the star's Teff "
+                     "and constrains a/Rs by the stellar density, but shallow transits still leave "
+                     "Rp/Rs degenerate with the impact parameter"
+                     + (f"; for {', '.join(long_t14)} T14 is also off by more than 10%, so the fitted "
+                        "transit shape differs from the published one" if long_t14 else "")
+                     + (f"; limb darkening is least certain for M dwarfs (the host of {', '.join(small)})"
+                        if small else ""))
         findings.append(text + ".")
     failed = [r.name for r in run.results if r.analysis is None or not r.analysis.ok or r.errors]
     if failed:
@@ -283,8 +315,11 @@ def report_markdown(run: ValidationRun, figures: dict[tuple[str, int], str]) -> 
         "",
         f"Pipeline: BLS search from {MIN_PERIOD_DAYS:g} d to half the baseline, up to "
         f"{MAX_PLANETS_PER_STAR} passes per star, detection at SDE ≥ {SDE_THRESHOLD:g} and "
-        f"SNR ≥ {SNR_THRESHOLD:g}. A found period matches a published one within 1%, also at "
-        "the 1/2× and 2× aliases.",
+        f"SNR ≥ {SNR_THRESHOLD:g} (red-noise scaled), backed by {MIN_TRANSITS}+ transits or 2 "
+        f"agreeing ones at SDE ≥ {SDE_TWO_TRANSITS:g}; a peak with fewer is masked and the pass "
+        "searches again. A found period matches a published one within 1%, also at "
+        "the 1/2× and 2× aliases; period differences are in units of the fit's and the published "
+        "errors combined.",
         "",
     ]
     if run.cancelled:

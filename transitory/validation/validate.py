@@ -61,6 +61,7 @@ class Published:
 
     name: str
     period: float  # days
+    period_err: float | None = None  # days, 1 sigma
     t0_bjd: float | None = None  # BJD_TDB (synthetic: light-curve time)
     duration_h: float | None = None
     depth: float | None = None  # fractional
@@ -71,8 +72,9 @@ class Published:
     @classmethod
     def from_archive(cls, planet: archive.ArchivePlanet) -> Published:
         return cls(name=planet.name, period=planet.period if planet.period is not None else math.nan,
-                   t0_bjd=planet.t0_bjd, duration_h=planet.duration_h, depth=planet.depth,
-                   rp_rs=planet.rp_rs, ref=planet.to_known().ref, disposition=planet.disposition)
+                   period_err=planet.period_err, t0_bjd=planet.t0_bjd, duration_h=planet.duration_h,
+                   depth=planet.depth, rp_rs=planet.rp_rs, ref=planet.to_known().ref,
+                   disposition=planet.disposition)
 
 
 @dataclass
@@ -326,10 +328,12 @@ def explain_other(planet: PlanetResult, analysis: StarAnalysis, published: list[
     """Where an unmatched candidate may come from."""
     period = found_period(planet)
     reasons = []
-    for name, p in matched + [(pub.name, pub.period) for pub in published]:
-        for k in (3.0, 1 / 3, 4.0, 0.25, 1.5, 2 / 3):
+    # A matched planet is also in ``published``: check each name once.
+    for name, p in dict(matched + [(pub.name, pub.period) for pub in published]).items():
+        for k, text in ((3.0, "3×"), (1 / 3, "1/3×"), (4.0, "4×"), (0.25, "1/4×"), (1.5, "3/2×"),
+                        (2 / 3, "2/3×")):
             if np.isfinite(p) and abs(period / (k * p) - 1.0) < PERIOD_TOLERANCE:
-                reasons.append(f"a {k:g}× alias of {name} (P = {p:.4f} d)")
+                reasons.append(f"a {text} alias of {name} (P = {p:.4f} d)")
                 break
     mission = analysis.raw.mission if analysis.raw is not None else ""
     for p_sys, what in SYSTEMATIC_PERIODS.get(mission, []):
@@ -344,8 +348,8 @@ def explain_other(planet: PlanetResult, analysis: StarAnalysis, published: list[
                        "variability than a periodic signal")
     rejected = planet.vetting is not None and planet.vetting.confidence == "none"
     if not reasons and not rejected:
-        reasons.append("not an alias or a known systematic period; correlated (red) noise, which "
-                       "the white-noise SNR does not account for, is the likely cause")
+        reasons.append("not an alias or a known systematic period; correlated noise or stellar "
+                       "variability beyond what the red-noise-scaled SNR allows for is the likely cause")
     if planet.vetting is not None and planet.vetting.reasons:
         reasons.append("vetting: " + "; ".join(planet.vetting.reasons))
     return "; ".join(reasons or ["no explanation found"]) + "."
