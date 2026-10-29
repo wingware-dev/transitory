@@ -10,7 +10,9 @@ its secondary eclipse when there is one, and searches again, up to
 A peak backed by fewer transits (a single dip from systematics or
 variability, which BLS can fold at many long periods) doesn't end the
 pass or use it up: its events are masked and the pass searches again, up
-to ``MAX_REJECTED_PEAKS`` times per search.
+to ``MAX_REJECTED_PEAKS`` times per search.  So is a peak at the period of a
+signal found in an earlier pass, or a harmonic of it: residuals the mask
+missed, not another planet.
 
 The period range is split into octaves.  Each octave gets its own set of
 trial durations, from the shortest plausible transit at that period up to
@@ -59,6 +61,11 @@ MAX_REJECTED_PEAKS = 5
 # since a deep single dip can rank low in SDE yet still hide later passes'
 # planets (TOI-270's 58.6 d dip, SDE 7.6, stood before planets d and b).
 SDE_REJECT_MIN = 7.0
+# A signal at one of these period ratios to one found in an earlier pass
+# repeats it (real resonant pairs sit a percent or more off exact).
+HARMONICS = ((1.0, "repeat"), (0.5, "half-period alias"), (2.0, "double-period alias"),
+             (1.0 / 3.0, "third-period alias"), (3.0, "triple-period alias"))
+HARMONIC_TOLERANCE = 0.002
 # Signals with at least this SNR leave residuals beyond the box: mask
 # DEEP_MASK_WIDTH box durations either side of each transit instead of one.
 DEEP_SNR = 100.0
@@ -251,6 +258,18 @@ def _enough_transits(time, flux, sigma, cand: TransitCandidate) -> bool:
             and _events_agree(time, flux, sigma, cand))
 
 
+def harmonic_of(candidate: TransitCandidate, other: TransitCandidate) -> str | None:
+    """How ``candidate`` repeats the stronger signal ``other``, or None if it doesn't."""
+    for ratio, name in HARMONICS:
+        if abs(candidate.period / other.period - ratio) < HARMONIC_TOLERANCE * ratio:
+            if ratio == 1.0:
+                offset = ((candidate.t0 - other.t0) / other.period) % 1.0
+                if abs(offset - 0.5) < 0.1:
+                    return f"secondary eclipse of the P={other.period:.4f} d signal"
+            return f"{name} of the P={other.period:.4f} d signal"
+    return None
+
+
 def _near(time: np.ndarray, period: float, centre: float, half_width: float) -> np.ndarray:
     epoch = np.round((time - centre) / period)
     return np.abs(time - (centre + epoch * period)) < half_width
@@ -368,14 +387,21 @@ def search_transits(
             peak = depth > 0 and cand.sde >= SDE_REJECT_MIN and snr >= SNR_THRESHOLD
             enough = peak and _enough_transits(t, f, sigma, cand)
             significant = enough and cand.sde >= SDE_THRESHOLD
-            rejected = peak and not enough
+            # Residuals an earlier signal leaves beyond its mask (a hot Jupiter's
+            # phase curve, say) come back at its period or a harmonic of it.
+            repeat = significant and next(
+                (h for r in results if (h := harmonic_of(cand, r.best))), None)
+            if repeat:
+                significant = False
+            rejected = (peak and not enough) or bool(repeat)
             log.info("BLS pass %d: P=%.5f d depth=%.0f ppm SDE=%.1f SNR=%.1f n=%d%s",
                      n_pass + 1, period, depth * 1e6, cand.sde, snr, n_transits,
-                     "" if significant else " (too few transits show it)" if rejected
-                     else " (not significant)")
+                     "" if significant else f" ({repeat})" if repeat
+                     else " (too few transits show it)" if rejected else " (not significant)")
             if not rejected or n_rejected >= MAX_REJECTED_PEAKS:
                 break
-            # Too few transits show it: mask its events and search this pass again.
+            # Too few transits show it, or it repeats a found signal: mask its
+            # events and search this pass again.
             n_rejected += 1
             attempt += 1
             keep &= ~_near(time, period, t0, duration)

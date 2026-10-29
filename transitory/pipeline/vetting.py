@@ -36,7 +36,7 @@ import numpy as np
 
 from ..models import DUO_TRANSIT, CleanedLightCurve, FitResult, TransitCandidate, Vetting
 from .noise import beta_factor, robust_std
-from .search import SDE_THRESHOLD, SNR_THRESHOLD, box_depth
+from .search import SDE_THRESHOLD, SNR_THRESHOLD, box_depth, harmonic_of
 
 # Below these (but above the detection thresholds) a candidate is marginal.
 SNR_STRONG = 15.0
@@ -51,11 +51,6 @@ SECONDARY_RATIO_MAX = 0.1
 # Above this rp/rs the companion is likely stellar (about 2 Jupiter radii for a Sun).
 RP_RS_PLANET_MAX = 0.2
 RP_RS_STELLAR = 0.4
-# A candidate at one of these period ratios to a stronger one on the same
-# star repeats it (real resonant pairs sit a percent or more off exact).
-HARMONICS = ((1.0, "repeat"), (0.5, "half-period alias"), (2.0, "double-period alias"),
-             (1.0 / 3.0, "third-period alias"), (3.0, "triple-period alias"))
-HARMONIC_TOLERANCE = 0.002
 # A fitted T14 this many times the BLS box means the fit chased something
 # broader than the dip (residual variability), not a transit.
 FIT_DURATION_RATIO_MAX = 3.0
@@ -68,18 +63,6 @@ def _depth_at(time, flux, period, centre, duration, sigma, select=None) -> tuple
     """(depth, error) of the mean dip in the central half of the transits at ``centre``."""
     return box_depth(time, flux, period, centre, duration, sigma, select, half_width=0.25,
                      robust=True)
-
-
-def _harmonic_of(candidate: TransitCandidate, other: TransitCandidate) -> str | None:
-    """How ``candidate`` repeats the stronger signal ``other``, or None if it doesn't."""
-    for ratio, name in HARMONICS:
-        if abs(candidate.period / other.period - ratio) < HARMONIC_TOLERANCE * ratio:
-            if ratio == 1.0:
-                offset = ((candidate.t0 - other.t0) / other.period) % 1.0
-                if abs(offset - 0.5) < 0.1:
-                    return f"secondary eclipse of the P={other.period:.4f} d signal"
-            return f"{name} of the P={other.period:.4f} d signal"
-    return None
 
 
 def vet_candidate(
@@ -99,8 +82,8 @@ def vet_candidate(
     good = np.isfinite(lc.time) & np.isfinite(lc.flux)
     for other in others:
         # A harmonic's transits overlap this candidate's own, so it stays in.
-        if other is not candidate and not (_harmonic_of(candidate, other)
-                                           or _harmonic_of(other, candidate)):
+        if other is not candidate and not (harmonic_of(candidate, other)
+                                           or harmonic_of(other, candidate)):
             epoch = np.round((lc.time - other.t0) / other.period)
             good &= np.abs(lc.time - (other.t0 + epoch * other.period)) >= other.duration
     time = np.asarray(lc.time[good], dtype=float)
@@ -124,7 +107,7 @@ def vet_candidate(
     repeats = []
     for other in others:
         if other is not candidate and other.snr > candidate.snr:
-            harmonic = _harmonic_of(candidate, other)
+            harmonic = harmonic_of(candidate, other)
             if harmonic:
                 repeats.append(f"{harmonic}, not a separate planet")
 

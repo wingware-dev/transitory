@@ -139,6 +139,36 @@ def test_hot_jupiter_secondary_does_not_take_a_pass():
         assert_recovered(cand, planet)
 
 
+def test_residual_at_a_found_period_does_not_take_a_pass():
+    # HAT-P-7-like: a dip left beyond the mask at the hot Jupiter's period (its
+    # phase-curve trough, 9 h before transit on Kepler-2) used to come back as a
+    # second planet at 1x the period, taking the pass from the 7.7 d planet.
+    hj = InjectedPlanet(3.21, 1.3, 0.010, 2.9)
+    trough = InjectedPlanet(3.21, 1.3 - 0.4, 0.0015, 3.0)
+    small = InjectedPlanet(7.7, 2.2, 0.0012, 3.0)
+    results = search_transits(flat_cleaned([hj, trough, small]), max_planets=2)
+    cands = sorted(found(results), key=lambda k: k.period)
+    assert len(cands) == 2
+    for cand, planet in zip(cands, [hj, small], strict=True):
+        assert_recovered(cand, planet)
+
+
+def test_harmonic_of_names_repeats_and_aliases():
+    from transitory.models import TransitCandidate
+    from transitory.pipeline.search import harmonic_of
+
+    def cand(period, t0=0.0):
+        return TransitCandidate(period=period, t0=t0, duration=0.1, depth=1e-3, snr=20.0,
+                                sde=12.0, n_transits=10)
+
+    found_ = cand(2.2047)
+    assert harmonic_of(cand(2.2050, t0=-0.39), found_).startswith("repeat")
+    assert harmonic_of(cand(0.7349), found_).startswith("third-period alias")
+    assert harmonic_of(cand(2.2047, t0=1.1), found_).startswith("secondary eclipse")
+    # TOI-270 d against c: 2.01x, off a 2:1 alias by more than the tolerance.
+    assert harmonic_of(cand(11.38194), cand(5.66051)) is None
+
+
 def test_rejected_peaks_are_capped(monkeypatch):
     # Many one-off dips: each is masked and searched past, but only up to
     # MAX_REJECTED_PEAKS extra BLS runs, and none becomes a candidate.  Depths
