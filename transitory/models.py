@@ -117,6 +117,7 @@ class FitResult:
     chi2: float = float("nan")  # reduced chi-squared
     limb_darkening: tuple[float, float] | None = None  # quadratic (u1, u2) the fit held fixed
     a_rs_prior: float | None = None  # a/Rs from the stellar density, when it constrained the fit
+    beta: float = 1.0  # red-noise factor the uncertainties were scaled by
     model_time: np.ndarray = field(default_factory=lambda: np.empty(0))  # phase grid (days from t0)
     model_flux: np.ndarray = field(default_factory=lambda: np.empty(0))
 

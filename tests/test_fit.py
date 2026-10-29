@@ -7,7 +7,9 @@ sqrt(depth) is only approximate for a limb-darkened fit to a flat-bottomed
 trapezoid (the fit's own depth is checked within 10%).  Against data made
 with the fit's own model the tolerances are tight: 2%.  Limb darkening
 and the stellar-density prior are checked against data made with the
-fit's own model for a given star.
+fit's own model for a given star.  The uncertainties are checked for
+coverage: over many noise draws, red noise and transit-timing variations
+included, the truth should lie within 3 quoted sigma.
 """
 
 import numpy as np
@@ -15,10 +17,11 @@ import pytest
 
 from pipeline_synth import flat_cleaned, injected_candidate
 from transitory.models import CleanedLightCurve, LightCurve, StarTarget, TransitCandidate
-from transitory.pipeline.fit import a_rs_from_density, fit_transit, limb_darkening
+from transitory.pipeline.fit import (a_rs_from_density, fit_transit, limb_darkening,
+                                     timing_ephemeris_errors)
 from transitory.pipeline.transit_model import (DEFAULT_U1, DEFAULT_U2, occulted_fraction, t14_hours,
                                                transit_flux)
-from transitory.synthetic import InjectedPlanet
+from transitory.synthetic import InjectedPlanet, red_noise
 
 
 def uniform_overlap(z, p):
@@ -254,3 +257,87 @@ def test_density_prior_ignored_when_out_of_range():
     fit = fit_transit(cleaned, cand, bad)
     assert fit.a_rs_prior is None
     assert fit.rp_rs == pytest.approx(0.1, rel=0.03)
+
+
+# --- uncertainties: red noise and transit timing ---
+
+ERR_PERIOD, ERR_K, ERR_A, ERR_B = 3.3, 0.06, 11.0, 0.3
+
+
+def noisy_cleaned(seed, white=200e-6, red=0.0, red_hours=1.0, ttv_minutes=0.0, ttv_period=17.0,
+                  baseline=54.0, cadence_s=600.0):
+    """Own-model transits with white noise, Ornstein-Uhlenbeck red noise and sinusoidal TTVs."""
+    rng = np.random.default_rng(seed)
+    time = np.arange(0.0, baseline, cadence_s / 86400.0)
+    epoch = np.round((time - 1.0) / ERR_PERIOD)
+    phase = rng.uniform(0, 2 * np.pi)
+    shift = ttv_minutes / 1440.0 * np.sin(2 * np.pi * epoch * ERR_PERIOD / ttv_period + phase)
+    flux = transit_flux(time - shift, 1.0, ERR_PERIOD, ERR_K, ERR_A, ERR_B) + rng.normal(0, white, time.shape)
+    if red > 0:
+        flux += red_noise(time, red, red_hours / 24.0, rng)
+    lc = LightCurve(time=time, flux=flux, flux_err=np.full_like(time, white), mission="Synthetic",
+                    cadence_s=cadence_s)
+    t14 = t14_hours(ERR_PERIOD, ERR_K, ERR_A, ERR_B)
+    cand = TransitCandidate(period=ERR_PERIOD, t0=1.0, duration=0.8 * t14 / 24.0, depth=ERR_K ** 2,
+                            snr=30.0, sde=20.0, n_transits=int(baseline / ERR_PERIOD))
+    cleaned = CleanedLightCurve(lc=lc, trend=np.ones_like(time), mask=np.ones(len(time), dtype=bool))
+    return cleaned, cand, t14
+
+
+def pulls(fits, truths):
+    """(fit - truth) / quoted sigma for period, rp/rs and T14, one row per fit."""
+    return np.array([[(f.period - ERR_PERIOD) / f.uncertainties["period"],
+                      (f.rp_rs - ERR_K) / f.uncertainties["rp_rs"],
+                      (f.duration_hours - truths) / f.uncertainties["duration_hours"]] for f in fits])
+
+
+def test_errors_cover_truth_with_red_noise():
+    # Red noise that barely raises the per-point scatter (chi2_red ~1.1) but
+    # dominates over a transit: white-noise errors leave the truth >4 sigma off.
+    fits, t14 = [], None
+    for seed in range(8):
+        cleaned, cand, t14 = noisy_cleaned(seed, white=600e-6, red=200e-6, red_hours=2.0,
+                                           cadence_s=120.0)
+        fits.append(fit_transit(cleaned, cand))
+    assert all(f.beta > 1.5 for f in fits)
+    p = pulls(fits, t14)
+    assert np.all(np.abs(p) < 3.0), p
+    assert np.sqrt(np.mean(p ** 2)) < 1.5
+
+
+def test_white_noise_errors_not_inflated():
+    for seed in range(3):
+        cleaned, cand, t14 = noisy_cleaned(seed)
+        fit = fit_transit(cleaned, cand)
+        assert fit.beta < 1.3
+        assert fit.chi2 == pytest.approx(1.0, abs=0.1)
+
+
+def test_period_error_covers_transit_timing_variations():
+    # 3-minute TTVs over a 17-day super-period on a precise light curve: the
+    # white-noise period error alone puts the true mean period up to ~6 sigma
+    # away.  (Rp/Rs and T14 are biased by the smeared stack; not checked.)
+    p_pulls = []
+    for seed in range(8):
+        kw = dict(white=100e-6, cadence_s=120.0)
+        fit = fit_transit(*noisy_cleaned(seed, ttv_minutes=3.0, **kw)[:2])
+        p_pulls.append((fit.period - ERR_PERIOD) / fit.uncertainties["period"])
+        quiet = fit_transit(*noisy_cleaned(seed, **kw)[:2])
+        assert fit.uncertainties["period"] > 3 * quiet.uncertainties["period"]
+    assert np.all(np.abs(p_pulls) < 3.0), p_pulls
+
+
+def test_timing_ephemeris_errors():
+    epochs = np.arange(-5, 6)
+    times = 2.0 + 3.0 * epochs
+    errors = np.full(len(epochs), 1e-3)
+    t0_err, p_err = timing_ephemeris_errors(epochs, times, errors)
+    # Perfect line: the formal errors, sigma / sqrt(N) at the middle epoch.
+    assert t0_err == pytest.approx(1e-3 / np.sqrt(11))
+    assert p_err == pytest.approx(1e-3 / np.sqrt(np.sum(epochs ** 2.0)))
+    # Scatter well above the quoted errors scales them up by sqrt(chi2_red).
+    jitter = np.random.default_rng(0).normal(0, 1e-2, len(epochs))
+    t0_wide, p_wide = timing_ephemeris_errors(epochs, times + jitter, errors)
+    assert p_wide > 5 * p_err and t0_wide > 5 * t0_err
+    assert timing_ephemeris_errors(epochs[:3], times[:3], errors[:3]) is None
+    assert timing_ephemeris_errors(np.zeros(5, int), np.full(5, 2.0), np.full(5, 1e-3)) is None

@@ -6,12 +6,18 @@ bandpass and the star's Teff when both are known, else the model's
 Sun-like defaults.  When the star's mass and radius are known, a Gaussian
 prior ties a/rs to the stellar density (circular orbit), which breaks the
 rp/rs - b - a/rs degeneracy of shallow or grazing-looking transits.  Only
-points near the predicted transits enter the fit.  The reference epoch is moved to the
-middle of the data, where t0 and P are least correlated.  The fit is
-started from a few impact parameters, because b and a/rs are nearly
-degenerate at low SNR, and the best start is kept.  Uncertainties come
-from the Jacobian covariance, scaled by the reduced chi-squared.  T14 and
-depth are derived, with their errors propagated through that covariance.
+points near the predicted transits enter the fit.  The reference epoch is
+moved to the middle of the data, where t0 and P are least correlated.  The
+fit is started from a few impact parameters, because b and a/rs are nearly
+degenerate at low SNR, and the best start is kept.
+
+Uncertainties come from the Jacobian covariance, with the data's rows
+scaled by the reduced chi-squared and by the red-noise factor beta of
+the light curve's residuals on the T14 timescale (``noise.beta_factor``).
+The error on P and t0 is at least what a straight line through
+individually fitted transit times gives, which also covers
+transit-timing variations.  T14 and depth are derived,
+with their errors propagated through the covariance.
 """
 
 from __future__ import annotations
@@ -22,7 +28,7 @@ import numpy as np
 from scipy.optimize import least_squares
 
 from ..models import CleanedLightCurve, FitResult, Mission, StarTarget, TransitCandidate
-from .search import robust_std
+from .noise import beta_factor, robust_std
 from .transit_model import DEFAULT_U1, DEFAULT_U2, t14_hours, transit_flux
 
 log = logging.getLogger(__name__)
@@ -58,6 +64,11 @@ SUPERSAMPLE_MIN_CADENCE_S = 900.0
 SUPERSAMPLE = 5
 _START_B = (0.1, 0.5, 0.85)
 _MODEL_POINTS = 2000
+
+# Per-transit timing: a transit's time counts if it is better than this
+# fraction of T14, and the line through the times needs this many of them.
+_TIMING_MAX_ERR_T14 = 0.1
+_TIMING_MIN_TRANSITS = 4
 
 
 def _fit_data(cleaned: CleanedLightCurve, candidate: TransitCandidate):
@@ -126,6 +137,83 @@ def _derived_errors(params: np.ndarray, cov: np.ndarray, ld: tuple[float, float]
     return np.sqrt(np.clip(var, 0.0, None))
 
 
+def _light_curve_beta(cleaned: CleanedLightCurve, params: np.ndarray, exposure: float,
+                      ld: tuple[float, float]) -> float:
+    """Red-noise beta of the whole light curve's residuals from the best model, on the T14 timescale."""
+    lc = cleaned.lc
+    time = np.asarray(lc.time, dtype=float)
+    flux = np.asarray(lc.flux, dtype=float)
+    good = np.isfinite(time) & np.isfinite(flux)
+    time, flux = time[good], flux[good]
+    # The model takes the transits out, so every point counts as out of transit.
+    resid = flux - _model(params, time, exposure, ld)
+    t14 = t14_hours(*params[1:]) / 24.0
+    return beta_factor(time, resid, t14)
+
+
+def _transit_times(time: np.ndarray, flux: np.ndarray, err: np.ndarray, params: np.ndarray,
+                   exposure: float, ld: tuple[float, float], scale: float):
+    """Mid-times of individual transits with the shape held at ``params``.
+
+    Returns (epochs, times, errors) for transits covered on both sides of
+    the centre whose timing error, inflated by ``scale``, is under
+    ``_TIMING_MAX_ERR_T14`` of T14.
+    """
+    t0, period = float(params[0]), float(params[1])
+    t14 = t14_hours(period, *params[2:]) / 24.0
+    epochs = np.round((time - t0) / period).astype(int)
+    out_n, out_t, out_e = [], [], []
+    for n in np.unique(epochs):
+        sel = epochs == n
+        tt, ff, ee = time[sel], flux[sel], err[sel]
+        centre = t0 + n * period
+        # Ingress and egress both sampled, so the time is set by both edges.
+        if not (np.any(tt < centre - 0.25 * t14) and np.any(tt > centre + 0.25 * t14)):
+            continue
+
+        def resid(x, tt=tt, ff=ff, ee=ee):
+            p = params.copy()
+            p[0] = x[0]
+            return (ff - _model(p, tt, exposure, ld)) / ee
+
+        lo, hi = centre - 0.5 * t14, centre + 0.5 * t14
+        try:
+            res = least_squares(resid, [centre], bounds=([lo], [hi]), x_scale=[t14 * 0.01])
+        except (ValueError, np.linalg.LinAlgError) as exc:
+            log.debug("timing of transit %d failed: %s", n, exc)
+            continue
+        info = float(res.jac[:, 0] @ res.jac[:, 0])
+        if res.status <= 0 or info <= 0:
+            continue
+        sigma = scale / np.sqrt(info)
+        at_bound = min(res.x[0] - lo, hi - res.x[0]) < 1e-3 * t14
+        if sigma < _TIMING_MAX_ERR_T14 * t14 and not at_bound:
+            out_n.append(int(n))
+            out_t.append(float(res.x[0]))
+            out_e.append(float(sigma))
+    return np.array(out_n), np.array(out_t), np.array(out_e)
+
+
+def timing_ephemeris_errors(epochs: np.ndarray, times: np.ndarray,
+                            errors: np.ndarray) -> tuple[float, float] | None:
+    """(t0 error, period error) of a weighted line through transit times, epoch 0 as reference.
+
+    The formal errors are scaled up by the line's reduced chi-squared when
+    it exceeds 1 (timing noise or TTVs).  None with too few transits or
+    fewer than two distinct epochs.
+    """
+    if len(epochs) < _TIMING_MIN_TRANSITS or len(np.unique(epochs)) < 2:
+        return None
+    w = 1.0 / errors ** 2
+    design = np.column_stack([np.ones_like(times), epochs.astype(float)])
+    normal = design.T @ (design * w[:, None])
+    coef = np.linalg.solve(normal, design.T @ (w * times))
+    cov = np.linalg.inv(normal)
+    chi2_red = float(np.sum(w * (times - design @ coef) ** 2) / (len(times) - 2))
+    cov *= max(chi2_red, 1.0)
+    return float(np.sqrt(cov[0, 0])), float(np.sqrt(cov[1, 1]))
+
+
 def fit_transit(cleaned: CleanedLightCurve, candidate: TransitCandidate,
                 star: StarTarget | None = None) -> FitResult:
     """Fit t0, period, rp/rs, a/rs and b starting from ``candidate``.
@@ -186,12 +274,27 @@ def fit_transit(cleaned: CleanedLightCurve, candidate: TransitCandidate,
     if t14 <= 0 or depth <= 0:
         raise RuntimeError("fitted model does not transit")
 
-    # chi-squared of the data alone; the prior's row stays in the Jacobian.
-    dof = max(len(flux) - len(params), 1)
-    chi2_red = float(np.sum(best.fun[:len(flux)] ** 2) / dof)
-    jac = best.jac
-    cov = np.linalg.pinv(jac.T @ jac) * max(chi2_red, 1e-12)
+    # chi-squared of the data alone.  The data's Jacobian rows are scaled by
+    # it and by the red-noise beta; the prior's row is left as it is.
+    n_data = len(flux)
+    dof = max(n_data - len(params), 1)
+    chi2_red = float(np.sum(best.fun[:n_data] ** 2) / dof)
+    beta = _light_curve_beta(cleaned, params, exposure, ld)
+    noise_scale = np.sqrt(max(chi2_red, 1e-12)) * beta
+    jac = best.jac.copy()
+    jac[:n_data] /= noise_scale
+    cov = np.linalg.pinv(jac.T @ jac)
     errors = np.sqrt(np.clip(np.diag(cov), 0.0, None))
+
+    timing = timing_ephemeris_errors(*_transit_times(time, flux, err, params, exposure, ld, noise_scale))
+    if timing is not None:
+        # t0 is the transit nearest mid-data, so the line's epoch 0 is t0.
+        for i, timing_err in enumerate(timing):
+            if timing_err > errors[i] > 0:
+                cov[i, :] *= timing_err / errors[i]
+                cov[:, i] *= timing_err / errors[i]
+                errors[i] = timing_err
+    log.debug("fit errors: chi2_red %.2f, beta %.2f, timing errors %s", chi2_red, beta, timing)
     t14_err, depth_err = _derived_errors(params, cov, ld)
     uncertainties = {name: float(e) for name, e in zip(PARAMS, errors)}
     uncertainties.update(duration_hours=float(t14_err), depth=float(depth_err))
@@ -208,6 +311,6 @@ def fit_transit(cleaned: CleanedLightCurve, candidate: TransitCandidate,
         period=period, t0=t0, rp_rs=rp_rs, a_rs=a_rs, b=b,
         duration_hours=float(t14), depth=float(depth),
         uncertainties=uncertainties, chi2=chi2_red,
-        limb_darkening=ld, a_rs_prior=a_prior,
+        limb_darkening=ld, a_rs_prior=a_prior, beta=beta,
         model_time=model_time, model_flux=model_flux,
     )
