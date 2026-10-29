@@ -79,7 +79,7 @@ def analyze_star(
         except Exception as exc:
             _stage_error(result, f"fit #{i + 1}", exc)
         try:
-            planet.vetting = vet_candidate(result.cleaned, cand, planet.fit)
+            planet.vetting = vet_candidate(result.cleaned, cand, planet.fit, others=candidates)
         except AnalysisCancelled:
             raise
         except Exception as exc:
