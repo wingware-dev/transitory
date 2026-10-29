@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 import textwrap
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -398,17 +399,31 @@ def confidence_color(planet: PlanetResult) -> str:
 # --- gallery and saving ---------------------------------------------------
 
 
-def gallery_figures(analysis: StarAnalysis) -> list[GalleryFigure]:
-    """All figures for one star, in gallery order: light curve, periodogram, one per planet."""
-    figures = [
-        GalleryFigure("lightcurve", "Light curve", light_curve_figure(analysis)),
-        GalleryFigure("periodogram", "Periodogram", periodogram_figure(analysis)),
+@dataclass
+class FigureSpec:
+    """A gallery figure not built yet: ``build()`` makes it.  All use FIG_SIZE."""
+
+    key: str
+    title: str
+    build: Callable[[], Figure]
+
+
+def gallery_figure_specs(analysis: StarAnalysis) -> list[FigureSpec]:
+    """The figures :func:`gallery_figures` would make, without building them (cheap)."""
+    specs = [
+        FigureSpec("lightcurve", "Light curve", lambda: light_curve_figure(analysis)),
+        FigureSpec("periodogram", "Periodogram", lambda: periodogram_figure(analysis)),
     ]
     for i in range(len(analysis.planets)):
         letter = planet_letter(i)
-        figures.append(GalleryFigure(f"planet-{letter}", f"Planet candidate {letter}",
-                                     folded_figure(analysis, i)))
-    return figures
+        specs.append(FigureSpec(f"planet-{letter}", f"Planet candidate {letter}",
+                                lambda i=i: folded_figure(analysis, i)))
+    return specs
+
+
+def gallery_figures(analysis: StarAnalysis) -> list[GalleryFigure]:
+    """All figures for one star, in gallery order: light curve, periodogram, one per planet."""
+    return [GalleryFigure(s.key, s.title, s.build()) for s in gallery_figure_specs(analysis)]
 
 
 def save_png(fig: Figure, path: Path | str, dpi: int = PNG_DPI) -> Path:

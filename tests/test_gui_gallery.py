@@ -43,7 +43,8 @@ def test_sections_embed_each_stars_figures(gallery, qtbot):
     a, b = gallery.sections()
     assert [c.objectName() for c in a.canvases] == [
         "figure-lightcurve", "figure-periodogram", "figure-planet-b", "figure-planet-c"]
-    assert b.canvases == [] and not b.save_button.isEnabled()  # no light curve: errors only
+    assert a.built and a.figure_keys == ["lightcurve", "periodogram", "planet-b", "planet-c"]
+    assert b.figure_keys == [] and not b.save_button.isEnabled()  # no light curve: errors only
     assert b.findChild(QLabel, "starErrors").text() == "fetch: no data"
     badges = [w.text().strip() for w in a.findChildren(QLabel, "confidenceBadge")]
     assert badges == ["b: strong", "c: strong"]
@@ -99,11 +100,70 @@ def test_replace_star_in_place_and_scroll_to(gallery, qtbot):
     layout = gallery.sections_layout
     order = [layout.itemAt(i).widget() for i in range(layout.count())]
     assert order.index(gallery.section("Star B")) < order.index(gallery.section("Star C"))
-    assert len(gallery.section("Star B").canvases) == 3
+    assert len(gallery.section("Star B").figure_keys) == 3
     settle()
     assert gallery.scroll_to("Star C")
     assert gallery.scroll.verticalScrollBar().value() > 0
     assert not gallery.scroll_to("Nope")
+
+
+def built_map(gallery):
+    return "".join("B" if s.built else "." for s in gallery.sections())
+
+
+def test_figures_built_only_near_view(gallery, qtbot):
+    gallery.set_analyses([make_analysis(name=f"Star {i}") for i in range(10)])
+    settle()
+    # each section is taller than the view: the one in view, and the next one prefetched
+    assert built_map(gallery) == "BB........"
+    unbuilt = gallery.section("Star 5")
+    assert unbuilt.canvases == [] and [s.objectName() for s in unbuilt.slots] == [
+        "slot-lightcurve", "slot-periodogram", "slot-planet-b", "slot-planet-c"]
+    # placeholders are canvas-sized, so building never moves what's below
+    assert unbuilt.height() == gallery.section("Star 0").height()
+    y_after = gallery.section("Star 6").y()
+
+    bar = gallery.scroll.verticalScrollBar()
+    bar.setValue(unbuilt.y() + 50)  # as the user scrolling there
+    qtbot.waitUntil(lambda: unbuilt.built)
+    settle()
+    assert gallery.section("Star 6").y() == y_after
+    assert built_map(gallery) == "BB..BBB..."  # in view, plus the neighbour on each side
+
+
+def test_scroll_to_builds_and_lands_on_star(gallery, qtbot):
+    gallery.set_analyses([make_analysis(name=f"Star {i}") for i in range(8)])
+    assert gallery.scroll_to("Star 6")  # straight after adding, before any layout pass
+    settle()
+    target = gallery.section("Star 6")
+    assert target.built
+    assert gallery.scroll.verticalScrollBar().value() == target.y()
+    gallery.scroll.verticalScrollBar().setValue(0)  # the user scrolling away ends the pin
+    settle()
+    assert gallery.scroll.verticalScrollBar().value() == 0
+
+
+def test_hidden_gallery_builds_nothing_until_shown(qtbot):
+    widget = GalleryWidget()
+    qtbot.addWidget(widget)
+    widget.resize(900, 700)
+    widget.set_analyses([make_analysis(name=f"Star {i}") for i in range(3)])
+    settle()
+    assert built_map(widget) == "..."
+    widget.show()
+    qtbot.waitUntil(lambda: built_map(widget).startswith("B"))
+
+
+def test_collapsed_section_builds_when_expanded(gallery, qtbot):
+    gallery.set_analyses([make_analysis(name=n) for n in ("Star A", "Star B", "Star C")])
+    for section in gallery.sections():  # collapsed before any were built: all headers in view
+        section.toggle.click()
+    settle()
+    assert built_map(gallery) == "..."
+    c = gallery.section("Star C")
+    c.toggle.click()
+    qtbot.waitUntil(lambda: c.built)
+    assert built_map(gallery) == "..B"
 
 
 def test_collapse_hides_figures(gallery):

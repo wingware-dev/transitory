@@ -41,9 +41,9 @@ def test_select_two_stars_submit_and_see_results(main_window, qtbot, tmp_path):
 
     sections = {s.key: s for s in window.gallery.sections()}
     assert set(sections) == {"Demo Hot Jupiter", "Demo Two-Planet"}
-    assert [c.objectName() for c in sections["Demo Hot Jupiter"].canvases] == [
-        "figure-lightcurve", "figure-periodogram", "figure-planet-b"]
-    assert len(sections["Demo Two-Planet"].canvases) == 4
+    # figures are built when a section scrolls into view; keys are known before that
+    assert sections["Demo Hot Jupiter"].figure_keys == ["lightcurve", "periodogram", "planet-b"]
+    assert len(sections["Demo Two-Planet"].figure_keys) == 4
 
     assert window.progress.status("Demo Hot Jupiter") == "Done — 1 candidate (1 strong)"
     assert window.progress.status("Demo Two-Planet") == "Done — 2 candidates (2 strong)"
@@ -104,7 +104,7 @@ def test_stage_errors_show_in_progress_and_gallery(qtbot):
     assert status.startswith("Error — fetch:") and "No synthetic data" in status
     message = window.statusBar().currentMessage()
     assert "1 with errors" in message and "Nowhere Star: fetch:" in message
-    assert window.gallery.section("Nowhere Star").canvases == []
+    assert window.gallery.section("Nowhere Star").figure_keys == []
     assert [r.star_key for r in window.table.rows()] == ["Nowhere Star"]
 
 
