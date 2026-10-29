@@ -155,6 +155,40 @@ def test_rejected_peaks_are_capped(monkeypatch):
     assert len(calls) <= 1 + search.MAX_REJECTED_PEAKS
 
 
+def _scaled_sde(monkeypatch, top, n_calls):
+    """Scale the first ``n_calls`` periodograms' SDE so their highest peak is ``top``."""
+    from transitory.pipeline import search
+    real_sde, calls = search._sde, []
+
+    def sde(power):
+        calls.append(1)
+        s = real_sde(power)
+        return s * (top / s.max()) if len(calls) <= n_calls else s
+
+    monkeypatch.setattr(search, "_sde", sde)
+    return calls
+
+
+def test_peak_below_detection_sde_is_not_a_detection(monkeypatch):
+    # A clean planet whose peak has SDE 8: enough transits, but under SDE_THRESHOLD.
+    calls = _scaled_sde(monkeypatch, 8.0, n_calls=1)
+    planet = InjectedPlanet(5.74, 2.1, 0.0020, 2.4)
+    assert not found(search_transits(flat_cleaned([planet])))
+    assert len(calls) == 1
+
+
+def test_low_sde_single_dip_is_still_searched_past(monkeypatch):
+    # TOI-270-like: a deep one-off dip tops the periodogram at SDE 7.6, between
+    # SDE_REJECT_MIN and SDE_THRESHOLD; it is masked and the planet found behind it.
+    calls = _scaled_sde(monkeypatch, 7.6, n_calls=1)
+    planet = InjectedPlanet(5.66, 2.3, 0.0015, 1.7)
+    dip = InjectedPlanet(500.0, 30.2, 0.0200, 6.0)
+    results = search_transits(flat_cleaned([planet, dip]), max_planets=1)
+    cands = found(results)
+    assert len(calls) >= 2 and len(cands) == 1
+    assert_recovered(cands[0], planet)
+
+
 def test_two_transits_at_the_grid_edge_unaliased():
     # P=20 d over 40 d (transits at 10, 30): BLS peaks at P/2 with an empty
     # middle epoch; the search must double back to 20 d.

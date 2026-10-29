@@ -38,8 +38,9 @@ from ..models import DUO_TRANSIT, CleanedLightCurve, FitResult, TransitCandidate
 from .noise import beta_factor, robust_std
 from .search import SDE_THRESHOLD, SNR_THRESHOLD, box_depth
 
-SNR_STRONG = 10.0
-SDE_STRONG = 9.0
+# Below these (but above the detection thresholds) a candidate is marginal.
+SNR_STRONG = 15.0
+SDE_STRONG = 12.0
 # Odd/even depths differing by more than this many sigma look like an EB.
 ODD_EVEN_SIGMA_MAX = 3.0
 # A secondary at least this significant counts as detected...

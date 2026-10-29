@@ -62,9 +62,9 @@ def test_planetary_secondary_stays_strong():
 
 def test_planetary_secondary_does_not_hide_other_weakness():
     hj = InjectedPlanet(2.2, 0.5, 0.007, 4.0, secondary_depth=0.0001)
-    v = vet([hj], snr=8.0)
+    v = vet([hj], snr=12.0)
     assert v.confidence == "weak"
-    assert v.reasons[0] == "marginal SNR 8.0"
+    assert v.reasons[0] == "marginal SNR 12.0"
     assert has_reason(v, "planetary emission")
 
 
@@ -102,11 +102,11 @@ def test_two_clean_transits_are_a_duo_transit_not_a_candidate():
 
 def test_two_transits_with_any_doubt_rejected():
     # A marginal SNR leaves a 3-transit signal 'weak'; with only 2 transits it rejects.
-    v = duo(snr=8.0)
+    v = duo(snr=12.0)
     assert v.confidence == "none"
     assert v.reasons[0].startswith("only 2 transits observed")
-    assert has_reason(v, "marginal SNR 8.0")
-    assert vet([PLANET], n_transits=2, snr=8.0).confidence == "none"
+    assert has_reason(v, "marginal SNR 12.0")
+    assert vet([PLANET], n_transits=2, snr=12.0).confidence == "none"
     assert vet([PLANET], n_transits=2, with_fit=False).confidence == "none"
 
 
@@ -136,7 +136,10 @@ def test_wasp_18_d_like_wide_fit_rejected():
 
 
 @pytest.mark.parametrize("snr,sde,confidence", [
-    (5.0, 20.0, "none"), (8.0, 20.0, "weak"), (50.0, 6.0, "none"), (50.0, 8.0, "weak"),
+    (5.0, 20.0, "none"), (12.0, 20.0, "weak"), (50.0, 8.0, "none"), (50.0, 10.0, "weak"),
+    (50.0, 14.4, "strong"),
+    # TIC 31410749's 57.63 d noise peak in the live validation.
+    (9.4, 10.5, "none"),
 ])
 def test_detection_thresholds(snr, sde, confidence):
     v = vet([PLANET], snr=snr, sde=sde)

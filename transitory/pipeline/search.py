@@ -35,9 +35,12 @@ from .noise import beta_factor, robust_std
 
 log = logging.getLogger(__name__)
 
-# A peak counts as a detection only when it clears both thresholds.
-SDE_THRESHOLD = 7.0
-SNR_THRESHOLD = 7.0
+# A peak counts as a detection only when it clears both thresholds.  Searches
+# of mirrored (pure-noise) flux on multi-year TESS stars gave peaks with
+# SDE up to 10.5 and SNR up to 12.3 that passed 7 / 7, even on the first
+# search, but none with both SDE >= 9 and SNR >= 10.
+SDE_THRESHOLD = 9.0
+SNR_THRESHOLD = 10.0
 
 # Phase drift across the baseline allowed between neighbouring trial periods,
 # as a fraction of the shortest trial duration.
@@ -51,6 +54,11 @@ MIN_TRANSITS = 3
 SDE_TWO_TRANSITS = 10.0
 # Single-event peaks masked and searched past per search; each costs a BLS run.
 MAX_REJECTED_PEAKS = 5
+# A peak too few transits back is masked and searched past when it has SNR
+# >= SNR_THRESHOLD and at least this SDE.  It is lower than SDE_THRESHOLD
+# since a deep single dip can rank low in SDE yet still hide later passes'
+# planets (TOI-270's 58.6 d dip, SDE 7.6, stood before planets d and b).
+SDE_REJECT_MIN = 7.0
 # Signals with at least this SNR leave residuals beyond the box: mask
 # DEEP_MASK_WIDTH box durations either side of each transit instead of one.
 DEEP_SNR = 100.0
@@ -357,12 +365,15 @@ def search_transits(
             n_transits = count_transits(t, period, t0, duration)
             cand = TransitCandidate(period=period, t0=t0, duration=duration, depth=depth,
                                     snr=snr, sde=float(sde[i]), n_transits=n_transits)
-            peak = depth > 0 and cand.sde >= SDE_THRESHOLD and snr >= SNR_THRESHOLD
-            significant = peak and _enough_transits(t, f, sigma, cand)
+            peak = depth > 0 and cand.sde >= SDE_REJECT_MIN and snr >= SNR_THRESHOLD
+            enough = peak and _enough_transits(t, f, sigma, cand)
+            significant = enough and cand.sde >= SDE_THRESHOLD
+            rejected = peak and not enough
             log.info("BLS pass %d: P=%.5f d depth=%.0f ppm SDE=%.1f SNR=%.1f n=%d%s",
                      n_pass + 1, period, depth * 1e6, cand.sde, snr, n_transits,
-                     "" if significant else " (too few transits show it)" if peak else " (not significant)")
-            if significant or not peak or n_rejected >= MAX_REJECTED_PEAKS:
+                     "" if significant else " (too few transits show it)" if rejected
+                     else " (not significant)")
+            if not rejected or n_rejected >= MAX_REJECTED_PEAKS:
                 break
             # Too few transits show it: mask its events and search this pass again.
             n_rejected += 1
