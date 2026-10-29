@@ -73,7 +73,7 @@ def analyze_star(
         progress(f"fitting candidate {i + 1}/{len(candidates)}", 0.8 + 0.2 * i / len(candidates))
         planet = PlanetResult(candidate=cand)
         try:
-            planet.fit = fit_transit(result.cleaned, cand)
+            planet.fit = fit_transit(result.cleaned, cand, target)
         except AnalysisCancelled:
             raise
         except Exception as exc:

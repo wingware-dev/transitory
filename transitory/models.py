@@ -34,6 +34,9 @@ class StarTarget:
     tmag: float | None = None  # TESS magnitude (or Kepler mag if only that is known)
     mission_hint: MissionHint = "any"
     radius_rsun: float | None = None  # stellar radius, when known, for Rp in Earth radii
+    teff_k: float | None = None  # effective temperature, for limb darkening
+    logg: float | None = None  # surface gravity, log10(cm s^-2)
+    mass_msun: float | None = None  # stellar mass; with the radius, a density prior on a/Rs
 
     @property
     def label(self) -> str:
@@ -112,6 +115,8 @@ class FitResult:
     depth: float  # fractional
     uncertainties: dict[str, float] = field(default_factory=dict)  # 1-sigma, keyed by field name
     chi2: float = float("nan")  # reduced chi-squared
+    limb_darkening: tuple[float, float] | None = None  # quadratic (u1, u2) the fit held fixed
+    a_rs_prior: float | None = None  # a/Rs from the stellar density, when it constrained the fit
     model_time: np.ndarray = field(default_factory=lambda: np.empty(0))  # phase grid (days from t0)
     model_flux: np.ndarray = field(default_factory=lambda: np.empty(0))
 

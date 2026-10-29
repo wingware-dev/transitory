@@ -64,6 +64,8 @@ def build(client: CatalogClient | None = None) -> dict:
             "name": name, "role": role, "tic": target.tic, "kic": target.kic,
             "ra": _round(target.ra, 6), "dec": _round(target.dec, 6),
             "tmag": _round(target.tmag, 3), "radius_rsun": _round(target.radius_rsun, 4),
+            "teff_k": _round(target.teff_k, 0), "logg": _round(target.logg, 3),
+            "mass_msun": _round(target.mass_msun, 3),
             "mission_hint": mission,
             "planets": [{"name": p.name, "period": p.period, "duration_h": p.duration_h,
                          "depth": _round(p.depth, 10), "rp_rs": p.rp_rs, "ref": p.ref}

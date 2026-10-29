@@ -40,6 +40,9 @@ class SkyStar:
     tic: int | None = None
     kic: int | None = None
     radius_rsun: float | None = None
+    teff_k: float | None = None
+    logg: float | None = None
+    mass_msun: float | None = None
     kind: StarKind = "host"
     planets: list[str] = field(default_factory=list)  # planet names, for hosts
     mission_hint: MissionHint = "any"
@@ -51,7 +54,8 @@ class SkyStar:
     def to_target(self) -> StarTarget:
         return StarTarget(name=self.name, tic=self.tic, kic=self.kic, ra=self.ra, dec=self.dec,
                           tmag=self.tmag, mission_hint=self.mission_hint,
-                          radius_rsun=self.radius_rsun)
+                          radius_rsun=self.radius_rsun, teff_k=self.teff_k, logg=self.logg,
+                          mass_msun=self.mass_msun)
 
 
 @dataclass
@@ -118,7 +122,8 @@ def field_stars(ra: float, dec: float, radius_deg: float, max_tmag: float | None
     """
     stars = ticdb.tic_cone(ra, dec, radius_deg, max_tmag=max_tmag, limit=limit, client=client)
     result = [SkyStar(name=f"TIC {s.tic}", ra=s.ra, dec=s.dec, tmag=s.tmag, tic=s.tic, kic=s.kic,
-                      radius_rsun=s.radius_rsun, kind="field")
+                      radius_rsun=s.radius_rsun, teff_k=s.teff_k, logg=s.logg,
+                      mass_msun=s.mass_msun, kind="field")
               for s in stars if s.obj_type == "STAR"]
     result.sort(key=lambda s: s.tmag if s.tmag is not None else 99.0)
     return result
@@ -139,6 +144,7 @@ def offline_targets() -> list[SkyStar]:
         stars.append(SkyStar(
             name=entry["name"], ra=entry["ra"], dec=entry["dec"], tmag=entry.get("tmag"),
             tic=entry.get("tic"), kic=entry.get("kic"), radius_rsun=entry.get("radius_rsun"),
+            teff_k=entry.get("teff_k"), logg=entry.get("logg"), mass_msun=entry.get("mass_msun"),
             kind="null" if entry.get("role") == "null" else "host",
             planets=[p["name"] for p in entry.get("planets", [])],
             mission_hint=entry.get("mission_hint", "any")))

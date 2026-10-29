@@ -2,7 +2,8 @@
 
 ``Mast.Name.Lookup`` resolves names through SIMBAD, NED and the K2 EPIC;
 the TIC services give TIC/KIC cross-identifications, TESS magnitudes and
-stellar radii.  All responses are cached by :class:`CatalogClient`.
+stellar radii, temperatures, gravities and masses.  All responses are
+cached by :class:`CatalogClient`.
 """
 
 from __future__ import annotations
@@ -27,6 +28,9 @@ class TicStar:
     tmag: float | None = None
     kic: int | None = None
     radius_rsun: float | None = None
+    teff_k: float | None = None
+    logg: float | None = None
+    mass_msun: float | None = None
     obj_type: str = "STAR"
     dist_arcsec: float | None = None  # from the cone centre, for cone searches
 
@@ -56,7 +60,9 @@ def _opt_int(value) -> int | None:
 def _tic_star(row: dict) -> TicStar:
     return TicStar(tic=int(row["ID"]), ra=float(row["ra"]), dec=float(row["dec"]),
                    tmag=_opt_float(row.get("Tmag")), kic=_opt_int(row.get("KIC")),
-                   radius_rsun=_opt_float(row.get("rad")), obj_type=row.get("objType") or "STAR",
+                   radius_rsun=_opt_float(row.get("rad")), teff_k=_opt_float(row.get("Teff")),
+                   logg=_opt_float(row.get("logg")), mass_msun=_opt_float(row.get("mass")),
+                   obj_type=row.get("objType") or "STAR",
                    dist_arcsec=_opt_float(row.get("dstArcSec")))
 
 

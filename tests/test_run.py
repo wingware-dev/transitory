@@ -114,7 +114,7 @@ def test_too_few_transits_not_strong():
 
 
 def test_fit_failure_keeps_candidate(source, monkeypatch):
-    def broken_fit(cleaned, candidate):
+    def broken_fit(cleaned, candidate, star=None):
         raise RuntimeError("did not converge")
 
     monkeypatch.setattr(run, "fit_transit", broken_fit)
