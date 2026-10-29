@@ -9,9 +9,12 @@ The confidence levels are:
   period alias).  These are the signs of noise, a single event or an
   eclipsing binary.
 - ``weak``: a detection that is marginal (SNR or SDE close to threshold,
-  only two transits, a large rp/rs, a significant but small secondary,
-  a failed fit).
+  only two transits, a large rp/rs, a failed fit).
 - ``strong``: everything else.
+
+A significant secondary eclipse shallow enough to be the planet's own
+thermal emission (as hot Jupiters show) doesn't lower the confidence; it is
+listed in the reasons as information.
 
 Depths are measured directly from the data (the median drop in the central
 half of the transit against the local out-of-transit level), so the checks
@@ -142,7 +145,7 @@ def vet_candidate(
         if ratio > SECONDARY_RATIO_MAX:
             fatal.append(f"{text}, {ratio:.0%} of the primary: likely eclipsing binary")
         else:
-            marginal.append(f"{text}, small enough to be planetary emission")
+            notes.append(f"{text}, small enough to be planetary emission")
 
     if fit is None:
         marginal.append("transit fit failed")
@@ -158,15 +161,15 @@ def vet_candidate(
 
     if repeats:
         # The other checks measured the stronger signal again; only this matters.
-        fatal, marginal = repeats, []
+        fatal, marginal, notes = repeats, [], []
     if fatal:
         confidence = "none"
     elif marginal:
         confidence = "weak"
     else:
         confidence = "strong"
-        notes.append(f"SNR {candidate.snr:.1f}, SDE {candidate.sde:.1f}, "
-                     f"{candidate.n_transits} transits, odd/even consistent")
+        notes.insert(0, f"SNR {candidate.snr:.1f}, SDE {candidate.sde:.1f}, "
+                        f"{candidate.n_transits} transits, odd/even consistent")
 
     return Vetting(
         odd_even_sigma=float(odd_even_sigma),

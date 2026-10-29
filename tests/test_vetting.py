@@ -49,12 +49,32 @@ def test_deep_secondary_eclipse_flagged():
     assert has_reason(v, "likely eclipsing binary")
 
 
-def test_small_secondary_is_only_weak():
-    # Hot-Jupiter-like emission: 1.5% of the transit depth.
+def test_planetary_secondary_stays_strong():
+    # Hot-Jupiter-like emission: 1.5% of the transit depth, a clear detection
+    # that is listed but doesn't lower the confidence.
     hj = InjectedPlanet(2.2, 0.5, 0.007, 4.0, secondary_depth=0.0001)
-    v = vet([hj])
-    assert v.confidence == "weak"
+    v = vet([hj], snr=500.0)
+    assert v.confidence == "strong"
+    assert v.secondary_depth == pytest.approx(0.0001, abs=50e-6)
     assert has_reason(v, "planetary emission")
+    assert has_reason(v, "odd/even consistent")
+
+
+def test_planetary_secondary_does_not_hide_other_weakness():
+    hj = InjectedPlanet(2.2, 0.5, 0.007, 4.0, secondary_depth=0.0001)
+    v = vet([hj], snr=8.0)
+    assert v.confidence == "weak"
+    assert v.reasons[0] == "marginal SNR 8.0"
+    assert has_reason(v, "planetary emission")
+
+
+def test_deep_secondary_rejected_despite_strong_detection():
+    # Same strong, many-transit signal as above, but a secondary 30% of the primary.
+    eb = InjectedPlanet(2.2, 0.5, 0.007, 4.0, secondary_depth=0.0015)
+    v = vet([eb], snr=500.0)
+    assert v.confidence == "none"
+    assert has_reason(v, "likely eclipsing binary")
+    assert not has_reason(v, "planetary emission")
 
 
 def test_single_transit_rejected():
