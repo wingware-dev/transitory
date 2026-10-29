@@ -12,6 +12,9 @@
    "dec": 50.241306,
    "tmag": 10.477,
    "radius_rsun": 1.0897,
+   "teff_k": 5706.0,
+   "logg": 4.371,
+   "mass_msun": 1.017,
    "mission_hint": "Kepler",
    "planets": [
     {
@@ -41,6 +44,9 @@
    "dec": 41.089824,
    "tmag": 12.453,
    "radius_rsun": 2.0812,
+   "teff_k": 5974.0,
+   "logg": 3.843,
+   "mass_msun": 1.1,
    "mission_hint": "Kepler",
    "planets": [
     {
@@ -62,6 +68,9 @@
    "dec": 47.969505,
    "tmag": 10.027,
    "radius_rsun": 1.9936,
+   "teff_k": 6532.0,
+   "logg": 3.968,
+   "mass_msun": 1.347,
    "mission_hint": "Kepler",
    "planets": [
     {
@@ -83,6 +92,9 @@
    "dec": 47.88443,
    "tmag": 11.189,
    "radius_rsun": 0.8552,
+   "teff_k": 5594.0,
+   "logg": 4.569,
+   "mass_msun": 0.989,
    "mission_hint": "Kepler",
    "planets": [
     {
@@ -104,6 +116,9 @@
    "dec": -80.46912,
    "tmag": 5.105,
    "radius_rsun": 1.1489,
+   "teff_k": 5992.0,
+   "logg": 4.359,
+   "mass_msun": 1.1,
    "mission_hint": "TESS",
    "planets": [
     {
@@ -125,6 +140,9 @@
    "dec": -69.168978,
    "tmag": 11.924,
    "radius_rsun": 0.1886,
+   "teff_k": 3004.0,
+   "logg": 5.085,
+   "mass_msun": 0.158,
    "mission_hint": "TESS",
    "planets": [
     {
@@ -146,6 +164,9 @@
    "dec": -45.677882,
    "tmag": 8.829,
    "radius_rsun": 1.3466,
+   "teff_k": 6226.0,
+   "logg": 4.259,
+   "mass_msun": 1.2,
    "mission_hint": "TESS",
    "planets": [
     {
@@ -167,6 +188,9 @@
    "dec": -51.956232,
    "tmag": 10.498,
    "radius_rsun": 0.3744,
+   "teff_k": 3532.0,
+   "logg": 4.851,
+   "mass_msun": 0.362,
    "mission_hint": "TESS",
    "planets": [
     {
@@ -204,6 +228,9 @@
    "dec": 43.833275,
    "tmag": 6.804,
    "radius_rsun": 0.9594,
+   "teff_k": 5337.0,
+   "logg": 4.438,
+   "mass_msun": 0.92,
    "mission_hint": "Kepler",
    "planets": []
   }

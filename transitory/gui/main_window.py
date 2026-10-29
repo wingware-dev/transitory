@@ -59,7 +59,8 @@ DEMO_SKY_SIZE_DEG = 18.0
 def demo_catalog(source: SyntheticSource) -> SkyCatalog:
     """The sky catalog for demo mode: the synthetic stars, at their made-up positions."""
     stars = [SkyStar(name=t.name, ra=t.ra, dec=t.dec, tmag=t.tmag, tic=t.tic, kic=t.kic,
-                     radius_rsun=t.radius_rsun, mission_hint=t.mission_hint,
+                     radius_rsun=t.radius_rsun, teff_k=t.teff_k, logg=t.logg,
+                     mass_msun=t.mass_msun, mission_hint=t.mission_hint,
                      planets=[p.name for p in source.known_planets(t)])
              for t in source.targets() if t.ra is not None and t.dec is not None]
     return SkyCatalog(stars=stars, offline=True,

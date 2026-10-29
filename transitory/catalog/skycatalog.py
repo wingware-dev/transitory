@@ -27,8 +27,8 @@ StarKind = Literal["host", "field", "null"]
 
 OFFLINE_FILE = "targets_offline.json"
 
-HOST_QUERY = ("select hostname, pl_name, tic_id, ra, dec, sy_tmag, sy_kepmag, st_rad, disc_facility "
-              "from pscomppars where tran_flag = 1")
+HOST_QUERY = ("select hostname, pl_name, tic_id, ra, dec, sy_tmag, sy_kepmag, st_rad, st_teff, "
+              "st_logg, st_mass, disc_facility from pscomppars where tran_flag = 1")
 
 
 @dataclass
@@ -88,6 +88,7 @@ def hosts_from_rows(rows: list[dict]) -> list[SkyStar]:
                 name=host, ra=float(row["ra"]), dec=float(row["dec"]),
                 tmag=row.get("sy_tmag") if row.get("sy_tmag") is not None else row.get("sy_kepmag"),
                 tic=tic_number(row.get("tic_id")), radius_rsun=row.get("st_rad"),
+                teff_k=row.get("st_teff"), logg=row.get("st_logg"), mass_msun=row.get("st_mass"),
                 mission_hint=_hint_for_facility(row.get("disc_facility")))
         if row["pl_name"] not in star.planets:
             star.planets.append(row["pl_name"])

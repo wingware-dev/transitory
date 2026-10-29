@@ -35,6 +35,11 @@ def test_host_stars_groups_planets_by_host(client):
     assert kepler10.planets == ["Kepler-10 b", "Kepler-10 c"]
     assert kepler10.tic == 377780790 and kepler10.kind == "host"
     assert kepler10.mission_hint == "Kepler"
+    assert kepler10.teff_k == pytest.approx(5708, abs=200) and kepler10.logg == pytest.approx(4.34, abs=0.2)
+    target = kepler10.to_target()
+    assert (target.teff_k, target.logg, target.mass_msun) == (kepler10.teff_k, kepler10.logg,
+                                                              kepler10.mass_msun)
+    assert target.mass_msun == pytest.approx(0.91, abs=0.2)
     assert by_name["TOI-270"].n_planets == 3 and by_name["TOI-270"].mission_hint == "TESS"
     assert by_name["HD 39091"].planets == ["pi Men c"]
     assert by_name["WASP-18"].planets == ["WASP-18 b"]  # duplicate rows count once
@@ -57,9 +62,11 @@ def test_host_stars_without_fallback_raise(down_client):
 def test_hosts_from_rows_skips_rows_without_position():
     rows = [{"hostname": "A", "pl_name": "A b", "ra": None, "dec": 1.0},
             {"hostname": "B", "pl_name": "B b", "ra": 10.0, "dec": 1.0, "tic_id": "TIC 5",
-             "sy_tmag": None, "sy_kepmag": 12.5, "disc_facility": "K2"}]
+             "sy_tmag": None, "sy_kepmag": 12.5, "disc_facility": "K2",
+             "st_teff": 5000.0, "st_logg": 4.5, "st_mass": 0.8}]
     (star,) = hosts_from_rows(rows)
     assert (star.name, star.tic, star.tmag, star.mission_hint) == ("B", 5, 12.5, "Kepler")
+    assert (star.teff_k, star.logg, star.mass_msun) == (5000.0, 4.5, 0.8)
 
 
 def test_field_stars_brightest_first(client):
@@ -69,7 +76,7 @@ def test_field_stars_brightest_first(client):
     assert mags == sorted(mags) and max(mags) <= 13.0
     assert all(s.kind == "field" and s.name == f"TIC {s.tic}" for s in stars)
     kepler10 = next(s for s in stars if s.tic == 377780790)
-    assert kepler10.kic == 11904151
+    assert kepler10.kic == 11904151 and kepler10.teff_k and kepler10.logg and kepler10.mass_msun
     target = kepler10.to_target()
     assert (target.tic, target.kic, target.ra) == (377780790, 11904151, kepler10.ra)
 
@@ -113,6 +120,7 @@ def test_offline_targets_are_the_validation_set():
     for star in stars:
         assert star.tic and -90 <= star.dec <= 90 and 0 <= star.ra < 360
         assert star.mission_hint in ("Kepler", "TESS")
+        assert star.teff_k and star.logg and star.mass_msun
     null = stars[-1]
     assert null.kind == "null" and null.planets == [] and null.kic == 8006161
     assert all(s.kind == "host" and s.planets for s in stars[:-1])

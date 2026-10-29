@@ -21,7 +21,7 @@ from transitory.catalog import archive, client as C, resolve as R, skycatalog as
 
 OUTPUT = Path(__file__).resolve().parent / "recorded.json"
 
-TIC_KEEP = ["ID", "ra", "dec", "Tmag", "KIC", "rad", "objType", "dstArcSec"]
+TIC_KEEP = ["ID", "ra", "dec", "Tmag", "KIC", "rad", "Teff", "logg", "mass", "objType", "dstArcSec"]
 HOSTS_KEEP = {"Kepler-10", "Kepler-7", "HAT-P-7", "Kepler-22", "HD 39091", "LHS 3844", "WASP-18",
               "TOI-270"}
 
