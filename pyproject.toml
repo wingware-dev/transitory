@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "transitory"
+version = "0.1.0"
+description = "Dashboard for finding transiting planets in public TESS and Kepler light curves"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "numpy>=2.0",
+    "scipy>=1.13",
+    "astropy>=6.0",
+    "astroquery>=0.4.7",
+    "lightkurve>=2.4",
+    "matplotlib>=3.8",
+    "PySide6>=6.7",
+    "pyqtgraph>=0.13.7",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-qt>=4.4", "pytest-xdist>=3.5"]
+
+[project.scripts]
+transitory = "transitory.gui.main_window:main"
+
+[tool.setuptools.packages.find]
+include = ["transitory*"]
+
+[tool.setuptools.package-data]
+transitory = ["data/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "tests"]
+addopts = "-m 'not network'"
+markers = [
+    "network: needs internet access to MAST / NASA Exoplanet Archive (skipped by default; run with -m network)",
+]
+qt_api = "pyside6"
