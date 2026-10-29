@@ -81,6 +81,25 @@ def test_flat_star_gives_no_detection(seed):
     assert len(results[0].periods) == len(results[0].power) > 1000
 
 
+@pytest.mark.parametrize("seed", [1, 2, 5, 7, 8])
+def test_red_noise_gives_no_detection(seed):
+    # 300 ppm noise correlated over 8 h on top of 300 ppm white: with a
+    # white-noise SNR these seeds gave detections at SNR 14-19.
+    lc = flat_cleaned([], seed=seed, red_noise_ppm=300, red_noise_hours=8)
+    assert not found(search_transits(lc))
+
+
+def test_planet_in_red_noise_recovered_with_lower_snr():
+    planet = InjectedPlanet(4.1, 1.0, 0.0015, 2.5)
+    white = found(search_transits(flat_cleaned([planet]), max_planets=1))[0]
+    red_lc = flat_cleaned([planet], red_noise_ppm=300, red_noise_hours=8)
+    cands = found(search_transits(red_lc))
+    assert len(cands) == 1
+    assert_recovered(cands[0], planet)
+    # The binned scatter, not the per-point scatter, sets the error.
+    assert cands[0].snr < 0.5 * white.snr
+
+
 def test_too_shallow_gives_no_detection():
     # 100 ppm under 300 ppm noise: SNR ~4 even with all 13 transits.
     results = search_transits(flat_cleaned([InjectedPlanet(4.1, 1.0, 0.0001, 2.5)]))

@@ -18,7 +18,9 @@ listed in the reasons as information.
 
 Depths are measured directly from the data (the median drop in the central
 half of the transit against the local out-of-transit level), so the checks
-don't depend on the fit converging.
+don't depend on the fit converging.  Their errors include the red-noise
+beta factor (``noise.beta_factor``), so correlated noise doesn't make an
+odd/even difference or a secondary eclipse look significant.
 """
 
 from __future__ import annotations
@@ -28,7 +30,8 @@ from collections.abc import Sequence
 import numpy as np
 
 from ..models import CleanedLightCurve, FitResult, TransitCandidate, Vetting
-from .search import SDE_THRESHOLD, SNR_THRESHOLD, box_depth, robust_std
+from .noise import beta_factor, robust_std
+from .search import SDE_THRESHOLD, SNR_THRESHOLD, box_depth
 
 SNR_STRONG = 10.0
 SDE_STRONG = 9.0
@@ -100,7 +103,10 @@ def vet_candidate(
         period, t0, duration = candidate.period, candidate.t0, candidate.duration
 
     epoch = np.round((time - t0) / period)
-    sigma = robust_std(flux[np.abs(time - (t0 + epoch * period)) > duration])
+    out = np.abs(time - (t0 + epoch * period)) > duration
+    # The depth checks average the central half of each transit, so the
+    # red-noise scaling is the one at half the duration.
+    sigma = robust_std(flux[out]) * beta_factor(time[out], flux[out], 0.5 * duration)
 
     fatal: list[str] = []
     marginal: list[str] = []

@@ -142,3 +142,23 @@ def test_resonant_pair_not_called_alias():
     cand_in, cand_out = injected_candidate(inner, snr=60.0), injected_candidate(outer, snr=90.0)
     v = vet([inner, outer], cand=cand_in, others=[cand_out, cand_in])
     assert v.confidence == "strong"
+
+
+@pytest.mark.parametrize("seed", [1, 2, 3, 16])
+def test_red_noise_does_not_look_like_an_eclipsing_binary(seed):
+    # 600 ppm noise correlated over 8 h: with white-noise errors these seeds
+    # showed odd/even differences of 4.5-5 sigma or a 3+ sigma secondary.
+    planet = InjectedPlanet(6.3, 2.0, 0.004, 6.0)
+    cleaned = flat_cleaned([planet], seed=seed, red_noise_ppm=600, red_noise_hours=8)
+    v = vet_candidate(cleaned, injected_candidate(planet), None)
+    assert not has_reason(v, "eclipsing binary")
+    assert not has_reason(v, "secondary eclipse")
+    assert v.odd_even_sigma < 3
+
+
+def test_eclipsing_binary_still_flagged_in_red_noise():
+    eb = InjectedPlanet(2.7, 0.5, 0.01, 3.1, odd_even_ratio=0.7)
+    cleaned = flat_cleaned([eb], red_noise_ppm=600, red_noise_hours=8)
+    v = vet_candidate(cleaned, injected_candidate(eb), None)
+    assert v.confidence == "none"
+    assert has_reason(v, "odd/even depths differ")

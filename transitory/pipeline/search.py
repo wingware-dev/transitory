@@ -31,6 +31,7 @@ from scipy.ndimage import median_filter
 
 from ..config import MAX_PLANETS_PER_STAR, MAX_TRANSIT_DURATION_HOURS, MIN_PERIOD_DAYS
 from ..models import CleanedLightCurve, PeriodogramResult, ProgressCallback, TransitCandidate
+from .noise import beta_factor, robust_std
 
 log = logging.getLogger(__name__)
 
@@ -104,13 +105,6 @@ def period_grid(baseline: float, min_period: float, max_period: float) -> list[t
     return grid
 
 
-def robust_std(values: np.ndarray) -> float:
-    values = values[np.isfinite(values)]
-    if len(values) < 2:
-        return float("nan")
-    return float(1.4826 * np.median(np.abs(values - np.median(values))))
-
-
 def covered_epochs(time: np.ndarray, period: float, t0: float, duration: float) -> np.ndarray:
     """Epochs with data covering at least MIN_TRANSIT_COVERAGE of the transit."""
     epoch = np.round((time - t0) / period)
@@ -130,14 +124,20 @@ def count_transits(time: np.ndarray, period: float, t0: float, duration: float) 
 
 def transit_snr(time: np.ndarray, flux: np.ndarray, period: float, t0: float,
                 duration: float, depth: float) -> float:
-    """Depth over its white-noise error, with the noise from out-of-transit scatter."""
+    """Depth over its error, with the noise from out-of-transit scatter.
+
+    The white-noise error is scaled by the red-noise beta factor at the
+    transit duration, so correlated noise doesn't pass for a transit.
+    """
     epoch = np.round((time - t0) / period)
     dt = np.abs(time - (t0 + epoch * period))
     n_in = int(np.sum(dt < 0.5 * duration))
-    sigma = robust_std(flux[dt > duration])
+    out = dt > duration
+    sigma = robust_std(flux[out])
     if n_in == 0 or not np.isfinite(sigma) or sigma <= 0:
         return 0.0
-    return float(depth / (sigma / np.sqrt(n_in)))
+    beta = beta_factor(time[out], flux[out], duration)
+    return float(depth / (beta * sigma / np.sqrt(n_in)))
 
 
 def box_depth(time: np.ndarray, flux: np.ndarray, period: float, t0: float, duration: float,
@@ -229,6 +229,8 @@ def _events_agree(time, flux, sigma, cand: TransitCandidate) -> bool:
     One deep dip can line up with an empty epoch or another planet's
     transit at some period; with only two events that passes as periodic.
     """
+    out = ~_near(time, cand.period, cand.t0, cand.duration)
+    sigma *= beta_factor(time[out], flux[out], cand.duration)
     depths, errors = _event_depths(time, flux, sigma, cand.period, cand.t0, cand.duration)
     return (bool(len(depths)) and bool(np.all(depths > 3.0 * errors))
             and depths.min() >= 0.5 * depths.max())

@@ -61,6 +61,20 @@ def test_noise_trend_gaps_and_outliers():
     assert lc.baseline_days == pytest.approx(30.0, abs=0.01)
 
 
+def test_red_noise_rms_and_correlation():
+    star = quiet_star([], red_noise_ppm=400.0, red_noise_hours=4.0, baseline_days=200.0,
+                      gaps=[(50.0, 60.0)])
+    lc = make_light_curve(star)
+    resid = lc.flux - 1.0
+    assert np.std(resid) == pytest.approx(400e-6, rel=0.15)
+    # Neighbours 4 h apart are correlated by about 1/e, ones a day apart not at all.
+    lag = int(round(4.0 * 6))
+    assert np.corrcoef(resid[:-lag], resid[lag:])[0, 1] == pytest.approx(np.exp(-1), abs=0.1)
+    assert abs(np.corrcoef(resid[:-144], resid[144:])[0, 1]) < 0.15
+    # Off by default, leaving earlier light curves unchanged.
+    assert np.all(make_light_curve(quiet_star([])).flux == 1.0)
+
+
 def test_deterministic_per_seed():
     star = quiet_star([], noise_ppm=300.0)
     a, b = make_light_curve(star), make_light_curve(star)

@@ -34,7 +34,8 @@ from ..config import MAX_PLANETS_PER_STAR, MIN_PERIOD_DAYS
 from ..models import PlanetResult, ProgressCallback, StarAnalysis
 from ..pipeline import AnalysisCancelled
 from ..pipeline.run import analyze_star
-from ..pipeline.search import SNR_THRESHOLD, count_transits, robust_std
+from ..pipeline.noise import beta_factor, robust_std
+from ..pipeline.search import SNR_THRESHOLD, count_transits
 from ..sources import LightCurveSource, SyntheticSource
 from .targets import ValidationTarget
 
@@ -292,9 +293,12 @@ def explain_miss(pub: Published, analysis: StarAnalysis | None) -> str:
                            "at the published ephemeris")
         if pub.depth:
             epoch = np.round((t - t0) / pub.period)
-            n_in = int(np.sum(np.abs(t - (t0 + epoch * pub.period)) < 0.5 * duration))
-            sigma = robust_std(f)
+            dt = np.abs(t - (t0 + epoch * pub.period))
+            n_in = int(np.sum(dt < 0.5 * duration))
+            out = dt > duration
+            sigma = robust_std(f[out]) * beta_factor(t[out], f[out], duration)
             if n_in and np.isfinite(sigma) and sigma > 0:
+                # Red-noise aware, as the search's SNR is.
                 snr = pub.depth / (sigma / math.sqrt(n_in))
                 if snr < SNR_THRESHOLD:
                     reasons.append(f"too shallow for the noise: the published depth "

@@ -50,6 +50,10 @@ class SyntheticStar:
     gaps: list[tuple[float, float]] = field(default_factory=list)  # (start, end) days removed
     n_outliers: int = 20  # positive flares / cosmic rays
     seed: int | None = None  # None: derived from the target name
+    # Correlated (red) noise: a random walk pulled back to zero over
+    # red_noise_hours (an Ornstein-Uhlenbeck process), rms red_noise_ppm.
+    red_noise_ppm: float = 0.0
+    red_noise_hours: float = 3.0
 
 
 def trapezoid_transit(time: np.ndarray, planet: InjectedPlanet) -> np.ndarray:
@@ -78,6 +82,23 @@ def _seed_for(star: SyntheticStar) -> int:
     return zlib.crc32(star.target.name.encode("utf-8"))
 
 
+def red_noise(time: np.ndarray, rms: float, timescale: float,
+              rng: np.random.Generator) -> np.ndarray:
+    """Ornstein-Uhlenbeck noise at ``time``: rms ``rms``, correlated over ``timescale`` days.
+
+    Gaps are handled exactly: the correlation decays with the time between
+    samples, whatever it is.
+    """
+    decay = np.exp(-np.diff(time) / timescale)
+    kicks = rng.normal(0.0, rms, time.shape)
+    kicks[1:] *= np.sqrt(1.0 - decay ** 2)
+    out = np.empty_like(time)
+    out[0] = kicks[0]
+    for i in range(1, len(time)):
+        out[i] = decay[i - 1] * out[i - 1] + kicks[i]
+    return out
+
+
 def make_light_curve(star: SyntheticStar) -> LightCurve:
     """Build a noisy, trended, gappy light curve with the star's planets injected."""
     rng = np.random.default_rng(_seed_for(star))
@@ -100,6 +121,9 @@ def make_light_curve(star: SyntheticStar) -> LightCurve:
     if star.n_outliers and len(time):
         idx = rng.choice(len(time), size=min(star.n_outliers, len(time)), replace=False)
         flux[idx] += rng.uniform(5, 20, idx.shape) * sigma
+
+    if star.red_noise_ppm > 0 and len(time):
+        flux += red_noise(time, star.red_noise_ppm * 1e-6, star.red_noise_hours / 24.0, rng)
 
     return LightCurve(
         time=time,
