@@ -29,7 +29,7 @@ PNG_DPI = 150
 FOOTER_FONT_SIZE = 6.5
 PLANET_LETTERS = "bcdefghijklmnopqrstuvwxyz"
 
-CONFIDENCE_COLORS = {"strong": "#1a9641", "weak": "#e6860b", "none": "#808080"}
+CONFIDENCE_COLORS = {"strong": "#1a9641", "weak": "#e6860b", "duo-transit": "#8073ac", "none": "#808080"}
 PLANET_COLORS = ["#d7191c", "#2b83ba", "#7b3294", "#008837", "#e66101"]
 DATA_COLOR = "#9e9e9e"
 TREND_COLOR = "#e6550d"
@@ -389,6 +389,16 @@ def _parameter_text(planet: PlanetResult) -> str:
         ]
         rows += textwrap.wrap("; ".join(vet.reasons), 30)
     return "\n".join(rows)
+
+
+def candidate_count_text(n_found: int, n_duo: int) -> str:
+    """"N candidates" for ``n_found`` found signals, of which ``n_duo`` duo-transits.
+
+    Duo-transits are not planet candidates, so they are counted apart.
+    """
+    n = n_found - n_duo
+    text = f"{n} candidate{'s' if n != 1 else ''}"
+    return text + (f", {n_duo} duo-transit" if n_duo else "")
 
 
 def confidence_color(planet: PlanetResult) -> str:

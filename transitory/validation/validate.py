@@ -9,6 +9,9 @@ aliases BLS is prone to, and the rest are sorted out:
   beyond the search's period range, the search ran out of passes, ...);
 - an unmatched candidate the vetting rejected (confidence "none") is a
   *rejected* detection: the pipeline flagged it itself;
+- an unmatched candidate rated "duo-transit" (two transits, passing every
+  check) is a *duo-transit*: not a planet candidate, so counted apart from
+  both recoveries and spurious detections;
 - an unmatched candidate rated "weak" or "strong" is a *spurious* detection
   (a false positive), also with an explanation.
 
@@ -31,7 +34,7 @@ import numpy as np
 from ..catalog import archive
 from ..catalog.client import CatalogClient, CatalogError
 from ..config import MAX_PLANETS_PER_STAR, MIN_PERIOD_DAYS
-from ..models import PlanetResult, ProgressCallback, StarAnalysis
+from ..models import DUO_TRANSIT, PlanetResult, ProgressCallback, StarAnalysis
 from ..pipeline import AnalysisCancelled
 from ..pipeline.run import analyze_star
 from ..pipeline.noise import beta_factor, robust_std
@@ -194,7 +197,7 @@ class OtherDetection:
     """A found candidate matching no published planet."""
 
     index: int  # into analysis.planets
-    kind: str  # "spurious", "rejected" or "duplicate" (a matched planet found again)
+    kind: str  # "spurious", "duo-transit", "rejected" or "duplicate" (a matched planet found again)
     explanation: str
 
 
@@ -243,6 +246,8 @@ class ValidationRun:
             "missed": sum(1 for c in comps if c.found_index is None),
             "spurious_null": sum(1 for r, o in others if o.kind == "spurious" and r.vt.role == "null"),
             "spurious_host": sum(1 for r, o in others if o.kind == "spurious" and r.vt.role != "null"),
+            "duo_null": sum(1 for r, o in others if o.kind == DUO_TRANSIT and r.vt.role == "null"),
+            "duo_host": sum(1 for r, o in others if o.kind == DUO_TRANSIT and r.vt.role != "null"),
             "rejected": sum(1 for _, o in others if o.kind == "rejected"),
             "duplicates": sum(1 for _, o in others if o.kind == "duplicate"),
             "failed": sum(1 for r in self.results if r.analysis is None or not r.analysis.ok or r.errors),
@@ -342,7 +347,11 @@ def explain_other(planet: PlanetResult, analysis: StarAnalysis, published: list[
                 reasons.append(f"near {_factor_text(k)} {what}")
                 break
     cand = planet.candidate
-    if cand.n_transits <= 3:
+    if planet.is_duo_transit:
+        reasons.append("only 2 events covered, passing every vetting check: a duo-transit, which "
+                       "may be a planet on a long period or two unrelated dips from systematics or "
+                       "stellar variability; more data must show a third transit")
+    elif cand.n_transits <= 3:
         events = f"{cand.n_transits} event{'s' if cand.n_transits != 1 else ''}"
         reasons.append(f"only {events} covered: more likely individual systematics or stellar "
                        "variability than a periodic signal")
@@ -395,7 +404,8 @@ def compare(vt: ValidationTarget, analysis: StarAnalysis, published: PublishedSe
             others.append(OtherDetection(index=fi, kind="duplicate", explanation=explanation + "."))
             continue
         rejected = planet.vetting is not None and planet.vetting.confidence == "none"
-        others.append(OtherDetection(index=fi, kind="rejected" if rejected else "spurious",
+        kind = "rejected" if rejected else DUO_TRANSIT if planet.is_duo_transit else "spurious"
+        others.append(OtherDetection(index=fi, kind=kind,
                                      explanation=explain_other(planet, analysis, expected, matched)))
     return comparisons, others
 

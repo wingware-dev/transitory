@@ -1,6 +1,6 @@
 {
- "started": "2026-10-29T16:24:06.734417+00:00",
- "finished": "2026-10-29T17:11:09.244826+00:00",
+ "started": "2026-10-29T21:31:13.755454+00:00",
+ "finished": "2026-10-29T22:07:59.190988+00:00",
  "source": "MAST",
  "max_products": null,
  "cancelled": false,
@@ -11,9 +11,11 @@
   "found": 11,
   "aliases": 0,
   "missed": 0,
-  "spurious_null": 4,
-  "spurious_host": 5,
-  "rejected": 7,
+  "spurious_null": 3,
+  "spurious_host": 0,
+  "duo_null": 0,
+  "duo_host": 4,
+  "rejected": 9,
   "duplicates": 1,
   "failed": 0
  },
@@ -21,7 +23,7 @@
   {
    "name": "Kepler-10",
    "role": "planet-host",
-   "elapsed_s": 117.5,
+   "elapsed_s": 96.9,
    "errors": [],
    "published_source": "NASA Exoplanet Archive pscomppars",
    "published_retrieved": "2026-10-29",
@@ -32,6 +34,7 @@
      "status": "found",
      "factor": 1.0,
      "period_pub": 0.8374907,
+     "period_err_pub": 2e-07,
      "rp_rs_pub": 0.01268,
      "t14_pub": 1.811,
      "depth_pub": 0.0001919,
@@ -54,6 +57,7 @@
      "status": "found",
      "factor": 1.0,
      "period_pub": 45.294301,
+     "period_err_pub": 4.8e-05,
      "rp_rs_pub": 0.020414,
      "t14_pub": 6.8714,
      "depth_pub": 0.0004768,
@@ -78,14 +82,14 @@
      "period": 385.10920456519085,
      "snr": 14.654045175813645,
      "sde": 17.032290456895325,
-     "explanation": "near 1\u00d7 the Kepler orbit (372.5 d); only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: odd/even depths differ by 5.8 sigma (281 vs 14 ppm): likely eclipsing binary; only 2 transits observed."
+     "explanation": "near 1\u00d7 the Kepler orbit (372.5 d); only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: only 2 transits observed, and they fail the checks; odd/even depths differ by 5.8 sigma (281 vs 14 ppm): likely eclipsing binary."
     }
    ]
   },
   {
    "name": "Kepler-7",
    "role": "planet-host",
-   "elapsed_s": 129.6,
+   "elapsed_s": 103.1,
    "errors": [],
    "published_source": "NASA Exoplanet Archive pscomppars",
    "published_retrieved": "2026-10-29",
@@ -96,6 +100,7 @@
      "status": "found",
      "factor": 1.0,
      "period_pub": 4.8854892,
+     "period_err_pub": 9e-07,
      "rp_rs_pub": 0.08294,
      "t14_pub": 5.1313,
      "depth_pub": 0.0075693,
@@ -116,26 +121,26 @@
    "others": [
     {
      "index": 1,
-     "kind": "spurious",
+     "kind": "duo-transit",
      "period": 719.976116082959,
      "snr": 30.739256262476143,
      "sde": 35.875111453746754,
-     "explanation": "near 2\u00d7 the Kepler orbit (372.5 d); only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: only 2 transits observed."
+     "explanation": "near 2\u00d7 the Kepler orbit (372.5 d); only 2 events covered, passing every vetting check: a duo-transit, which may be a planet on a long period or two unrelated dips from systematics or stellar variability; more data must show a third transit; vetting: only 2 transits observed (SNR 30.7, SDE 35.9, odd/even consistent): a possible long-period planet, not a planet candidate until more transits confirm it."
     },
     {
      "index": 2,
-     "kind": "spurious",
+     "kind": "duo-transit",
      "period": 434.94023457089077,
      "snr": 16.929031405381554,
      "sde": 25.919015255862252,
-     "explanation": "only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: only 2 transits observed."
+     "explanation": "only 2 events covered, passing every vetting check: a duo-transit, which may be a planet on a long period or two unrelated dips from systematics or stellar variability; more data must show a third transit; vetting: only 2 transits observed (SNR 16.9, SDE 25.9, odd/even consistent): a possible long-period planet, not a planet candidate until more transits confirm it."
     }
    ]
   },
   {
    "name": "Kepler-2",
    "role": "planet-host",
-   "elapsed_s": 166.7,
+   "elapsed_s": 121.6,
    "errors": [],
    "published_source": "NASA Exoplanet Archive pscomppars",
    "published_retrieved": "2026-10-29",
@@ -146,6 +151,7 @@
      "status": "found",
      "factor": 1.0,
      "period_pub": 2.20474,
+     "period_err_pub": 1.7e-05,
      "rp_rs_pub": 0.075408,
      "t14_pub": 3.88216,
      "depth_pub": 0.006,
@@ -170,7 +176,7 @@
      "period": 360.00510370204654,
      "snr": 18.377850838917354,
      "sde": 17.134226068048562,
-     "explanation": "near 1\u00d7 the Kepler orbit (372.5 d); only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: odd/even depths differ by 8.2 sigma (425 vs -45 ppm): likely eclipsing binary; only 2 transits observed."
+     "explanation": "near 1\u00d7 the Kepler orbit (372.5 d); only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: only 2 transits observed, and they fail the checks; odd/even depths differ by 8.2 sigma (425 vs -45 ppm): likely eclipsing binary."
     },
     {
      "index": 2,
@@ -185,7 +191,7 @@
   {
    "name": "Kepler-22",
    "role": "planet-host",
-   "elapsed_s": 183.2,
+   "elapsed_s": 146.1,
    "errors": [],
    "published_source": "NASA Exoplanet Archive pscomppars",
    "published_retrieved": "2026-10-29",
@@ -196,6 +202,7 @@
      "status": "found",
      "factor": 1.0,
      "period_pub": 289.863876,
+     "period_err_pub": 1.3e-05,
      "rp_rs_pub": 0.020319,
      "t14_pub": 7.415,
      "depth_pub": 0.0005019,
@@ -216,26 +223,26 @@
    "others": [
     {
      "index": 1,
-     "kind": "spurious",
+     "kind": "duo-transit",
      "period": 476.90995304170787,
      "snr": 19.194940804222345,
      "sde": 20.876756827002108,
-     "explanation": "only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: only 2 transits observed."
+     "explanation": "only 2 events covered, passing every vetting check: a duo-transit, which may be a planet on a long period or two unrelated dips from systematics or stellar variability; more data must show a third transit; vetting: only 2 transits observed (SNR 19.2, SDE 20.9, odd/even consistent): a possible long-period planet, not a planet candidate until more transits confirm it."
     },
     {
      "index": 2,
-     "kind": "spurious",
+     "kind": "duo-transit",
      "period": 732.5321189974754,
      "snr": 17.93883964469822,
      "sde": 19.9802828713777,
-     "explanation": "near 2\u00d7 the Kepler orbit (372.5 d); only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: only 2 transits observed."
+     "explanation": "near 2\u00d7 the Kepler orbit (372.5 d); only 2 events covered, passing every vetting check: a duo-transit, which may be a planet on a long period or two unrelated dips from systematics or stellar variability; more data must show a third transit; vetting: only 2 transits observed (SNR 17.9, SDE 20.0, odd/even consistent): a possible long-period planet, not a planet candidate until more transits confirm it."
     }
    ]
   },
   {
    "name": "pi Men",
    "role": "planet-host",
-   "elapsed_s": 889.6,
+   "elapsed_s": 699.3,
    "errors": [],
    "published_source": "NASA Exoplanet Archive pscomppars",
    "published_retrieved": "2026-10-29",
@@ -246,6 +253,7 @@
      "status": "found",
      "factor": 1.0,
      "period_pub": 6.2678399,
+     "period_err_pub": 1.1e-05,
      "rp_rs_pub": 0.015844,
      "t14_pub": 2.952024,
      "depth_pub": 0.00026759,
@@ -268,7 +276,7 @@
   {
    "name": "LHS 3844",
    "role": "planet-host",
-   "elapsed_s": 185.9,
+   "elapsed_s": 146.8,
    "errors": [],
    "published_source": "NASA Exoplanet Archive pscomppars",
    "published_retrieved": "2026-10-29",
@@ -279,6 +287,7 @@
      "status": "found",
      "factor": 1.0,
      "period_pub": 0.462929709,
+     "period_err_pub": 4.4e-08,
      "rp_rs_pub": 0.06262,
      "t14_pub": 0.5242,
      "depth_pub": 0.000696,
@@ -303,7 +312,7 @@
      "period": 114.62871503965464,
      "snr": 35.70656458711565,
      "sde": 17.917711601778407,
-     "explanation": "only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: odd/even depths differ by 3.9 sigma (8973 vs 12343 ppm): likely eclipsing binary; only 2 transits observed."
+     "explanation": "only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: only 2 transits observed, and they fail the checks; odd/even depths differ by 3.9 sigma (8973 vs 12343 ppm): likely eclipsing binary."
     },
     {
      "index": 2,
@@ -311,14 +320,14 @@
      "period": 64.33346156769531,
      "snr": 21.355620655835242,
      "sde": 10.139024169399079,
-     "explanation": "only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: odd/even depths differ by 4.3 sigma (2541 vs 4964 ppm): likely eclipsing binary; only 2 transits observed."
+     "explanation": "only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: only 2 transits observed, and they fail the checks; odd/even depths differ by 4.3 sigma (2541 vs 4964 ppm): likely eclipsing binary."
     }
    ]
   },
   {
    "name": "WASP-18",
    "role": "planet-host",
-   "elapsed_s": 209.1,
+   "elapsed_s": 155.8,
    "errors": [],
    "published_source": "NASA Exoplanet Archive pscomppars",
    "published_retrieved": "2026-10-29",
@@ -329,6 +338,7 @@
      "status": "found",
      "factor": 1.0,
      "period_pub": 0.94145223,
+     "period_err_pub": 2.4e-07,
      "rp_rs_pub": 0.1018,
      "t14_pub": 2.21,
      "depth_pub": 0.010409999999999999,
@@ -353,22 +363,22 @@
      "period": 0.3138176759162566,
      "snr": 15.109327144194319,
      "sde": 14.611702737085812,
-     "explanation": "a 0.333333\u00d7 alias of WASP-18 b (P = 0.9415 d); a 0.333333\u00d7 alias of WASP-18 b (P = 0.9415 d); vetting: third-period alias of the P=0.9414 d signal, not a separate planet."
+     "explanation": "a 1/3\u00d7 alias of WASP-18 b (P = 0.9415 d); vetting: third-period alias of the P=0.9414 d signal, not a separate planet."
     },
     {
      "index": 2,
-     "kind": "spurious",
+     "kind": "rejected",
      "period": 21.92923672414827,
      "snr": 15.892270697261878,
      "sde": 11.887119186091537,
-     "explanation": "only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: only 2 transits observed; fitted T14 13.9 h is much longer than the 3.6 h detected dip: not transit-shaped."
+     "explanation": "only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: only 2 transits observed, and they fail the checks; fitted T14 13.9 h is much longer than the 3.6 h detected dip: not transit-shaped."
     }
    ]
   },
   {
    "name": "TOI-270",
    "role": "planet-host",
-   "elapsed_s": 216.2,
+   "elapsed_s": 167.4,
    "errors": [],
    "published_source": "NASA Exoplanet Archive pscomppars",
    "published_retrieved": "2026-10-29",
@@ -379,6 +389,7 @@
      "status": "found",
      "factor": 1.0,
      "period_pub": 3.35992,
+     "period_err_pub": 5e-05,
      "rp_rs_pub": 0.0307,
      "t14_pub": 1.294,
      "depth_pub": 0.0009766941,
@@ -401,6 +412,7 @@
      "status": "found",
      "factor": 1.0,
      "period_pub": 5.66051,
+     "period_err_pub": 4e-05,
      "rp_rs_pub": 0.056,
      "t14_pub": 1.682,
      "depth_pub": 0.003451844,
@@ -423,6 +435,7 @@
      "status": "found",
      "factor": 1.0,
      "period_pub": 11.38194,
+     "period_err_pub": 0.00011,
      "rp_rs_pub": 0.0491,
      "t14_pub": 2.117,
      "depth_pub": 0.002645,
@@ -445,7 +458,7 @@
   {
    "name": "KIC 8006161",
    "role": "null",
-   "elapsed_s": 173.8,
+   "elapsed_s": 137.8,
    "errors": [],
    "published_source": "NASA Exoplanet Archive pscomppars, cumulative KOI and TOI tables",
    "published_retrieved": "2026-10-29",
@@ -464,7 +477,7 @@
   {
    "name": "KIC 6106415",
    "role": "null",
-   "elapsed_s": 131.0,
+   "elapsed_s": 104.4,
    "errors": [],
    "published_source": "NASA Exoplanet Archive pscomppars, cumulative KOI and TOI tables",
    "published_retrieved": "2026-10-29",
@@ -473,33 +486,33 @@
     {
      "index": 0,
      "kind": "rejected",
-     "period": 554.7527879716569,
+     "period": 554.7303523239436,
      "snr": 127.9540864355115,
      "sde": 29.371600380110227,
-     "explanation": "only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: odd/even depths differ by 113.2 sigma (6731 vs 687 ppm): likely eclipsing binary; only 2 transits observed."
+     "explanation": "only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: only 2 transits observed, and they fail the checks; odd/even depths differ by 49.9 sigma (6747 vs 4070 ppm): likely eclipsing binary; rp/rs 0.30 is large for a planet; fitted T14 1.0 h disagrees with the 3.4 h detected dip: not transit-shaped."
     },
     {
      "index": 1,
-     "kind": "spurious",
-     "period": 486.068547763476,
+     "kind": "rejected",
+     "period": 486.07031263651623,
      "snr": 86.48451077661652,
      "sde": 25.572782014558438,
-     "explanation": "only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: only 2 transits observed; rp/rs 0.27 is large for a planet."
+     "explanation": "only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: only 2 transits observed, and they fail the checks; rp/rs 0.31 is large for a planet; fitted T14 1.2 h disagrees with the 3.4 h detected dip: not transit-shaped."
     },
     {
      "index": 2,
      "kind": "rejected",
-     "period": 700.917763251672,
+     "period": 700.9177590705067,
      "snr": 80.93442334324145,
      "sde": 19.39595314583038,
-     "explanation": "only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: odd/even depths differ by 23.8 sigma (624 vs 1469 ppm): likely eclipsing binary; only 2 transits observed."
+     "explanation": "only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: only 2 transits observed, and they fail the checks; odd/even depths differ by 23.1 sigma (626 vs 1465 ppm): likely eclipsing binary."
     }
    ]
   },
   {
    "name": "TIC 31410749",
    "role": "null",
-   "elapsed_s": 420.0,
+   "elapsed_s": 326.3,
    "errors": [],
    "published_source": "NASA Exoplanet Archive pscomppars, cumulative KOI and TOI tables",
    "published_retrieved": "2026-10-29",
@@ -508,15 +521,15 @@
     {
      "index": 0,
      "kind": "spurious",
-     "period": 57.63225918869425,
+     "period": 57.63362758319878,
      "snr": 9.370841173623928,
      "sde": 10.471545958238577,
-     "explanation": "not an alias or a known systematic period; correlated (red) noise, which the white-noise SNR does not account for, is the likely cause; vetting: marginal SNR 9.4."
+     "explanation": "not an alias or a known systematic period; correlated noise or stellar variability beyond what the red-noise-scaled SNR allows for is the likely cause; vetting: marginal SNR 9.4."
     },
     {
      "index": 1,
      "kind": "spurious",
-     "period": 96.63400167945704,
+     "period": 96.63246457032642,
      "snr": 8.297684293050086,
      "sde": 8.821060407679285,
      "explanation": "only 3 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: marginal SNR 8.3; marginal SDE 8.8."

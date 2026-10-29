@@ -183,6 +183,50 @@ def test_spurious_signal_near_tess_orbit_is_explained():
     assert "TESS orbit" in others[0].explanation and "only 3 events" in others[0].explanation
 
 
+def test_duo_transits_counted_apart_from_recoveries_and_spurious():
+    from datetime import UTC, datetime
+
+    from transitory.validation.validate import TargetResult, ValidationRun
+
+    def result(vt, planets, published=PublishedSet()):
+        analysis = _analysis(planets, mission="Kepler")
+        res = TargetResult(vt=vt, analysis=analysis, published=published)
+        res.comparisons, res.others = compare(vt, analysis, published)
+        return res
+
+    duo_reasons = ["only 2 transits observed (SNR 30.0, SDE 20.0, odd/even consistent): a possible "
+                   "long-period planet, not a planet candidate until more transits confirm it"]
+    host = ValidationTarget(target=StarTarget(name="Host"), role="planet-host")
+    null = ValidationTarget(target=StarTarget(name="Quiet"), role="null")
+    run = ValidationRun(results=[
+        result(host, [_planet(3.0), _planet(720.0, "duo-transit", n_transits=2, reasons=duo_reasons),
+                      _planet(77.0, "weak", n_transits=4)], PublishedSet(planets=[Published("Host b", 3.0)])),
+        result(null, [_planet(486.0, "duo-transit", n_transits=2, reasons=duo_reasons)]),
+    ], source_name="MAST", max_products=None, started=datetime.now(UTC))
+    assert [o.kind for r in run.results for o in r.others] == ["duo-transit", "spurious", "duo-transit"]
+    tally = run.tally()
+    assert (tally["found"], tally["spurious_host"], tally["spurious_null"]) == (1, 1, 0)
+    assert (tally["duo_host"], tally["duo_null"]) == (1, 1)
+    duo = run.results[1].others[0].explanation
+    assert "a duo-transit" in duo and "third transit" in duo and "more likely individual" not in duo
+    assert "near 2× the Kepler orbit" in run.results[0].others[0].explanation
+
+    findings = " ".join(report.run_findings(run))
+    assert "the vetting rejects 0 of them afterwards and lists 2 as duo-transits" in findings
+    assert "2 duo-transit signals (Host c at 720 d, Quiet b at 486 d)" in findings
+    assert "counted neither as recoveries nor as spurious detections" in findings
+    assert "1 lie near an instrumental period" in findings
+    assert "1 spurious detection passed vetting as 'weak' (Host)" in findings
+
+    text = report.report_markdown(run, {})
+    assert "| Spurious detections on null stars | 0 |" in text
+    assert "| Duo-transit signals (2 transits, not candidates) on null stars | 1 |" in text
+    assert "| Duo-transit signals on planet hosts | 1 |" in text
+    assert "*duo-transits* cover only 2 transits" in text
+    null_star_rows = text.split("## Null stars")[1].split("## Targets")[0]
+    assert "| b: duo-transit |" in null_star_rows
+
+
 def test_unexplained_spurious_signal_points_at_red_noise():
     vt = ValidationTarget(target=StarTarget(name="Quiet"), role="null")
     _, others = compare(vt, _analysis([_planet(5.3)]), PublishedSet())

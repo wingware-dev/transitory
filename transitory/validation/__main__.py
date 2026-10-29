@@ -72,7 +72,7 @@ def main(argv: list[str] | None = None) -> int:
     tally = run.tally()
     print(f"{tally['found']} found, {tally['aliases']} at aliases, {tally['missed']} missed of "
           f"{tally['published']} published; {tally['spurious_null'] + tally['spurious_host']} spurious, "
-          f"{tally['rejected']} rejected by vetting")
+          f"{tally['duo_null'] + tally['duo_host']} duo-transit, {tally['rejected']} rejected by vetting")
     return 0
 
 

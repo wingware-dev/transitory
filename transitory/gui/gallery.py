@@ -111,7 +111,8 @@ def _summary_text(analysis: StarAnalysis) -> str:
         parts.append(f"{analysis.raw.mission}, {len(analysis.raw):,} points, "
                      f"{analysis.raw.baseline_days:.1f} d")
     n = len(analysis.planets)
-    parts.append("no candidates" if n == 0 else f"{n} candidate{'s' if n != 1 else ''}")
+    parts.append("no candidates" if n == 0 else plots.candidate_count_text(
+        n, sum(1 for p in analysis.planets if p.is_duo_transit)))
     return " · ".join(parts)
 
 
@@ -421,10 +422,10 @@ class GalleryWidget(QWidget):
         n = len(self._sections)
         self.empty_label.setVisible(n == 0)
         self.save_all_button.setEnabled(any(has_plots(s.analysis) for s in self._sections.values()))
-        planets = sum(len(s.analysis.planets) for s in self._sections.values())
+        planets = [p for s in self._sections.values() for p in s.analysis.planets]
         self.status.setText("" if n == 0 else
-                            f"{n} star{'s' if n != 1 else ''}, {planets} candidate"
-                            f"{'s' if planets != 1 else ''}")
+                            f"{n} star{'s' if n != 1 else ''}, " + plots.candidate_count_text(
+                                len(planets), sum(1 for p in planets if p.is_duo_transit)))
 
     # --- saving -----------------------------------------------------------
 

@@ -15,7 +15,11 @@ import numpy as np
 
 Mission = Literal["TESS", "Kepler", "Synthetic"]
 MissionHint = Literal["TESS", "Kepler", "any"]
-Confidence = Literal["strong", "weak", "none"]
+# "duo-transit": a signal backed by only two transits that passes every other
+# check.  It may be a long-period planet, but two dips can't show periodicity,
+# so it is listed in its own class and not counted as a planet candidate.
+Confidence = Literal["strong", "weak", "duo-transit", "none"]
+DUO_TRANSIT: Confidence = "duo-transit"
 
 # progress_cb(message, fraction) with fraction in [0, 1].  A callback may raise
 # (e.g. a cancellation exception) to stop the work in progress.
@@ -135,6 +139,10 @@ class PlanetResult:
     candidate: TransitCandidate
     fit: FitResult | None = None
     vetting: Vetting | None = None
+
+    @property
+    def is_duo_transit(self) -> bool:
+        return self.vetting is not None and self.vetting.confidence == DUO_TRANSIT
 
 
 @dataclass

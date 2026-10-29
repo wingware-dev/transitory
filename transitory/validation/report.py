@@ -20,6 +20,7 @@ from matplotlib.ticker import NullFormatter, ScalarFormatter
 from .. import plots
 from ..catalog.archive import ARCHIVE_CREDIT
 from ..config import MAX_PLANETS_PER_STAR, MIN_PERIOD_DAYS, PROJECT_ROOT, reports_dir
+from ..models import DUO_TRANSIT
 from ..pipeline.search import MIN_TRANSITS, SDE_THRESHOLD, SDE_TWO_TRANSITS, SNR_THRESHOLD
 from .validate import PlanetComparison, TargetResult, ValidationRun, found_period
 
@@ -156,7 +157,8 @@ def summary_figure(run: ValidationRun) -> Figure:
     tally = run.tally()
     fig.suptitle(f"Known-planet validation: {tally['found'] + tally['aliases']} of {tally['published']} "
                  f"recovered, {tally['missed']} missed, {tally['spurious_null'] + tally['spurious_host']} "
-                 f"spurious ({run.source_name}, {_cap(run)})", fontsize=11, x=0.01, ha="left")
+                 f"spurious, {tally['duo_null'] + tally['duo_host']} duo-transit "
+                 f"({run.source_name}, {_cap(run)})", fontsize=11, x=0.01, ha="left")
     if _uses_archive(run):
         fig.text(0.01, 0.01, f"Published values: NASA Exoplanet Archive (retrieved {run.retrieved}). "
                  + ARCHIVE_CREDIT, fontsize=6, color="#555", wrap=True)
@@ -216,6 +218,7 @@ def run_findings(run: ValidationRun) -> list[str]:
         stars = sorted({r.name for r, _, _ in few})
         periods = sorted(found_period(p) for _, _, p in few)
         n_rejected = sum(1 for _, o, _ in few if o.kind == "rejected")
+        n_duo = sum(1 for _, o, _ in few if o.kind == DUO_TRANSIT)
         text = (f"{len(few)} of {len(extra)} extra candidates cover at most 2 transits, at periods of "
                 f"{periods[0]:.0f}–{periods[-1]:.0f} d: dips from systematics or variability")
         if any(p.candidate.n_transits == 2 for _, _, p in few):
@@ -226,8 +229,22 @@ def run_findings(run: ValidationRun) -> list[str]:
                  + ("They take search passes from real planets; " if exhausted else
                     "" if missed else "No planet was missed for them, but they fill the remaining "
                     "search passes; ")
-                 + f"the vetting rejects {n_rejected} of them afterwards.")
+                 + f"the vetting rejects {n_rejected} of them afterwards"
+                 + (f" and lists {n_duo} as duo-transits" if n_duo else "") + ".")
         findings.append(text)
+    duos = [(r, o, p) for r, o, p in extra if o.kind == DUO_TRANSIT]
+    if duos:
+        n_sys = sum(1 for _, o, _ in duos if "near " in o.explanation)
+        findings.append(
+            f"{_count(len(duos), 'duo-transit signal')} ("
+            + ", ".join(f"{r.name} {plots.planet_letter(o.index)} at {found_period(p):.0f} d"
+                        for r, o, p in duos)
+            + "): 2 transits that pass every vetting check, including a fitted T14 that agrees with "
+            "the dip's width. A real planet on a long period can show only two transits, so they are "
+            "kept, but two dips can't show periodicity: they are counted neither as recoveries nor "
+            "as spurious detections"
+            + (f"; {n_sys} lie near an instrumental period, which makes systematics the likelier "
+               "cause" if n_sys else "") + ".")
     spurious = [(r, o, p) for r, o, p in extra if o.kind == "spurious"]
     if spurious:
         ratings = sorted({p.vetting.confidence for _, _, p in spurious if p.vetting is not None})
@@ -334,6 +351,8 @@ def report_markdown(run: ValidationRun, figures: dict[tuple[str, int], str]) -> 
             f"| Missed | {tally['missed']} |",
             f"| Spurious detections on null stars | {tally['spurious_null']} |",
             f"| Spurious detections on planet hosts | {tally['spurious_host']} |",
+            f"| Duo-transit signals (2 transits, not candidates) on null stars | {tally['duo_null']} |",
+            f"| Duo-transit signals on planet hosts | {tally['duo_host']} |",
             f"| Extra candidates rejected by vetting | {tally['rejected']} |",
             f"| Planets found twice (duplicates) | {tally['duplicates']} |",
             f"| Targets with errors | {tally['failed']} |",
@@ -379,8 +398,11 @@ def report_markdown(run: ValidationRun, figures: dict[tuple[str, int], str]) -> 
 
     out += ["## Other detections", "",
             "Candidates that match no published planet. *Spurious* ones passed vetting (weak or "
-            "strong) and count as false positives; *rejected* ones were flagged by the vetting itself; "
-            "*duplicates* are a recovered planet found again by a later search pass.",
+            "strong) and count as false positives; *duo-transits* cover only 2 transits but pass "
+            "every vetting check, including a fitted T14 that agrees with the dip's width: two "
+            "dips can't show periodicity, so they are listed apart, as neither planet candidates nor "
+            "false positives, until more data show a third transit; *rejected* ones were flagged by "
+            "the vetting itself; *duplicates* are a recovered planet found again by a later search pass.",
             ""]
     others = [(r, o) for r in run.results for o in r.others]
     if others:

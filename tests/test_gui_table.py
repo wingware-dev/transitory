@@ -110,6 +110,20 @@ def test_confidence_colour_coding(table):
     assert cell(table, 0, 0, Qt.ItemDataRole.BackgroundRole).name() == "#e3f4e6"
 
 
+def test_duo_transit_row_labelled_and_not_counted_as_candidate(table):
+    star = make_analysis(name="Duo Star")
+    star.planets[1].vetting.confidence = "duo-transit"
+    table.set_analyses(analyses() + [star])
+    duo = next(r for r in table.rows() if r.star_key == "Duo Star" and r.planet == "c")
+    row = table.rows().index(duo)
+    assert cell(table, row, CONFIDENCE_COLUMN) == "duo-transit"
+    assert cell(table, row, CONFIDENCE_COLUMN, Qt.ItemDataRole.BackgroundRole).name() == "#8073ac"
+    assert table.status.text() == "5 stars, 4 candidates, 1 duo-transit (3 strong)"
+    # Ranked between weak and rejected.
+    table.view.sortByColumn(CONFIDENCE_COLUMN, Qt.SortOrder.DescendingOrder)
+    assert [r.confidence for r in table.rows() if r.planet_index is not None][-2:] == ["weak", "duo-transit"]
+
+
 def test_sorts_numerically_with_unknowns_lowest(table, qtbot):
     header = table.view.horizontalHeader()
     qtbot.mouseClick(header.viewport(), Qt.MouseButton.LeftButton,

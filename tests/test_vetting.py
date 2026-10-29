@@ -83,8 +83,56 @@ def test_single_transit_rejected():
     assert has_reason(v, "only 1 transit")
 
 
-def test_two_transits_weak():
-    assert vet([PLANET], n_transits=2).confidence == "weak"
+def duo(box_hours=None, **cand_kw):
+    """Vet a clean 5 h, 4000 ppm transit at P=20 d seen twice in 40 d (at 10 and 30 d)."""
+    planet = InjectedPlanet(20.0, 10.0, 0.004, 5.0)
+    cand = injected_candidate(planet, n_transits=cand_kw.pop("n_transits", 2), **cand_kw)
+    if box_hours is not None:
+        cand.duration = box_hours / 24.0
+    cleaned = flat_cleaned([planet], baseline_days=40.0)
+    return vet_candidate(cleaned, cand, fit_transit(cleaned, cand))
+
+
+def test_two_clean_transits_are_a_duo_transit_not_a_candidate():
+    v = duo()
+    assert v.confidence == "duo-transit"
+    assert has_reason(v, "only 2 transits observed")
+    assert has_reason(v, "not a planet candidate")
+
+
+def test_two_transits_with_any_doubt_rejected():
+    # A marginal SNR leaves a 3-transit signal 'weak'; with only 2 transits it rejects.
+    v = duo(snr=8.0)
+    assert v.confidence == "none"
+    assert v.reasons[0].startswith("only 2 transits observed")
+    assert has_reason(v, "marginal SNR 8.0")
+    assert vet([PLANET], n_transits=2, snr=8.0).confidence == "none"
+    assert vet([PLANET], n_transits=2, with_fit=False).confidence == "none"
+
+
+@pytest.mark.parametrize("box_hours", [2.0, 12.0])
+def test_two_transit_t14_mismatch_rejected(box_hours):
+    # The fit finds the real 5 h transit: a 2 h or 12 h detected dip doesn't match its shape.
+    v = duo(box_hours)
+    assert v.confidence == "none"
+    assert has_reason(v, f"disagrees with the {box_hours:.1f} h detected dip")
+
+
+def test_t14_agreement_is_only_required_of_two_transits():
+    # The same 2 h box backed by 3 transits passes: its other events vouch for it.
+    assert duo(2.0, n_transits=3).confidence == "strong"
+
+
+def test_wasp_18_d_like_wide_fit_rejected():
+    # A broad 14 h dip detected with a 3.6 h box, seen twice: the fit chases the
+    # broad dip (fitted T14 ~4x the box), as for WASP-18 d in the live validation.
+    broad = InjectedPlanet(21.9, 8.0, 0.001, 14.0)
+    cand = injected_candidate(broad, n_transits=2)
+    cand.duration = 3.6 / 24.0
+    cleaned = flat_cleaned([broad], baseline_days=40.0)
+    v = vet_candidate(cleaned, cand, fit_transit(cleaned, cand))
+    assert v.confidence == "none"
+    assert has_reason(v, "not transit-shaped")
 
 
 @pytest.mark.parametrize("snr,sde,confidence", [

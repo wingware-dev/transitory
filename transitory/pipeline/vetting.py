@@ -8,8 +8,13 @@ The confidence levels are:
   repeat of a stronger signal on the star (its secondary eclipse or a
   period alias).  These are the signs of noise, a single event or an
   eclipsing binary.
+- ``duo-transit``: only two transits, passing every check below without
+  doubt, and a fitted T14 that agrees with the detected dip's width.  Two
+  dips may be a long-period planet but can't show periodicity, so this is
+  its own low-confidence class, not a planet candidate.  A two-transit
+  signal with any doubt (or a failed fit) is ``none``.
 - ``weak``: a detection that is marginal (SNR or SDE close to threshold,
-  only two transits, a large rp/rs, a failed fit).
+  a large rp/rs, a failed fit).
 - ``strong``: everything else.
 
 A significant secondary eclipse shallow enough to be the planet's own
@@ -29,7 +34,7 @@ from collections.abc import Sequence
 
 import numpy as np
 
-from ..models import CleanedLightCurve, FitResult, TransitCandidate, Vetting
+from ..models import DUO_TRANSIT, CleanedLightCurve, FitResult, TransitCandidate, Vetting
 from .noise import beta_factor, robust_std
 from .search import SDE_THRESHOLD, SNR_THRESHOLD, box_depth
 
@@ -53,6 +58,9 @@ HARMONIC_TOLERANCE = 0.002
 # A fitted T14 this many times the BLS box means the fit chased something
 # broader than the dip (residual variability), not a transit.
 FIT_DURATION_RATIO_MAX = 3.0
+# A 2-transit signal has no other events to vouch for it, so its shape must
+# hold up: the fitted T14 within this factor of the detected dip either way.
+DUO_DURATION_RATIO_MAX = 2.0
 
 
 def _depth_at(time, flux, period, centre, duration, sigma, select=None) -> tuple[float, float]:
@@ -79,7 +87,7 @@ def vet_candidate(
     fit: FitResult | None = None,
     others: Sequence[TransitCandidate] = (),
 ) -> Vetting:
-    """Grade a candidate 'strong', 'weak' or 'none', with the reasons.
+    """Grade a candidate 'strong', 'weak', 'duo-transit' or 'none', with the reasons.
 
     ``others`` are the star's other candidates.  Their transits are left out
     of the depth checks, so another planet's transit can't pass for a
@@ -128,10 +136,9 @@ def vet_candidate(
     elif candidate.sde < SDE_STRONG:
         marginal.append(f"marginal SDE {candidate.sde:.1f}")
 
+    duo = candidate.n_transits == 2
     if candidate.n_transits < 2:
         fatal.append(f"only {candidate.n_transits} transit observed")
-    elif candidate.n_transits == 2:
-        marginal.append("only 2 transits observed")
 
     odd_d, odd_e = _depth_at(time, flux, period, t0, duration, sigma, lambda e: e % 2 == 1)
     even_d, even_e = _depth_at(time, flux, period, t0, duration, sigma, lambda e: e % 2 == 0)
@@ -164,12 +171,28 @@ def vet_candidate(
         if fit.duration_hours > FIT_DURATION_RATIO_MAX * box_hours:
             marginal.append(f"fitted T14 {fit.duration_hours:.1f} h is much longer than the "
                             f"{box_hours:.1f} h detected dip: not transit-shaped")
+        elif duo and not (1.0 / DUO_DURATION_RATIO_MAX
+                          <= fit.duration_hours / box_hours <= DUO_DURATION_RATIO_MAX):
+            marginal.append(f"fitted T14 {fit.duration_hours:.1f} h disagrees with the "
+                            f"{box_hours:.1f} h detected dip: not transit-shaped")
 
     if repeats:
         # The other checks measured the stronger signal again; only this matters.
         fatal, marginal, notes = repeats, [], []
+    elif duo:
+        # Two dips can't show periodicity, so nothing is left to spare: any
+        # doubt rejects the signal, and a clean one is a duo-transit.
+        if fatal or marginal:
+            fatal = ["only 2 transits observed, and they fail the checks"] + fatal + marginal
+            marginal = []
+        else:
+            notes.insert(0, f"only 2 transits observed (SNR {candidate.snr:.1f}, SDE "
+                            f"{candidate.sde:.1f}, odd/even consistent): a possible long-period "
+                            "planet, not a planet candidate until more transits confirm it")
     if fatal:
         confidence = "none"
+    elif duo:
+        confidence = DUO_TRANSIT
     elif marginal:
         confidence = "weak"
     else:

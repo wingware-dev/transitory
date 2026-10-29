@@ -52,6 +52,17 @@ def test_sections_embed_each_stars_figures(gallery, qtbot):
     assert gallery.status.text() == "2 stars, 2 candidates"
 
 
+def test_duo_transit_badge_and_count(gallery):
+    star = make_analysis(name="Duo Star")
+    star.planets[1].vetting.confidence = "duo-transit"
+    section = gallery.add_analysis(star)
+    settle()
+    badges = [w.text().strip() for w in section.findChildren(QLabel, "confidenceBadge")]
+    assert badges == ["b: strong", "c: duo-transit"]
+    assert "1 candidate, 1 duo-transit" in section.summary.text()
+    assert gallery.status.text() == "1 star, 1 candidate, 1 duo-transit"
+
+
 def test_canvas_keeps_figure_layout_when_resized(gallery, qtbot):
     section = gallery.add_analysis(make_analysis())
     settle()

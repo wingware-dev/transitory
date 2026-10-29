@@ -113,6 +113,18 @@ def test_too_few_transits_not_strong():
     assert not strong(result)
 
 
+def test_two_transit_planet_is_a_duo_transit():
+    # P=20 d over 40 d: two clean transits, kept but listed apart from planet candidates.
+    star = SyntheticStar(StarTarget(name="Duo"), [InjectedPlanet(20.0, 10.0, 0.004, 5.0)],
+                         baseline_days=40.0, seed=5)
+    result = analyze_star(star.target, SyntheticSource(stars=[star], allow_unknown=False))
+    assert result.ok, result.errors
+    assert [p.vetting.confidence for p in result.planets] == ["duo-transit"]
+    duo = result.planets[0]
+    assert duo.is_duo_transit and duo.candidate.n_transits == 2
+    assert abs(duo.fit.period - 20.0) / 20.0 < 5e-3
+
+
 def test_fit_failure_keeps_candidate(source, monkeypatch):
     def broken_fit(cleaned, candidate, star=None):
         raise RuntimeError("did not converge")

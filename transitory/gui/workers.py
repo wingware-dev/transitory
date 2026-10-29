@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .. import plots
 from ..models import StarAnalysis, StarTarget
 from ..pipeline import AnalysisCancelled
 from ..pipeline.run import analyze_star
@@ -198,7 +199,8 @@ def outcome_text(analysis: StarAnalysis) -> str:
     strong = sum(1 for p in analysis.planets if p.vetting is not None and p.vetting.confidence == "strong")
     if n == 0:
         return "Done — no candidates"
-    return f"Done — {n} candidate{'s' if n != 1 else ''} ({strong} strong)"
+    duos = sum(1 for p in analysis.planets if p.is_duo_transit)
+    return f"Done — {plots.candidate_count_text(n, duos)} ({strong} strong)"
 
 
 class ProgressPanel(QWidget):

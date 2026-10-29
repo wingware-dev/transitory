@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import plots
-from ..models import PlanetResult, StarAnalysis
+from ..models import DUO_TRANSIT, PlanetResult, StarAnalysis
 
 log = logging.getLogger(__name__)
 
@@ -39,8 +39,8 @@ R_SUN_IN_R_EARTH = 109.076  # IAU nominal solar radius / equatorial Earth radius
 SORT_ROLE = Qt.ItemDataRole.UserRole + 1
 NAN = float("nan")
 
-ROW_TINTS = {"strong": "#e3f4e6", "weak": "#fdf0dc", "none": "#f0f0f0"}
-CONFIDENCE_RANK = {"strong": 2, "weak": 1, "none": 0}
+ROW_TINTS = {"strong": "#e3f4e6", "weak": "#fdf0dc", DUO_TRANSIT: "#ebe8f3", "none": "#f0f0f0"}
+CONFIDENCE_RANK = {"strong": 3, "weak": 2, DUO_TRANSIT: 1, "none": 0}
 
 
 @dataclass
@@ -309,12 +309,13 @@ class ResultsTable(QWidget):
     def _refresh(self) -> None:
         rows = [row for a in self._analyses.values() for row in rows_for(a)]
         self.model.set_rows(rows)
-        candidates = sum(1 for r in rows if r.planet_index is not None)
+        found = sum(1 for r in rows if r.planet_index is not None)
+        duos = sum(1 for r in rows if r.confidence == DUO_TRANSIT)
         strong = sum(1 for r in rows if r.confidence == "strong")
         n = len(self._analyses)
         self.status.setText("Planet candidates and confidence will appear here." if n == 0 else
-                            f"{n} star{'s' if n != 1 else ''}, {candidates} candidate"
-                            f"{'s' if candidates != 1 else ''} ({strong} strong)")
+                            f"{n} star{'s' if n != 1 else ''}, "
+                            f"{plots.candidate_count_text(found, duos)} ({strong} strong)")
         self.export_button.setEnabled(bool(rows))
 
     def _activated(self, index) -> None:
