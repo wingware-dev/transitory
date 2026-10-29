@@ -103,8 +103,10 @@ def planet_row(analysis: StarAnalysis, index: int, planet: PlanetResult) -> Resu
         notes.extend(vet.reasons)
     else:
         notes.append("not vetted")
-    if cand.n_transits:
-        notes.insert(0, f"{cand.n_transits} transits")
+    # Vetting reasons usually state the count already ("17 transits, ...", "only 2 transits ...").
+    count = f"{cand.n_transits} transit"
+    if cand.n_transits and not any(count in reason for reason in notes):
+        notes.insert(0, f"{count}{'s' if cand.n_transits != 1 else ''}")
     row.notes = "; ".join(notes)
     return row
 

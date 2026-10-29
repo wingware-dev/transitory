@@ -84,6 +84,18 @@ def test_unfitted_candidate_uses_bls_values(table):
     assert "no fit" in row.notes
 
 
+def test_transit_count_noted_once():
+    analysis = make_analysis()
+    planet = analysis.planets[0]
+    planet.vetting.reasons = ["SNR 497.6, SDE 24.3, 8 transits, odd/even consistent"]
+    assert rows_for(analysis)[0].notes == "SNR 497.6, SDE 24.3, 8 transits, odd/even consistent"
+    planet.candidate.n_transits = 1
+    planet.vetting.reasons = ["only 1 transit observed"]
+    assert rows_for(analysis)[0].notes == "only 1 transit observed"
+    planet.vetting = None  # no reasons to carry it: the table adds the count
+    assert rows_for(analysis)[0].notes == "1 transit; not vetted"
+
+
 def test_stars_without_planets_explain_why():
     quiet, failed = analyses()[2:]
     assert rows_for(quiet)[0].notes == "no transit signal found"
