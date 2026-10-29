@@ -34,6 +34,7 @@ from ..catalog.resolve import split_names
 from ..catalog.skycatalog import SkyCatalog, SkyStar
 from ..models import StarAnalysis, StarTarget
 from ..sources import LightCurveSource, SyntheticSource
+from ..validation.gui import ValidationController
 from .credits_dialog import CreditsDialog
 from .gallery import GalleryWidget
 from .results_table import ResultsTable
@@ -186,6 +187,8 @@ class MainWindow(QMainWindow):
         self.max_products_menu.menuAction().setToolTip(
             "How many TESS sectors or Kepler quarters to download and analyse per star")
 
+        self.validation = ValidationController(self, self.menuBar().addMenu("&Validation"))
+
         help_menu = self.menuBar().addMenu("&Help")
         self.credits_action = help_menu.addAction("Data Credits…")
         self.credits_action.triggered.connect(self.show_credits)
@@ -263,7 +266,9 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:
         self.runner.cancel()
+        self.validation.cancel()
         self.runner.wait()
+        self.validation.wait()
         self.sky.close()
         self.panel.close()
         super().closeEvent(event)

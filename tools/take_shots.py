@@ -32,6 +32,17 @@ def shot_skeleton(app):
     return make_main_window()
 
 
+def shot_validation(app):
+    """The committed live validation report, as Validation ▸ Show validation report shows it."""
+    from transitory.validation.gui import ReportDialog
+    from transitory.validation.report import DOCS_DIR, REPORT_NAME
+
+    dialog = ReportDialog(DOCS_DIR / REPORT_NAME)
+    dialog.resize(1100, 900)
+    dialog.show()
+    return dialog
+
+
 # name -> (file name, function(app) -> widget)
 SHOTS = {
     "skeleton": ("01-skeleton.png", shot_skeleton),
@@ -40,6 +51,7 @@ SHOTS = {
     "gallery": ("04-gallery.png", shot_gallery),
     "table": ("05-table.png", shot_table),
     "credits": ("06-credits.png", shot_credits),
+    "validation": ("07-validation.png", shot_validation),
 }
 
 
