@@ -22,7 +22,9 @@ sys.path[:0] = [str(ROOT), str(ROOT / "tests")]
 
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
+from dashboard_host import shot_credits, shot_gallery, shot_running, shot_table  # noqa: E402
 from harness import make_main_window, shot  # noqa: E402
+from sky_selection_host import shot_sky_selection  # noqa: E402
 from transitory.config import shots_dir  # noqa: E402
 
 
@@ -33,6 +35,11 @@ def shot_skeleton(app):
 # name -> (file name, function(app) -> widget)
 SHOTS = {
     "skeleton": ("01-skeleton.png", shot_skeleton),
+    "sky-selection": ("02-sky-selection.png", shot_sky_selection),
+    "running": ("03-running.png", shot_running),
+    "gallery": ("04-gallery.png", shot_gallery),
+    "table": ("05-table.png", shot_table),
+    "credits": ("06-credits.png", shot_credits),
 }
 
 

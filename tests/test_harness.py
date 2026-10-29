@@ -30,8 +30,13 @@ def test_main_window_layout(main_window):
     assert main_window.selection_dock.windowTitle() == "Selection"
     tabs = main_window.tabs
     assert [tabs.tabText(i) for i in range(tabs.count())] == ["Gallery", "Table"]
-    assert main_window.findChild(QLabel, "skyPlaceholder") is not None
-    assert "Synthetic" in main_window.statusBar().currentMessage()
+    assert tabs.widget(0) is main_window.gallery and tabs.widget(1) is main_window.table
+    assert main_window.sky_dock.widget() is main_window.sky
+    assert main_window.selection_dock.widget() is main_window.panel
+    assert main_window.progress_dock.widget() is main_window.progress
+    for name in ("skyPlaceholder", "selectionPlaceholder", "galleryPlaceholder", "tablePlaceholder"):
+        assert main_window.findChild(QLabel, name) is None
+    assert "Synthetic" in main_window.source_label.text()
 
 
 def test_shot_writes_png(main_window, tmp_path):

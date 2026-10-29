@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Start the Transitory dashboard.  ``--demo`` uses made-up data (no downloads)."""
+"""Start the Transitory dashboard.
+
+    python run_dashboard.py                              # TESS / Kepler data from MAST
+    python run_dashboard.py --demo                       # made-up data, no downloads
+    python run_dashboard.py --targets "Kepler-10, TOI-270" --max-sectors 10
+"""
 
 import sys
 
