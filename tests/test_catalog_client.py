@@ -1,7 +1,10 @@
 """CatalogClient: caching, offline mode, error replies.  Fake transports only, no network."""
 
+import http.server
 import json
 import logging
+import threading
+import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -30,6 +33,11 @@ class FakeTransport:
 
 
 ROWS = json.dumps([{"pl_name": "X b", "pl_orbper": 1.5}])
+
+
+@pytest.fixture(autouse=True)
+def no_backoff(monkeypatch):
+    monkeypatch.setattr(C, "RETRY_BACKOFF_SECONDS", 0.0)
 
 
 @pytest.fixture
@@ -186,6 +194,91 @@ def test_requests_transport_wraps_connection_errors(monkeypatch):
     monkeypatch.setattr(requests, "post", fake_post)
     with pytest.raises(CatalogError, match="no route to host"):
         C.requests_transport("POST", C.MAST_URL, {"request": "{}"})
+
+
+class SlowRequests:
+    """Stands in for ``requests.get``: times out ``timeouts`` times, then answers ``replies``."""
+
+    def __init__(self, timeouts, *replies):
+        self.timeouts = timeouts
+        self.replies = list(replies)
+        self.calls = []
+
+    def __call__(self, url, params, headers, timeout):
+        import requests
+
+        self.calls.append(timeout)
+        if len(self.calls) <= self.timeouts:
+            raise requests.ReadTimeout(f"Read timed out. (read timeout={timeout})")
+        return self.replies.pop(0)
+
+
+def test_requests_transport_tries_a_timeout_once_more(monkeypatch):
+    import requests
+
+    slow = SlowRequests(1, _Reply(200, ROWS))
+    monkeypatch.setattr(requests, "get", slow)
+    assert C.requests_transport("GET", C.TAP_URL, {"query": "x"}) == ROWS
+    assert slow.calls == [C.REQUEST_TIMEOUT_SECONDS] * 2
+
+
+def test_requests_transport_gives_up_after_two_timeouts(monkeypatch):
+    import requests
+
+    slow = SlowRequests(5)
+    monkeypatch.setattr(requests, "get", slow)
+    monkeypatch.setattr(C, "RETRY_BACKOFF_SECONDS", 3.0)
+    sleeps = []
+    monkeypatch.setattr(C.time, "sleep", sleeps.append)
+    with pytest.raises(CatalogError, match=r"Read timed out.*\(tried twice\)"):
+        C.requests_transport("GET", C.TAP_URL, {"query": "x"})
+    assert len(slow.calls) == 2
+    assert sleeps == [3.0]
+
+
+def test_requests_transport_tries_a_server_error_once_more(monkeypatch):
+    import requests
+
+    slow = SlowRequests(0, _Reply(503, "busy", "Service Unavailable"), _Reply(200, ROWS))
+    monkeypatch.setattr(requests, "get", slow)
+    assert C.requests_transport("GET", C.TAP_URL, {"query": "x"}) == ROWS
+    assert len(slow.calls) == 2
+
+
+def test_requests_transport_does_not_retry_a_bad_query(monkeypatch):
+    import requests
+
+    slow = SlowRequests(0, _Reply(400, "nope"))
+    monkeypatch.setattr(requests, "get", slow)
+    with pytest.raises(CatalogError, match="HTTP 400: nope"):
+        C.requests_transport("GET", C.TAP_URL, {"query": "x"})
+    assert len(slow.calls) == 1
+
+
+class _SlowHandler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        time.sleep(2.0)
+        self.send_response(200)
+        self.end_headers()
+
+    def log_message(self, *args):
+        pass
+
+
+def test_requests_transport_ends_a_slow_request(cache):
+    """A real request to a local server slower than the timeout fails promptly, twice tried."""
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _SlowHandler)
+    server.daemon_threads = True
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{server.server_address[1]}/"
+    try:
+        start = time.monotonic()
+        with pytest.raises(CatalogError, match="tried twice"):
+            C.requests_transport("GET", url, {"query": "x"}, timeout=0.3)
+        assert time.monotonic() - start < 2.0
+    finally:
+        server.shutdown()
+        server.server_close()
 
 
 def test_recorded_transport_replays_and_reports_missing():

@@ -1,11 +1,13 @@
 """MastSource and the cache index, with lightkurve replaced by a fake (no network)."""
 
+import http.server
 import threading
 import time as _time
 from pathlib import Path
 
 import numpy as np
 import pytest
+import requests
 from astropy.table import Table
 
 from transitory.config import USER_AGENT, cache_dir
@@ -70,6 +72,8 @@ class FakeLightkurve:
         self.reads = []
         self.data = {}  # productFilename -> (time, pdcsap, sap)
         self.search_error = None
+        self.search_errors = []  # raised one per search, before search_error
+        self.download_errors = []  # raised one per download
         self.search_delay = 0.0
         self.active = 0
         self.max_active = 0
@@ -89,6 +93,8 @@ class FakeLightkurve:
             if self.search_delay:
                 _time.sleep(self.search_delay)
             self.searches.append((target, kw))
+            if self.search_errors:
+                raise self.search_errors.pop(0)
             if self.search_error is not None:
                 raise self.search_error
             return FakeSearchResult(self, make_table(self.rows.get(kw["mission"], [])))
@@ -98,6 +104,8 @@ class FakeLightkurve:
 
     def download(self, r, quality_bitmask, download_dir, flux_column):
         self.downloads.append((r["obs_id"], quality_bitmask, download_dir, flux_column))
+        if self.download_errors:
+            raise self.download_errors.pop(0)
         path = Path(download_dir, "mastDownload", r["obs_collection"], r["obs_id"], r["productFilename"])
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(r["productFilename"])
@@ -114,6 +122,7 @@ class FakeLightkurve:
 def fake_lk(monkeypatch):
     lk = FakeLightkurve()
     monkeypatch.setattr(fetch, "_lightkurve", lambda: lk)
+    monkeypatch.setattr(fetch, "MAST_RETRY_BACKOFF_SECONDS", 0.0)
     return lk
 
 
@@ -334,6 +343,128 @@ def test_user_agent_set_on_mast_session(fake_lk, monkeypatch):
     agent = Observations._session.headers["User-Agent"]
     assert agent.startswith(USER_AGENT)
     assert agent.count(USER_AGENT) == 1
+
+
+# --- timeouts and retries ------------------------------------------------------------
+
+def _read_timeout():
+    return requests.ReadTimeout("HTTPSConnectionPool(host='mast.stsci.edu', port=443): "
+                                "Read timed out. (read timeout=120.0)")
+
+
+def test_search_timeout_is_tried_once_more(fake_lk):
+    tess_setup(fake_lk)
+    fake_lk.search_errors = [_read_timeout()]
+    calls = []
+    lc = MastSource().fetch(StarTarget("x", tic=261136679, mission_hint="TESS"),
+                            progress_cb=lambda m, f: calls.append(m))
+    assert len(fake_lk.searches) == 2
+    assert lc.sectors_or_quarters == [14, 15, 16]
+    assert any("timed out or could not connect; trying again" in m for m in calls)
+
+
+def test_search_timing_out_twice_fails_the_star_without_caching(fake_lk):
+    fake_lk.search_errors = [_read_timeout(), _read_timeout()]
+    with pytest.raises(SourceError, match=r"timed out or could not connect \(tried twice\)"):
+        MastSource().fetch(StarTarget("x", tic=5, mission_hint="TESS"))
+    assert len(fake_lk.searches) == 2
+    assert CacheIndex().keys() == []
+
+
+def test_timed_out_star_is_a_per_star_error_in_the_analysis(fake_lk):
+    from transitory.pipeline.run import analyze_star
+    fake_lk.search_errors = [_read_timeout(), _read_timeout()]
+    result = analyze_star(StarTarget("Kepler-22", kic=10593626, mission_hint="Kepler"), MastSource())
+    assert result.raw is None and not result.ok
+    assert len(result.errors) == 1
+    assert result.errors[0].startswith("fetch: MAST search for 'KIC 10593626' timed out")
+
+
+def test_server_errors_are_tried_once_more(fake_lk):
+    tess_setup(fake_lk)
+    reply = requests.Response()
+    reply.status_code = 503
+    fake_lk.search_errors = [requests.HTTPError("503 Server Error", response=reply)]
+    MastSource().fetch(StarTarget("x", tic=261136679, mission_hint="TESS"))
+    assert len(fake_lk.searches) == 2
+
+
+def test_other_search_errors_are_not_retried(fake_lk):
+    fake_lk.search_error = ValueError("bad table")
+    with pytest.raises(SourceError, match="failed: bad table"):
+        MastSource().fetch(StarTarget("x", tic=5, mission_hint="TESS"))
+    assert len(fake_lk.searches) == 1
+
+
+def test_download_timeout_is_tried_once_more(fake_lk):
+    tess_setup(fake_lk)
+    fake_lk.download_errors = [_read_timeout()]
+    lc = MastSource().fetch(StarTarget("x", tic=261136679, mission_hint="TESS"))
+    assert len(fake_lk.downloads) == 4  # three sectors, the first one twice
+    assert lc.sectors_or_quarters == [14, 15, 16]
+
+
+def test_retry_waits_the_backoff(fake_lk, monkeypatch):
+    sleeps = []
+    monkeypatch.setattr(fetch, "MAST_RETRY_BACKOFF_SECONDS", 7.0)
+    monkeypatch.setattr(fetch.time, "sleep", sleeps.append)
+    fake_lk.search_errors = [_read_timeout(), _read_timeout()]
+    with pytest.raises(SourceError):
+        MastSource().fetch(StarTarget("x", tic=5, mission_hint="TESS"))
+    assert sleeps == [7.0]
+
+
+def test_mast_requests_get_a_timeout(fake_lk, monkeypatch):
+    from astroquery.mast import Observations
+    from astroquery.mast import utils as mast_utils
+    session = Observations._session
+    monkeypatch.setattr(fetch, "_timeouts_set", False)
+    monkeypatch.setattr(session, "adapters", type(session.adapters)(session.adapters))
+    monkeypatch.setattr(mast_utils, "requests", requests)
+    tess_setup(fake_lk)
+    MastSource().fetch(StarTarget("x", tic=261136679, mission_hint="TESS"))
+    for url in ("https://mast.stsci.edu/api/v0/invoke", "http://mastresolver.stsci.edu/x"):
+        assert session.get_adapter(url).timeout == fetch.MAST_TIMEOUT_SECONDS
+    assert mast_utils.requests.timeout == fetch.MAST_TIMEOUT_SECONDS
+    assert mast_utils.requests.Session is requests.Session
+
+
+class _SlowHandler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        _time.sleep(2.0)
+        self.send_response(200)
+        self.end_headers()
+
+    def log_message(self, *args):
+        pass
+
+
+@pytest.fixture
+def slow_server():
+    """A local server that takes 2 s to answer, standing in for a slow MAST."""
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _SlowHandler)
+    server.daemon_threads = True
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    yield f"http://127.0.0.1:{server.server_address[1]}/"
+    server.shutdown()
+    server.server_close()
+
+
+def test_timeout_adapter_ends_a_request_sent_without_timeout(slow_server):
+    session = requests.Session()
+    session.mount("http://", fetch._TimeoutAdapter(0.3))
+    start = _time.monotonic()
+    with pytest.raises(requests.Timeout):
+        session.get(slow_server)
+    assert _time.monotonic() - start < 1.5
+
+
+def test_timeout_requests_ends_a_get_sent_without_timeout(slow_server):
+    start = _time.monotonic()
+    with pytest.raises(requests.Timeout):
+        fetch._TimeoutRequests(0.3).get(slow_server)
+    assert _time.monotonic() - start < 1.5
 
 
 def test_credits():

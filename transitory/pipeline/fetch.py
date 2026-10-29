@@ -14,6 +14,11 @@ Being polite to the archive: files go to ``config.cache_dir()`` and the
 query -> files mapping to the cache index (``pipeline/cache.py``), so nothing
 is downloaded twice and a repeated fetch makes no request at all.  Requests
 are serial across all threads and carry a descriptive user agent.
+
+MAST is sometimes slow for minutes at a time.  astroquery sends its requests
+with no timeout, so each one here gets ``MAST_TIMEOUT_SECONDS``, and a search
+or download that times out or cannot connect is tried once more after
+``MAST_RETRY_BACKOFF_SECONDS`` before the star fails with a ``SourceError``.
 """
 
 from __future__ import annotations
@@ -21,11 +26,14 @@ from __future__ import annotations
 import logging
 import re
 import threading
+import time
 import warnings
 from collections.abc import Iterable
 from typing import Any
 
 import numpy as np
+import requests
+from requests.adapters import HTTPAdapter
 
 from ..config import USER_AGENT, cache_dir
 from ..models import LightCurve, Mission, ProgressCallback, StarTarget
@@ -65,6 +73,12 @@ NEGATIVE_CACHE_DAYS = 7.0
 # One request at a time to MAST from this process, whichever thread asks.
 _network_lock = threading.Lock()
 _user_agent_set = False
+_timeouts_set = False
+
+# Seconds to wait for MAST to connect or to send more of a reply.
+MAST_TIMEOUT_SECONDS = 120.0
+# A failed search or download is tried once more after this pause.
+MAST_RETRY_BACKOFF_SECONDS = 10.0
 
 
 def _lightkurve():
@@ -90,6 +104,91 @@ def _ensure_user_agent() -> None:
     if USER_AGENT not in headers.get("User-Agent", ""):
         headers["User-Agent"] = f"{USER_AGENT} {headers.get('User-Agent', '')}".strip()
     _user_agent_set = True
+
+
+class _TimeoutAdapter(HTTPAdapter):
+    """An adapter that gives requests sent with no timeout ``timeout`` instead."""
+
+    def __init__(self, timeout: float, **kwargs):
+        self.timeout = timeout
+        super().__init__(**kwargs)
+
+    def send(self, request, timeout=None, **kwargs):
+        return super().send(request, timeout=self.timeout if timeout is None else timeout, **kwargs)
+
+
+class _TimeoutRequests:
+    """The ``requests`` module, but ``get`` with no timeout gets ``timeout``."""
+
+    def __init__(self, timeout: float):
+        self.timeout = timeout
+
+    def get(self, *args, timeout=None, **kwargs):
+        return requests.get(*args, timeout=self.timeout if timeout is None else timeout, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(requests, name)
+
+
+def _ensure_timeouts() -> None:
+    """Give astroquery's MAST requests a finite timeout (once).
+
+    Searches and downloads go through the ``Observations`` session; name
+    resolution calls ``requests.get`` directly from ``astroquery.mast.utils``.
+    """
+    global _timeouts_set
+    if _timeouts_set:
+        return
+    try:
+        from astroquery.mast import Observations, utils as mast_utils
+        session = Observations._session
+    except (ImportError, AttributeError) as exc:
+        log.warning("Could not set a timeout on MAST requests: %s", exc)
+        return
+    adapter = _TimeoutAdapter(MAST_TIMEOUT_SECONDS)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    if getattr(mast_utils, "requests", None) is requests:
+        mast_utils.requests = _TimeoutRequests(MAST_TIMEOUT_SECONDS)
+    else:
+        log.warning("MAST name resolution keeps astroquery's default (no) timeout")
+    _timeouts_set = True
+
+
+def _is_transient(exc: BaseException) -> bool:
+    """Whether ``exc`` is MAST being slow or unreachable, worth one more try."""
+    while exc is not None:
+        if isinstance(exc, (requests.Timeout, requests.ConnectionError, TimeoutError,
+                            ConnectionError)):
+            return True
+        if isinstance(exc, requests.HTTPError) and exc.response is not None \
+                and exc.response.status_code in (500, 502, 503, 504):
+            return True
+        exc = exc.__cause__ or exc.__context__
+    return False
+
+
+def _with_retry(what: str, call, on_retry=None):
+    """``call()``, tried once more after a pause if MAST timed out or was unreachable.
+
+    ``on_retry(message)`` is told before the pause.
+    """
+    try:
+        return call()
+    except Exception as exc:
+        if not _is_transient(exc):
+            raise
+        log.warning("%s failed (%s); trying again in %.0f s", what, exc, MAST_RETRY_BACKOFF_SECONDS)
+        if on_retry:
+            on_retry(f"{what} timed out or could not connect; trying again")
+    time.sleep(MAST_RETRY_BACKOFF_SECONDS)
+    return call()
+
+
+def _failure(what: str, exc: Exception) -> SourceError:
+    if _is_transient(exc):
+        return SourceError(f"{what} timed out or could not connect (tried twice): {exc}")
+    return SourceError(f"{what} failed: {exc}")
 
 
 def mission_credits(lc: LightCurve) -> list[str]:
@@ -263,20 +362,25 @@ class MastSource:
         download_dir = str(cache_dir())
         with _network_lock:
             _ensure_user_agent()
+            _ensure_timeouts()
             progress(f"Searching MAST for {mission} light curves of {query}", 0.0)
-            try:
+
+            def search():
                 if mission == "TESS":
-                    sr = lk.search_lightcurve(query, mission="TESS", author=TESS_AUTHORS)
-                else:
-                    sr = lk.search_lightcurve(query, mission="Kepler", author=KEPLER_AUTHOR,
-                                              exptime="long")
+                    return lk.search_lightcurve(query, mission="TESS", author=TESS_AUTHORS)
+                return lk.search_lightcurve(query, mission="Kepler", author=KEPLER_AUTHOR,
+                                            exptime="long")
+
+            try:
+                sr = _with_retry(f"MAST search for {query!r}", search,
+                                 lambda msg: progress(msg, 0.0))
             except Exception as exc:
                 if type(exc).__name__ == "SearchError" and "resolve" in str(exc).lower():
                     # An unknown name: the same as finding no data.
                     log.info("MAST could not resolve %r: %s", query, exc)
                     return []
                 log.exception("MAST search for %r (%s) failed", query, mission)
-                raise SourceError(f"MAST search for {query!r} failed: {exc}") from exc
+                raise _failure(f"MAST search for {query!r}", exc) from exc
 
             rows = select_products(sr.table, mission)
             if self.max_products is not None:
@@ -287,11 +391,14 @@ class MastSource:
                 label = str(tab["mission"][row])
                 progress(f"Downloading {label} ({n + 1}/{len(rows)})", 0.1 + 0.8 * n / max(len(rows), 1))
                 try:
-                    lc = sr[row].download(quality_bitmask="default", download_dir=download_dir,
-                                          flux_column="pdcsap_flux")
+                    lc = _with_retry(
+                        f"Download of {label} for {query!r}",
+                        lambda r=row: sr[r].download(quality_bitmask="default",
+                                                     download_dir=download_dir,
+                                                     flux_column="pdcsap_flux"))
                 except Exception as exc:
                     log.exception("Download of %s for %r failed", label, query)
-                    raise SourceError(f"Download of {label} for {query!r} failed: {exc}") from exc
+                    raise _failure(f"Download of {label} for {query!r}", exc) from exc
                 path = lc.meta.get("FILENAME") if lc is not None else None
                 if not path:
                     raise SourceError(f"Download of {label} for {query!r} returned no file")

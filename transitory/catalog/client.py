@@ -48,6 +48,13 @@ MAST_MAX_AGE: timedelta | None = None
 MAST_RETRY_SECONDS = 2.0
 MAST_MAX_WAIT_SECONDS = 60.0
 
+# Seconds to wait for a service to connect or to send more of a reply; a
+# request that times out, cannot connect or gets a 5xx is tried once more
+# after RETRY_BACKOFF_SECONDS.
+REQUEST_TIMEOUT_SECONDS = 60.0
+RETRY_BACKOFF_SECONDS = 5.0
+_TRANSIENT_STATUS = (500, 502, 503, 504)
+
 
 class CatalogError(RuntimeError):
     """A catalog service could not answer (offline, HTTP error, query error)."""
@@ -73,18 +80,37 @@ def request_key(method: str, url: str, params: dict[str, str]) -> str:
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:32]
 
 
-def requests_transport(method: str, url: str, params: dict[str, str], timeout: float = 60.0) -> str:
-    """The real transport: one HTTP request with the project user agent."""
+def requests_transport(method: str, url: str, params: dict[str, str],
+                       timeout: float = REQUEST_TIMEOUT_SECONDS) -> str:
+    """The real transport: one HTTP request with the project user agent.
+
+    A timeout, failed connection or 5xx reply is tried once more after
+    ``RETRY_BACKOFF_SECONDS``, since the services are now and then slow.
+    """
     import requests
 
     headers = {"User-Agent": USER_AGENT}
-    try:
+
+    def send():
         if method.upper() == "POST":
-            reply = requests.post(url, data=params, headers=headers, timeout=timeout)
+            return requests.post(url, data=params, headers=headers, timeout=timeout)
+        return requests.get(url, params=params, headers=headers, timeout=timeout)
+
+    for attempt in (1, 2):
+        try:
+            reply = send()
+        except (requests.Timeout, requests.ConnectionError) as exc:
+            if attempt == 2:
+                raise CatalogError(f"{url}: {exc} (tried twice)") from exc
+            log.warning("%s: %s; trying again in %.0f s", url, exc, RETRY_BACKOFF_SECONDS)
+        except requests.RequestException as exc:
+            raise CatalogError(f"{url}: {exc}") from exc
         else:
-            reply = requests.get(url, params=params, headers=headers, timeout=timeout)
-    except requests.RequestException as exc:
-        raise CatalogError(f"{url}: {exc}") from exc
+            if reply.status_code not in _TRANSIENT_STATUS or attempt == 2:
+                break
+            log.warning("%s: HTTP %s; trying again in %.0f s", url, reply.status_code,
+                        RETRY_BACKOFF_SECONDS)
+        time.sleep(RETRY_BACKOFF_SECONDS)
     if reply.status_code >= 400:
         # The archive explains a bad query in a VOTable body; MAST in JSON.
         detail = reply.text.strip()
