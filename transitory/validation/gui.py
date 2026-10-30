@@ -83,6 +83,10 @@ class ReportDialog(QDialog):
             return
         self._image_width = width
         doc = self.browser.document()
+        # One edit block, so the layout sees one change: re-laid out per figure, the
+        # blocks after the figures (and after some tables) were left with no lines.
+        edit = QTextCursor(doc)
+        edit.beginEditBlock()
         block = doc.begin()
         while block.isValid():
             it = block.begin()
@@ -99,6 +103,7 @@ class ReportDialog(QDialog):
                     cursor.setCharFormat(image)
                 it += 1
             block = block.next()
+        edit.endEditBlock()
 
 
 class _Signals(QObject):
