@@ -18,7 +18,7 @@ from PySide6.QtWidgets import QApplication
 
 from harness import shot
 from sky_selection_host import (RECORDED, SHOT_NAME, RecordedHipsTransport, recorded_client,
-                                shot_sky_selection)
+                                shot_sky_selection, shot_sky_zoomed)
 from transitory.catalog import hips, skycatalog
 from transitory.catalog.client import CatalogClient, CatalogError, RecordedTransport, ResponseCache
 from transitory.catalog.hips import CutoutCache
@@ -961,4 +961,15 @@ def test_sky_selection_shot(qtbot, tmp_path, client):
     assert len(window.sky.selected) == 3
     path = shot(window, SHOT_NAME, tmp_path)
     assert path.stat().st_size > 10000
+    window.close()
+
+
+def test_sky_zoomed_shot_keeps_the_stand_in_out_of_the_cache(qtbot, client):
+    """The zoomed shot shows Kepler-10's field and image; the stand-in cutout never reaches the user's cache."""
+    window = shot_sky_zoomed(QApplication.instance(), client=client)
+    qtbot.addWidget(window)
+    sky = window.sky
+    assert sky.field and sky.background.shown is not None
+    assert sky.background.cache.directory != CutoutCache().directory
+    assert not list(CutoutCache().directory.glob("*.jpg"))
     window.close()
