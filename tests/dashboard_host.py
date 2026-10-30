@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import time
 
-from PySide6.QtCore import QEventLoop, Qt, QTimer
+from PySide6.QtCore import QEventLoop, QPointF, Qt, QTimer
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
@@ -39,6 +39,20 @@ def click_star(window, name: str) -> None:
     """Click the demo star ``name`` on the sky, as the user would."""
     star = next(s for s in window.sky.hosts if s.name == name)
     window.sky.click_at(star.ra, star.dec)
+
+
+def hover_star(sky, star) -> None:
+    """Move the mouse over ``star`` in the sky view ``sky``, as a real mouse move.
+
+    Waits a little first: pyqtgraph's scene drops moves that come faster
+    than its event rate.
+    """
+    loop = QEventLoop()
+    QTimer.singleShot(40, loop.quit)
+    loop.exec()
+    scene_pos = sky.view_box.mapViewToScene(QPointF(star.ra, star.dec))
+    QTest.mouseMove(sky.plot.viewport(), sky.plot.mapFromScene(scene_pos))
+    QApplication.processEvents()
 
 
 def type_stars(window, text: str, timeout_s: float = 10.0) -> None:

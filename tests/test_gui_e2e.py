@@ -4,11 +4,11 @@ import threading
 import time
 
 import pytest
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QPointF, Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
-from dashboard_host import click_star, select_and_submit, type_stars, wait_for_results, wait_until
+from dashboard_host import click_star, hover_star, select_and_submit, type_stars, wait_for_results, wait_until
 from harness import shot
 from sky_selection_host import recorded_client
 from transitory.gui.credits_dialog import credits_text
@@ -91,6 +91,23 @@ def test_demo_sky_shows_demo_stars_and_never_loads_fields(main_window):
     main_window.panel.targetActivated.emit(main_window.panel.targets()[0])
     sky._maybe_load_field()  # zoomed to 3 deg; a field load would go to MAST
     assert sky.field == [] and not sky.runner.busy
+
+
+def test_hovering_stars_never_moves_the_sky_plot(main_window):
+    sky = main_window.sky
+    QApplication.processEvents()
+
+    def geometry():
+        return (sky.plot.geometry(), sky.view_box.sceneBoundingRect(), main_window.sky_dock.width())
+
+    before = geometry()
+    in_view = [s for s in sky.hosts if sky.view_box.sceneBoundingRect().contains(
+        sky.view_box.mapViewToScene(QPointF(s.ra, s.dec)))]
+    assert len(in_view) >= 4
+    for star in in_view:
+        hover_star(sky, star)
+        assert star.name in sky.coord_label.text()
+        assert geometry() == before, star.name
 
 
 def test_stage_errors_show_in_progress_and_gallery(qtbot):

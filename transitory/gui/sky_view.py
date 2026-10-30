@@ -9,6 +9,10 @@ and the TESS continuous viewing zones are outlined.
 Positions are plotted as plain RA/Dec degrees, which stretches RA near
 the poles; the nearest-star search measures in screen pixels, so clicks
 still pick what the user sees.
+
+Under the plot, one line each shows the catalog status and the hovered
+position and star, elided to the view's width so changing text never
+resizes the footer or moves the plot under the mouse.
 """
 
 from __future__ import annotations
@@ -20,7 +24,7 @@ import numpy as np
 import pyqtgraph as pg
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 from ..catalog import skycatalog
 from ..catalog.client import CatalogClient, CatalogError
@@ -111,6 +115,36 @@ def _marker_size(tmag: float | None, brightest: float = 17.0, low: float = 4.0, 
 
 # -- the widget --------------------------------------------------------------------
 
+class ElidedLabel(QLabel):
+    """A one-line label whose size never follows its text: long text is elided.
+
+    ``text()`` returns the full text, which is also the tooltip.
+    """
+
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__(parent)
+        self._full_text = ""
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        margins = self.contentsMargins()
+        self.setFixedHeight(self.fontMetrics().height() + margins.top() + margins.bottom())
+
+    def setText(self, text: str) -> None:
+        self._full_text = text
+        self.setToolTip(text)
+        self._elide()
+
+    def text(self) -> str:
+        return self._full_text
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._elide()
+
+    def _elide(self) -> None:
+        width = self.contentsRect().width()
+        super().setText(self.fontMetrics().elidedText(self._full_text, Qt.TextElideMode.ElideRight, width))
+
+
 class SkyView(QWidget):
     starClicked = Signal(object)  # SkyStar
     catalogLoaded = Signal(object)  # SkyCatalog
@@ -159,19 +193,15 @@ class SkyView(QWidget):
             self.plot.addItem(item)
         self._labels: list[pg.TextItem] = []
 
-        self.status_label = QLabel()
+        self.status_label = ElidedLabel()
         self.status_label.setObjectName("skyStatus")
-        self.status_label.setWordWrap(True)
-        self.coord_label = QLabel()
+        self.coord_label = ElidedLabel()
         self.coord_label.setObjectName("skyCoords")
-        self.coord_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        footer = QHBoxLayout()
-        footer.addWidget(self.status_label, 1)
-        footer.addWidget(self.coord_label)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.plot, 1)
-        layout.addLayout(footer)
+        layout.addWidget(self.status_label)
+        layout.addWidget(self.coord_label)
 
         self._field_timer = QTimer(self)
         self._field_timer.setSingleShot(True)
