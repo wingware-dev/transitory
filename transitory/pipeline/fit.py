@@ -49,6 +49,7 @@ _LD_TABLES: dict[str, np.ndarray] = {
     "Kepler": np.array([(0.30, 0.38), (0.38, 0.32), (0.52, 0.18), (0.59, 0.12), (0.52, 0.18),
                         (0.45, 0.22), (0.38, 0.26), (0.32, 0.29), (0.27, 0.31)]),
 }
+_LD_TABLES["K2"] = _LD_TABLES["Kepler"]  # the same telescope and bandpass
 
 # Fractional 1-sigma on the stellar density from catalog masses and radii
 # (TIC: ~7% in R, ~12% in M); a/rs goes as density^(1/3), so ~10% on a/rs,

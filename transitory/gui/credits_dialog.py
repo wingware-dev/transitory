@@ -55,7 +55,7 @@ def general_credits() -> list[tuple[str, list[str]]]:
     """(heading, lines) for every data service and package the dashboard can use."""
     return [
         ("TESS data (MAST)", [MAST_CREDITS["TESS"]]),
-        ("Kepler data (MAST)", [MAST_CREDITS["Kepler"]]),
+        ("Kepler and K2 data (MAST)", [MAST_CREDITS["Kepler"]]),
         ("Mission data DOIs", [doi_line(doi) for doi in DOI_TITLES]),
         ("TESS Input Catalog (MAST)", [TIC_CREDIT]),
         ("NASA Exoplanet Archive", [ARCHIVE_CREDIT, *ARCHIVE_REFERENCES]),

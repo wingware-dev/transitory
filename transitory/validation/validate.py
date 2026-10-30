@@ -47,14 +47,15 @@ log = logging.getLogger(__name__)
 # found period / published period ratios accepted as a match, preferred in this order.
 ALIASES = (1.0, 0.5, 2.0)
 PERIOD_TOLERANCE = 0.01  # relative
-# Light-curve time = BJD_TDB - offset (TESS: BTJD, Kepler: BKJD; synthetic times are used as is).
-BJD_OFFSETS = {"TESS": 2457000.0, "Kepler": 2454833.0}
+# Light-curve time = BJD_TDB - offset (TESS: BTJD, Kepler and K2: BKJD; synthetic times are used as is).
+BJD_OFFSETS = {"TESS": 2457000.0, "Kepler": 2454833.0, "K2": 2454833.0}
 # Instrumental periods (days) a spurious signal may come from.
 SYSTEMATIC_PERIODS = {
     "TESS": [(13.7, "the TESS orbit (13.7 d: scattered light and momentum dumps)"),
              (27.4, "a TESS sector (27.4 d)")],
     "Kepler": [(372.5, "the Kepler orbit (372.5 d)"), (93.0, "a Kepler quarter (~93 d)"),
                (3.0, "Kepler momentum dumps (~3 d)")],
+    "K2": [(0.245, "K2 thruster firings (~6 h)"), (80.0, "a K2 campaign (~80 d)")],
 }
 
 

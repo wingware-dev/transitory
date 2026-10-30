@@ -67,7 +67,7 @@ def test_hosts_from_rows_skips_rows_without_position():
              "sy_tmag": None, "sy_kepmag": 12.5, "disc_facility": "K2",
              "st_teff": 5000.0, "st_logg": 4.5, "st_mass": 0.8}]
     (star,) = hosts_from_rows(rows)
-    assert (star.name, star.tic, star.tmag, star.mission_hint) == ("B", 5, 12.5, "Kepler")
+    assert (star.name, star.tic, star.tmag, star.mission_hint) == ("B", 5, 12.5, "K2")
     assert (star.teff_k, star.logg, star.mass_msun) == (5000.0, 4.5, 0.8)
     assert star.credits == [ARCHIVE_CREDIT]
     target = star.to_target()

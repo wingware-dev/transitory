@@ -183,7 +183,7 @@ def light_curve_figure(analysis: StarAnalysis) -> Figure:
 
 def _time_label(analysis: StarAnalysis) -> str:
     mission = analysis.raw.mission if analysis.raw is not None else ""
-    system = {"TESS": "BTJD", "Kepler": "BKJD"}.get(mission, "days")
+    system = {"TESS": "BTJD", "Kepler": "BKJD", "K2": "BKJD"}.get(mission, "days")
     return f"Time ({system})"
 
 

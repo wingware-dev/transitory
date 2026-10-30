@@ -69,7 +69,9 @@ class SkyCatalog:
 
 def _hint_for_facility(facility: str | None) -> MissionHint:
     facility = (facility or "").lower()
-    if "kepler" in facility or facility.startswith("k2"):
+    if facility.startswith("k2"):
+        return "K2"
+    if "kepler" in facility:
         return "Kepler"
     if "tess" in facility:
         return "TESS"

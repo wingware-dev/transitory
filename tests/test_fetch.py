@@ -253,6 +253,53 @@ def test_any_mission_falls_back_to_tess(fake_lk):
     assert lc.mission == "TESS"
 
 
+def k2_row(campaign, exptime=1800, author="K2", target="ktwo211945201"):
+    """A K2 search row; ``campaign`` is "05" or a half such as "10a", as lightkurve labels them."""
+    obs_id = f"ktwo-{target}-c{campaign}-{exptime}"
+    return {"mission": f"K2 Campaign {campaign}", "author": author, "exptime": float(exptime),
+            "target_name": target, "distance": 0.0, "obs_id": obs_id, "obs_collection": "K2",
+            "productFilename": obs_id + "_llc.fits"}
+
+
+def test_select_products_k2_long_cadence_by_campaign_half():
+    rows = [k2_row("05"), k2_row("05", exptime=60), k2_row("10a"), k2_row("10b"),
+            k2_row("05", author="K2SFF"), k2_row("18", target="ktwo999")]
+    rows[-1]["distance"] = 20.0  # a neighbour
+    picked = [rows[i]["mission"] for i in select_products(make_table(rows), "K2")]
+    assert picked == ["K2 Campaign 05", "K2 Campaign 10a", "K2 Campaign 10b"]
+
+
+def test_k2_host_fetches_k2_campaigns(fake_lk):
+    rows = [k2_row("05"), k2_row("10a"), k2_row("10b")]
+    fake_lk.rows["K2"] = rows
+    for n, r in enumerate(rows):
+        fake_lk.add_data(r["productFilename"], np.arange(n * 100.0, n * 100.0 + 70, 0.02), 3e4)
+    lc = MastSource().fetch(StarTarget("K2-334", tic=5, mission_hint="K2"))
+    assert fake_lk.searches == [("K2-334", {"mission": "K2", "author": "K2", "exptime": "long"})]
+    assert len(fake_lk.downloads) == 3  # both halves of campaign 10
+    assert lc.mission == "K2"
+    assert lc.sectors_or_quarters == [5, 10]
+    assert lc.dois == [DOIS["K2"]]
+    assert lc.cadence_s == 1800.0
+    credits = mission_credits(lc)
+    assert credits[0] == fetch.MAST_CREDITS["Kepler"]
+    assert credits[1] == "K2 Light Curves (all): https://doi.org/10.17909/T9WS3R (campaigns 5, 10)"
+
+
+def test_k2_search_is_not_blocked_by_an_old_kepler_no_data_entry(fake_lk):
+    CacheIndex().put(cache_key("lightcurve", "Kepler", "K2-334"),
+                     {"query": "K2-334", "mission": "Kepler", "products": []})
+    fake_lk.rows["K2"] = [k2_row("05")]
+    fake_lk.add_data(k2_row("05")["productFilename"], np.arange(0, 70, 0.02), 3e4)
+    assert MastSource().fetch(StarTarget("K2-334", mission_hint="K2")).mission == "K2"
+
+
+def test_any_mission_without_kic_tries_tess_then_k2(fake_lk):
+    with pytest.raises(SourceError, match=r"searched TESS \(TIC 7\), K2 \(K2-18\)"):
+        MastSource().fetch(StarTarget("K2-18", tic=7))
+    assert [s[1]["mission"] for s in fake_lk.searches] == ["TESS", "K2"]
+
+
 def test_name_used_without_catalog_number(fake_lk):
     tess_setup(fake_lk)
     MastSource().fetch(StarTarget("Pi Mensae", mission_hint="TESS"))
@@ -411,6 +458,17 @@ def test_rate_limit_is_not_retried_and_says_so(fake_lk):
     with pytest.raises(SourceError, match=r"^MAST is limiting requests from this machine "
                                           r"\(HTTP 429\): .*not a lack of data"):
         MastSource().fetch(StarTarget("x", tic=5, mission_hint="TESS"))
+    assert len(fake_lk.searches) == 1
+    assert CacheIndex().keys() == []
+
+
+def test_mast_side_search_error_says_so(fake_lk):
+    from astroquery.exceptions import RemoteServiceError
+
+    fake_lk.search_error = RemoteServiceError(
+        "Request failed.  If this problem persists, please notify archive[at]stsci.edu.")
+    with pytest.raises(SourceError, match=r"^MAST reported an error on its side: .*not a lack of data"):
+        MastSource().fetch(StarTarget("K2-334", mission_hint="K2"))
     assert len(fake_lk.searches) == 1
     assert CacheIndex().keys() == []
 

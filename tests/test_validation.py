@@ -395,7 +395,7 @@ def _mission_star(name, mission, sectors, doi_sectors=None):
     from transitory.models import LightCurve
     from transitory.pipeline.fetch import DOIS, mission_credits
 
-    dois = list(doi_sectors) if doi_sectors else [DOIS["SPOC" if mission == "TESS" else "Kepler"]]
+    dois = list(doi_sectors) if doi_sectors else [DOIS[{"TESS": "SPOC"}.get(mission, mission)]]
     lc = LightCurve(np.zeros(1), np.ones(1), np.ones(1), mission, sectors_or_quarters=sectors, dois=dois,
                     doi_sectors=doi_sectors or {})
     return name, report.credit_entry(lc, mission_credits(lc) + [TIC_CREDIT, ARCHIVE_CREDIT])
@@ -435,6 +435,17 @@ def test_report_credits_group_each_data_product_with_its_stars():
         f"- {ARCHIVE_CREDIT}",
         *[f"- {line}" for line in ARCHIVE_REFERENCES],
         ""]
+
+
+def test_report_credits_give_the_shared_kepler_k2_acknowledgement_once():
+    from transitory.pipeline.fetch import MAST_CREDITS
+
+    stars = [report.StarCredits.from_entry(*s) for s in
+             (_mission_star("Kepler-10", "Kepler", [1, 2]), _mission_star("K2-18", "K2", [1]))]
+    lines = report.credits_markdown(stars, uses_archive=False)
+    assert lines.count(f"- {MAST_CREDITS['Kepler']}") == 1
+    assert "- K2 Light Curves (all): https://doi.org/10.17909/T9WS3R (campaigns 1)" in lines
+    assert "  - K2-18: campaigns 1" in lines
 
 
 def test_report_credits_keep_lines_from_other_sources():

@@ -72,6 +72,8 @@ def parse_name(text: str, mission_hint: MissionHint = "any") -> ParsedName:
     if _NUMBER.match(text):
         if mission_hint == "Kepler":
             return ParsedName("kic", f"KIC {int(text)}", int(text))
+        if mission_hint == "K2":
+            return ParsedName("epic", f"EPIC {int(text)}", int(text))
         return ParsedName("tic", f"TIC {int(text)}", int(text))
     if m := _PLANET.match(text):
         return ParsedName("planet", text, host=m.group("host"))
@@ -180,6 +182,7 @@ def _resolve_parsed(parsed: ParsedName, client: CatalogClient) -> StarTarget:
         target = _by_lookup(parsed.text, client)
         if target is None:
             raise ResolveError(f"{parsed.text} is not known to the MAST name resolver")
+        target.mission_hint = "K2"  # EPIC numbers are K2's targets
         return target
     if kind == "koi":
         found = archive.kois(koi_number=number, client=client)

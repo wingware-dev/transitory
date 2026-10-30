@@ -1,7 +1,7 @@
 """Shared data contracts between the pipeline, catalog, plots, GUI and validation.
 
 Everything here is plain dataclasses over numpy arrays: no Qt, no network.
-Times are in days (BTJD for TESS, BKJD for Kepler, or arbitrary for
+Times are in days (BTJD for TESS, BKJD for Kepler and K2, or arbitrary for
 synthetic data); flux is normalised to a median of about 1.
 """
 
@@ -13,8 +13,8 @@ from typing import Literal
 
 import numpy as np
 
-Mission = Literal["TESS", "Kepler", "Synthetic"]
-MissionHint = Literal["TESS", "Kepler", "any"]
+Mission = Literal["TESS", "Kepler", "K2", "Synthetic"]
+MissionHint = Literal["TESS", "Kepler", "K2", "any"]
 # "duo-transit": a signal backed by only two transits that passes every other
 # check.  It may be a long-period planet, but two dips can't show periodicity,
 # so it is listed in its own class and not counted as a planet candidate.

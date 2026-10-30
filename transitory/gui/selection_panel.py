@@ -44,6 +44,7 @@ MISSION_CHOICES: list[tuple[str, MissionHint | None]] = [
     ("Auto (each star's default)", None),
     ("TESS", "TESS"),
     ("Kepler", "Kepler"),
+    ("K2", "K2"),
 ]
 
 ENTRY_PLACEHOLDER = "Kepler-10, TIC 261136679, KOI-72, TOI-270, pi Men c…"

@@ -53,6 +53,10 @@ def test_bare_number_is_a_kic_when_the_hint_is_kepler():
     assert parse_name("8006161", mission_hint="Kepler").kind == "kic"
 
 
+def test_bare_number_is_an_epic_when_the_hint_is_k2():
+    assert parse_name("201367065", mission_hint="K2").kind == "epic"
+
+
 @pytest.mark.parametrize("text", ["", "   "])
 def test_parse_empty_name_fails(text):
     with pytest.raises(ResolveError):
@@ -69,7 +73,7 @@ def test_split_names():
 RESOLVED = [
     ("TIC 261136679", "TIC 261136679", 261136679, None, "any"),
     ("KIC 8006161", "KIC 8006161", 123234496, 8006161, "Kepler"),
-    ("EPIC 201367065", "EPIC 201367065", 173103335, None, "any"),
+    ("EPIC 201367065", "EPIC 201367065", 173103335, None, "K2"),
     ("KOI-72", "KOI-72", 377780790, 11904151, "Kepler"),
     ("K00072.01", "KOI-72", 377780790, 11904151, "Kepler"),
     ("TOI-270.01", "TOI-270", 259377017, None, "TESS"),

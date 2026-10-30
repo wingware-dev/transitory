@@ -195,9 +195,9 @@ def _data_line(result: TargetResult) -> str:
         return "no light curve"
     raw = a.raw
     n = len(raw.sectors_or_quarters)
-    what = "sector" if raw.mission == "TESS" else "quarter" if raw.mission == "Kepler" else "segment"
+    what = {"TESS": "sector", "Kepler": "quarter", "K2": "campaign"}.get(raw.mission, "segment")
     parts = [raw.mission]
-    if raw.author and raw.mission in ("TESS", "Kepler") and raw.author != raw.mission:
+    if raw.author and raw.mission in ("TESS", "Kepler", "K2") and raw.author != raw.mission:
         parts.append(raw.author)
     if n:
         parts.append(_count(n, what))
@@ -508,7 +508,8 @@ def credits_markdown(stars: list[StarCredits], uses_archive: bool) -> list[str]:
             for doi in s.sectors:
                 used.setdefault(doi, []).append(s)
     missions = [m for m in MAST_CREDITS if any(users[0].mission == m for users in used.values())]
-    out = [CREDITS_HEADING, ""] + [f"- {MAST_CREDITS[m]}" for m in missions]
+    # Kepler and K2 share one acknowledgement: given once.
+    out = [CREDITS_HEADING, ""] + [f"- {text}" for text in dict.fromkeys(MAST_CREDITS[m] for m in missions)]
     for m in missions:
         unit = sector_unit(m)
         for doi, users in used.items():

@@ -184,6 +184,7 @@ def star_cleaned(mission, star, period, k, b, noise, baseline=54.0, cadence_s=12
 def test_limb_darkening_by_mission_and_teff():
     assert limb_darkening("TESS", 3500) == pytest.approx((0.20, 0.38))
     assert limb_darkening("Kepler", 4500) == pytest.approx((0.59, 0.12))
+    assert limb_darkening("K2", 4500) == limb_darkening("Kepler", 4500)  # the same band
     assert limb_darkening("TESS", 3750) == pytest.approx((0.28, 0.31))  # interpolated
     assert limb_darkening("Kepler", 9000) == pytest.approx((0.27, 0.31))  # held at the grid's end
     # A Sun-like star in Kepler's band is close to the old fixed defaults.

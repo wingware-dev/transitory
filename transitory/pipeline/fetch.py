@@ -1,10 +1,12 @@
-"""``MastSource``: real TESS and Kepler light curves from MAST, via lightkurve.
+"""``MastSource``: real TESS, Kepler and K2 light curves from MAST, via lightkurve.
 
-Products chosen, per sector or quarter:
+Products chosen, per sector, quarter or campaign:
 
 * TESS: SPOC 2-minute light curves, else TESS-SPOC full-frame-image light
   curves, else SPOC 20-second ones.
 * Kepler: long-cadence (30-minute) light curves from the Kepler pipeline.
+* K2: long-cadence light curves from the K2 pipeline; campaigns 9-11, which
+  K2 observed in two halves, give one file per half.
 
 PDCSAP flux is used, falling back to SAP for a file with no PDCSAP values.
 Quality-flagged cadences are dropped on reading (lightkurve's default
@@ -46,7 +48,8 @@ log = logging.getLogger(__name__)
 
 TESS_AUTHORS = ("SPOC", "TESS-SPOC")
 KEPLER_AUTHOR = "Kepler"
-KEPLER_LONG_CADENCE_S = 1800.0
+K2_AUTHOR = "K2"
+KEPLER_LONG_CADENCE_S = 1800.0  # Kepler's and K2's
 
 # Mission data DOIs at MAST, by pipeline, with their landing-page titles
 # (checked at doi.org, 2026-10-29).  MAST asks for each as a doi.org URL.
@@ -54,11 +57,14 @@ DOIS = {
     "SPOC": "10.17909/t9-nmc8-f686",
     "TESS-SPOC": "10.17909/t9-wpz1-8s54",
     "Kepler": "10.17909/T9488N",
+    # From https://archive.stsci.edu/publishing/doi; title from its landing page (2026-10-30).
+    "K2": "10.17909/T9WS3R",
 }
 DOI_TITLES = {
     "10.17909/t9-nmc8-f686": "TESS Light Curves - All Sectors",
     "10.17909/t9-wpz1-8s54": 'TESS Light Curves From Full Frame Images ("TESS-SPOC")',
     "10.17909/T9488N": "Kepler LC, Q0-Q17",
+    "10.17909/T9WS3R": "K2 Light Curves (all)",
 }
 
 # MAST's acknowledgement for each mission, as given at
@@ -76,6 +82,9 @@ MAST_CREDITS = {
                "Directorate. STScI is operated by the Association of Universities for Research in "
                "Astronomy, Inc., under NASA contract NAS5-26555."),
 }
+# The page gives one acknowledgement for "Kepler and K2 mission data products"
+# (checked 2026-10-30): K2 data is credited with the Kepler text.
+MAST_CREDITS["K2"] = MAST_CREDITS["Kepler"]
 # Lightkurve's own recommended acknowledgement ("Citing Lightkurve").
 LIGHTKURVE_CREDIT = ("This research made use of Lightkurve, a Python package for Kepler and TESS "
                      "data analysis (Lightkurve Collaboration, 2018).")
@@ -241,6 +250,10 @@ def _failure(what: str, exc: Exception) -> SourceError:
     if isinstance(exc, TimeoutError):
         return SourceError(f"MAST is overloaded or down: {what} timed out. "
                            f"{_NOT_MISSING_DATA} ({exc})")
+    if type(exc).__name__ == "RemoteServiceError":
+        # astroquery's: MAST answered that the search failed on its side.
+        return SourceError(f"MAST reported an error on its side: {what} failed. "
+                           f"{_NOT_MISSING_DATA} ({exc})")
     return SourceError(f"{what} failed: {exc}")
 
 
@@ -258,10 +271,10 @@ def number_ranges(numbers: Iterable[int]) -> str:
 def mission_credits(lc: LightCurve) -> list[str]:
     """Acknowledgement lines for the mission data in ``lc``.
 
-    MAST asks for the sectors used next to a TESS DOI; quarters are given
-    for Kepler in the same way.
+    MAST asks for the sectors used next to a TESS DOI; quarters and
+    campaigns are given for Kepler and K2 in the same way.
     """
-    if lc.mission not in ("TESS", "Kepler"):
+    if lc.mission not in MAST_CREDITS:
         return []
     lines = [MAST_CREDITS[lc.mission]]
     for doi in lc.dois:
@@ -273,18 +286,19 @@ def mission_credits(lc: LightCurve) -> list[str]:
 
 
 def sector_unit(mission: str) -> str:
-    """What a mission's observing periods are called: TESS sectors, Kepler quarters."""
-    return "sectors" if mission == "TESS" else "quarters"
+    """What a mission's observing periods are called: TESS sectors, Kepler quarters, K2 campaigns."""
+    return {"TESS": "sectors", "K2": "campaigns"}.get(mission, "quarters")
 
 
 def _mission_order(target: StarTarget) -> list[Mission]:
     if target.mission_hint == "TESS":
         return ["TESS"]
-    if target.mission_hint == "Kepler":
-        return ["Kepler"]
+    if target.mission_hint in ("Kepler", "K2"):
+        return [target.mission_hint]
     # A KIC number means the star was in the Kepler field, whose 4-year
-    # light curves beat TESS for small planets; otherwise TESS covers more sky.
-    return ["Kepler", "TESS"] if target.kic is not None else ["TESS", "Kepler"]
+    # light curves beat TESS for small planets; otherwise TESS covers more
+    # sky, and K2 (along the ecliptic, never in the Kepler field) the rest.
+    return ["Kepler", "TESS"] if target.kic is not None else ["TESS", "K2"]
 
 
 def _query_for(target: StarTarget, mission: Mission) -> str:
@@ -300,9 +314,18 @@ def _query_for(target: StarTarget, mission: Mission) -> str:
 
 
 def _seq_number(label: str) -> int | None:
-    """Sector / quarter number from a SearchResult 'mission' label like 'TESS Sector 14'."""
+    """Sector / quarter / campaign number from a SearchResult 'mission' label like 'TESS Sector 14'.
+
+    The two halves of K2 campaigns 9-11 ('K2 Campaign 10a') give the campaign's number.
+    """
     m = re.search(r"(\d+)\s*[ab]?\s*$", str(label))
     return int(m.group(1)) if m else None
+
+
+def _seq_key(label: str) -> tuple[int, str] | None:
+    """``(number, half)`` from a 'mission' label: ``(10, "a")`` for 'K2 Campaign 10a', else half ``""``."""
+    m = re.search(r"(\d+)\s*([ab]?)\s*$", str(label))
+    return (int(m.group(1)), m.group(2)) if m else None
 
 
 def _tess_rank(author: str, exptime: float) -> int | None:
@@ -316,7 +339,7 @@ def _tess_rank(author: str, exptime: float) -> int | None:
 
 
 def select_products(table: Any, mission: Mission) -> list[int]:
-    """Row indices of the products to use: one per sector or quarter, best first.
+    """Row indices of the products to use: one per sector, quarter or campaign half, in order.
 
     ``table`` is a lightkurve ``SearchResult.table`` (rows sorted by distance).
     Only the target nearest the search position is kept, so a name search
@@ -333,19 +356,20 @@ def select_products(table: Any, mission: Mission) -> list[int]:
     else:
         nearest = names[0]
 
-    best: dict[int, tuple[int, int]] = {}  # seq -> (rank, row)
+    best: dict[tuple[int, str], tuple[int, int]] = {}  # (seq, half) -> (rank, row)
     for i in range(n):
         if names[i] != nearest:
             continue
         author = str(table["author"][i])
         exptime = float(table["exptime"][i])
-        seq = _seq_number(table["mission"][i])
+        seq = _seq_key(table["mission"][i])
         if seq is None:
             continue
         if mission == "TESS":
             rank = _tess_rank(author, exptime)
         else:
-            rank = 0 if author == KEPLER_AUTHOR and round(exptime) == KEPLER_LONG_CADENCE_S else None
+            pipeline = K2_AUTHOR if mission == "K2" else KEPLER_AUTHOR
+            rank = 0 if author == pipeline and round(exptime) == KEPLER_LONG_CADENCE_S else None
         if rank is None:
             continue
         if seq not in best or rank < best[seq][0]:
@@ -362,7 +386,7 @@ def _values(q: Any) -> np.ndarray:
 
 
 class MastSource:
-    """TESS / Kepler light curves from MAST, cached in ``cache_dir()``.
+    """TESS / Kepler / K2 light curves from MAST, cached in ``cache_dir()``.
 
     ``max_products`` caps how many sectors or quarters are used (the most
     recent ones are dropped first), for stars with very long coverage.
@@ -443,6 +467,8 @@ class MastSource:
             def search():
                 if mission == "TESS":
                     return lk.search_lightcurve(query, mission="TESS", author=TESS_AUTHORS)
+                if mission == "K2":
+                    return lk.search_lightcurve(query, mission="K2", author=K2_AUTHOR, exptime="long")
                 return lk.search_lightcurve(query, mission="Kepler", author=KEPLER_AUTHOR,
                                             exptime="long")
 
