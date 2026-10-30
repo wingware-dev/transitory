@@ -300,6 +300,11 @@ def test_any_mission_without_kic_tries_tess_then_k2(fake_lk):
     assert [s[1]["mission"] for s in fake_lk.searches] == ["TESS", "K2"]
 
 
+def test_k2_search_uses_the_epic_when_known(fake_lk):
+    with pytest.raises(SourceError, match=r"searched TESS \(TIC 7\), K2 \(EPIC 201912552\)"):
+        MastSource().fetch(StarTarget("K2-18", tic=7, epic=201912552))
+
+
 def test_name_used_without_catalog_number(fake_lk):
     tess_setup(fake_lk)
     MastSource().fetch(StarTarget("Pi Mensae", mission_hint="TESS"))

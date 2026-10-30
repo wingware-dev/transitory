@@ -16,12 +16,15 @@ values are revised over time and reports must say which ones they used.
 from __future__ import annotations
 
 import html
+import logging
 import math
 import re
 from dataclasses import dataclass, field
 
 from ..models import KnownPlanet, StarTarget
 from .client import CatalogClient, Response, adql_string, default_client
+
+log = logging.getLogger(__name__)
 
 ARCHIVE_CREDIT = ("This research has made use of the NASA Exoplanet Archive, which is operated by "
                   "the California Institute of Technology, under contract with the National "
@@ -231,6 +234,18 @@ def tois(tic: int | None = None, toi_number: int | None = None,
     else:
         raise ValueError("tois needs a tic or toi_number")
     return _run(client, f"select {TOI_COLUMNS} from toi where {where}", _from_toi, refresh)
+
+
+def epic_for_host(host: str, client: CatalogClient | None = None,
+                  refresh: bool = False) -> int | None:
+    """EPIC number of a planet host K2 observed, from the archive's K2 planets and candidates table."""
+    adql = ("select distinct epic_hostname from k2pandc "
+            f"where lower(hostname) = {adql_string(host.strip().lower())}")
+    rows = (client or default_client()).tap(adql, refresh=refresh).data
+    epics = sorted({n for n in (tic_number(row.get("epic_hostname")) for row in rows) if n is not None})
+    if len(epics) > 1:
+        log.warning("k2pandc lists several EPIC numbers for %s: %s; using the first", host, epics)
+    return epics[0] if epics else None
 
 
 def known_planets(target: StarTarget, client: CatalogClient | None = None,

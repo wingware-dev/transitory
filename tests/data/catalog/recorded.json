@@ -1,4 +1,13 @@
 {
+ "0be23780feb76199ec60d75125f6b513": {
+  "body": "[\n{\"pl_name\": \"K2-18 b\",\n\"hostname\": \"K2-18\",\n\"tic_id\": \"TIC 388804061\",\n\"ra\": 172.5601410,\n\"dec\": 7.5878315,\n\"sy_tmag\": 11.2373000,\n\"sy_kepmag\": 12.473,\n\"st_rad\": 0.411000,\n\"pl_orbper\": 32.93962300000,\n\"pl_orbpererr1\": 0.00009500000,\n\"pl_tranmid\": 2457264.39144000,\n\"pl_trandur\": 2.6820000,\n\"pl_trandep\": 0.30980000,\n\"pl_ratror\": 0.05375000,\n\"pl_rade\": 2.37000000,\n\"tran_flag\": 1,\n\"disc_facility\": \"K2\",\n\"pl_orbper_reflink\": \"<a refstr=SARKIS_ET_AL__2018 href=https://ui.adsabs.harvard.edu/abs/2018AJ....155..257S/abstract target=ref>Sarkis et al. 2018</a>\"},\n{\"pl_name\": \"K2-18 c\",\n\"hostname\": \"K2-18\",\n\"tic_id\": \"TIC 388804061\",\n\"ra\": 172.5601410,\n\"dec\": 7.5878315,\n\"sy_tmag\": 11.2373000,\n\"sy_kepmag\": 12.473,\n\"st_rad\": 0.411000,\n\"pl_orbper\": 8.96200000000,\n\"pl_orbpererr1\": 0.00800000000,\n\"pl_tranmid\": null,\n\"pl_trandur\": null,\n\"pl_trandep\": null,\n\"pl_ratror\": null,\n\"pl_rade\": 2.65000000,\n\"tran_flag\": 0,\n\"disc_facility\": \"La Silla Observatory\",\n\"pl_orbper_reflink\": \"<a refstr=CLOUTIER_ET_AL__2017 href=https://ui.adsabs.harvard.edu/abs/2017A&A...608A..35C/abstract target=ref>Cloutier et al. 2017</a>\"}\n]\n",
+  "method": "GET",
+  "params": {
+   "format": "json",
+   "query": "select pl_name, hostname, tic_id, ra, dec, sy_tmag, sy_kepmag, st_rad, pl_orbper, pl_orbpererr1, pl_tranmid, pl_trandur, pl_trandep, pl_ratror, pl_rade, tran_flag, disc_facility, pl_orbper_reflink from pscomppars where lower(hostname) = 'k2-18' or lower(pl_name) = 'k2-18'"
+  },
+  "url": "https://exoplanetarchive.ipac.caltech.edu/TAP/sync"
+ },
  "0be8932156e289915d646af540907ff9": {
   "body": "[\n{\"kepid\": 11904151,\n\"kepoi_name\": \"K00072.01\",\n\"kepler_name\": \"Kepler-10 b\",\n\"koi_disposition\": \"CONFIRMED\",\n\"koi_period\": 0.837491225,\n\"koi_period_err1\": 3.03e-07,\n\"koi_time0bk\": 131.574858,\n\"koi_duration\": 1.796,\n\"koi_depth\": 190.4,\n\"koi_ror\": 0.012545,\n\"koi_prad\": 1.43,\n\"ra\": 285.679380,\n\"dec\": 50.241299,\n\"koi_kepmag\": 10.961},\n{\"kepid\": 11904151,\n\"kepoi_name\": \"K00072.02\",\n\"kepler_name\": \"Kepler-10 c\",\n\"koi_disposition\": \"CONFIRMED\",\n\"koi_period\": 45.29422297,\n\"koi_period_err1\": 5.6e-05,\n\"koi_time0bk\": 138.678725,\n\"koi_duration\": 6.83,\n\"koi_depth\": 477.1,\n\"koi_ror\": 0.019806,\n\"koi_prad\": 2.26,\n\"ra\": 285.679380,\n\"dec\": 50.241299,\n\"koi_kepmag\": 10.961}\n]\n",
   "method": "GET",
@@ -68,6 +77,15 @@
   },
   "url": "https://mast.stsci.edu/api/v0/invoke"
  },
+ "50e81426c54a2710784f75ce49fe5407": {
+  "body": "[\n]\n",
+  "method": "GET",
+  "params": {
+   "format": "json",
+   "query": "select distinct epic_hostname from k2pandc where lower(hostname) = 'hd 39091'"
+  },
+  "url": "https://exoplanetarchive.ipac.caltech.edu/TAP/sync"
+ },
  "51732df398d74f9b2c9ac89fb105e010": {
   "body": "[\n]\n",
   "method": "GET",
@@ -127,6 +145,14 @@
   },
   "url": "https://mast.stsci.edu/api/v0/invoke"
  },
+ "7a0186655b94fe9f0567f0e229e58861": {
+  "body": "{\"status\": \"COMPLETE\", \"msg\": \"\", \"data\": [{\"ID\": 388804061, \"ra\": 172.56049010363, \"dec\": 7.58840478280286, \"Tmag\": 11.2373, \"KIC\": null, \"rad\": 0.444516, \"Teff\": 3464, \"logg\": 4.7864, \"mass\": 0.440668, \"objType\": \"STAR\", \"dstArcSec\": 0.03928875569142444}], \"paging\": {\"page\": 1, \"pageSize\": 5000, \"pagesFiltered\": 1, \"rows\": 1, \"rowsFiltered\": 1, \"rowsTotal\": 1}}",
+  "method": "POST",
+  "params": {
+   "request": "{\"format\": \"json\", \"page\": 1, \"pagesize\": 5000, \"params\": {\"dec\": 7.5884, \"ra\": 172.5605, \"radius\": 0.0028}, \"service\": \"Mast.Catalogs.Tic.Cone\"}"
+  },
+  "url": "https://mast.stsci.edu/api/v0/invoke"
+ },
  "7cb1c5edd31cd0c5f4041c0866f57f10": {
   "body": "[\n{\"pl_name\": \"WASP-18 b\",\n\"hostname\": \"WASP-18\",\n\"tic_id\": \"TIC 100100827\",\n\"ra\": 24.3544618,\n\"dec\": -45.6777937,\n\"sy_tmag\": 8.8287000,\n\"sy_kepmag\": null,\n\"st_rad\": 1.319000,\n\"pl_orbper\": 0.94145223000,\n\"pl_orbpererr1\": 0.00000024000,\n\"pl_tranmid\": 2456740.80560000,\n\"pl_trandur\": 2.2100000,\n\"pl_trandep\": 1.04100000,\n\"pl_ratror\": 0.10180000,\n\"pl_rade\": 13.89913607,\n\"tran_flag\": 1,\n\"disc_facility\": \"SuperWASP\",\n\"pl_orbper_reflink\": \"<a refstr=CORT_EACUTE_S_ZULETA_ET_AL__2020 href=https://ui.adsabs.harvard.edu/abs/2020A&A...636A..98C/abstract target=ref>Cort&eacute;s-Zuleta et al. 2020</a>\"}\n]\n",
   "method": "GET",
@@ -151,6 +177,15 @@
   "params": {
    "format": "json",
    "query": "select pl_name, hostname, tic_id, ra, dec, sy_tmag, sy_kepmag, st_rad, pl_orbper, pl_orbpererr1, pl_tranmid, pl_trandur, pl_trandep, pl_ratror, pl_rade, tran_flag, disc_facility, pl_orbper_reflink from pscomppars where lower(hostname) = 'kepler-10' or lower(pl_name) = 'kepler-10'"
+  },
+  "url": "https://exoplanetarchive.ipac.caltech.edu/TAP/sync"
+ },
+ "842b3c0cee3f171df2857ff9d9da5fbe": {
+  "body": "[\n]\n",
+  "method": "GET",
+  "params": {
+   "format": "json",
+   "query": "select distinct epic_hostname from k2pandc where lower(hostname) = 'wasp-18'"
   },
   "url": "https://exoplanetarchive.ipac.caltech.edu/TAP/sync"
  },
@@ -197,6 +232,15 @@
   },
   "url": "https://mast.stsci.edu/api/v0/invoke"
  },
+ "9f2c66b246ad689da849d915937ace86": {
+  "body": "[\n{\"epic_hostname\": \"EPIC 201912552\"}\n]\n",
+  "method": "GET",
+  "params": {
+   "format": "json",
+   "query": "select distinct epic_hostname from k2pandc where lower(hostname) = 'k2-18'"
+  },
+  "url": "https://exoplanetarchive.ipac.caltech.edu/TAP/sync"
+ },
  "a3c01ecf442d7e23332393602c0978ca": {
   "body": "{\"status\": \"COMPLETE\", \"msg\": \"\", \"data\": [], \"paging\": {\"page\": 0, \"pageSize\": 0, \"pagesFiltered\": 0, \"rows\": 0, \"rowsFiltered\": 0, \"rowsTotal\": 0}}",
   "method": "POST",
@@ -220,6 +264,15 @@
   "params": {
    "format": "json",
    "query": "select tid, toi, tfopwg_disp, ra, dec, st_tmag, st_rad, pl_orbper, pl_orbpererr1, pl_tranmid, pl_trandurh, pl_trandep, pl_rade from toi where tid = 377780790"
+  },
+  "url": "https://exoplanetarchive.ipac.caltech.edu/TAP/sync"
+ },
+ "b7778488c26d565421d3623c3a5af9c4": {
+  "body": "[\n]\n",
+  "method": "GET",
+  "params": {
+   "format": "json",
+   "query": "select distinct epic_hostname from k2pandc where lower(hostname) = 'lhs 3844'"
   },
   "url": "https://exoplanetarchive.ipac.caltech.edu/TAP/sync"
  },
@@ -264,6 +317,14 @@
    "query": "select pl_name, hostname, tic_id, ra, dec, sy_tmag, sy_kepmag, st_rad, pl_orbper, pl_orbpererr1, pl_tranmid, pl_trandur, pl_trandep, pl_ratror, pl_rade, tran_flag, disc_facility, pl_orbper_reflink from pscomppars where tic_id = 'TIC 377780790'"
   },
   "url": "https://exoplanetarchive.ipac.caltech.edu/TAP/sync"
+ },
+ "d1c9c9a5b5060134879d92e00878ea04": {
+  "body": "{\"status\": \"COMPLETE\", \"msg\": \"\", \"data\": [{\"ID\": 388804061, \"ra\": 172.56049010363, \"dec\": 7.58840478280286, \"Tmag\": 11.2373, \"KIC\": null, \"rad\": 0.444516, \"Teff\": 3464, \"logg\": 4.7864, \"mass\": 0.440668, \"objType\": \"STAR\"}], \"paging\": {\"page\": 1, \"pageSize\": 1, \"pagesFiltered\": 1, \"rows\": 1, \"rowsFiltered\": 1, \"rowsTotal\": 1}}",
+  "method": "POST",
+  "params": {
+   "request": "{\"format\": \"json\", \"params\": {\"columns\": \"*\", \"filters\": [{\"paramName\": \"ID\", \"values\": [\"388804061\"]}]}, \"service\": \"Mast.Catalogs.Filtered.Tic\"}"
+  },
+  "url": "https://mast.stsci.edu/api/v0/invoke"
  },
  "e0f7a9f98b700cb4e4bab1ceb1068998": {
   "body": "{\"status\": \"COMPLETE\", \"msg\": \"\", \"data\": [{\"ID\": 424865156, \"ra\": 292.247307554825, \"dec\": 47.9695045141174, \"Tmag\": 10.0274, \"KIC\": 10666592, \"rad\": 1.99356, \"Teff\": 6532.23, \"logg\": 3.96818, \"mass\": 1.347, \"objType\": \"STAR\", \"dstArcSec\": 0.024406343645639365}, {\"ID\": 1882891963, \"ra\": 292.24879026723, \"dec\": 47.9695435437984, \"Tmag\": 17.8483, \"KIC\": null, \"rad\": null, \"Teff\": null, \"logg\": null, \"mass\": null, \"objType\": \"STAR\", \"dstArcSec\": 3.595399528104443}], \"paging\": {\"page\": 1, \"pageSize\": 5000, \"pagesFiltered\": 1, \"rows\": 2, \"rowsFiltered\": 2, \"rowsTotal\": 2}}",
@@ -315,6 +376,14 @@
    "query": "select kepid, kepoi_name, kepler_name, koi_disposition, koi_period, koi_period_err1, koi_time0bk, koi_duration, koi_depth, koi_ror, koi_prad, ra, dec, koi_kepmag from cumulative where kepoi_name like 'K999999.%'"
   },
   "url": "https://exoplanetarchive.ipac.caltech.edu/TAP/sync"
+ },
+ "faa218ca824a058ef65cfd6e04e7bdca": {
+  "body": "{\"resolvedCoordinate\": [{\"searchString\": \"epic 201912552\", \"resolver\": \"K2\", \"cached\": false, \"resolverTime\": 3, \"searchRadius\": 0.000333, \"canonicalName\": \"EPIC 201912552\", \"ra\": 172.56046, \"decl\": 7.588391}], \"status\": \"\"}",
+  "method": "POST",
+  "params": {
+   "request": "{\"format\": \"json\", \"params\": {\"format\": \"json\", \"input\": \"EPIC 201912552\"}, \"service\": \"Mast.Name.Lookup\"}"
+  },
+  "url": "https://mast.stsci.edu/api/v0/invoke"
  },
  "ff37a607ab12210483f4f9791eb80f11": {
   "body": "{\"status\": \"COMPLETE\", \"msg\": \"\", \"data\": [{\"ID\": 377780790, \"ra\": 285.679421792384, \"dec\": 50.2413057664223, \"Tmag\": 10.4767, \"KIC\": 11904151, \"rad\": 1.08974, \"Teff\": 5706, \"logg\": 4.37074, \"mass\": 1.017, \"objType\": \"STAR\"}], \"paging\": {\"page\": 1, \"pageSize\": 1, \"pagesFiltered\": 1, \"rows\": 1, \"rowsFiltered\": 1, \"rowsTotal\": 1}}",

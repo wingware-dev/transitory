@@ -33,6 +33,7 @@ class StarTarget:
     name: str
     tic: int | None = None
     kic: int | None = None
+    epic: int | None = None  # K2's Ecliptic Plane Input Catalog number
     ra: float | None = None  # degrees, ICRS
     dec: float | None = None  # degrees, ICRS
     tmag: float | None = None  # TESS magnitude (or Kepler mag if only that is known)
@@ -51,6 +52,8 @@ class StarTarget:
             return f"{self.name} (TIC {self.tic})"
         if self.kic is not None and f"{self.kic}" not in self.name:
             return f"{self.name} (KIC {self.kic})"
+        if self.epic is not None and f"{self.epic}" not in self.name:
+            return f"{self.name} (EPIC {self.epic})"
         return self.name
 
 

@@ -10,7 +10,7 @@ Accepted forms (case-insensitive except planet letters):
 - any star name SIMBAD knows (``Kepler-2``, ``LHS 3844``, ``HD 39091``).
 
 Names are looked up first among confirmed planet hosts in the Exoplanet
-Archive, then through the MAST name resolver (SIMBAD / NED / EPIC) and the
+Archive (with the EPIC number from its K2 table for hosts K2 observed), then through the MAST name resolver (SIMBAD / NED / EPIC) and the
 nearest TIC star.  Every service response is cached on disk, so resolving a
 name a second time needs no network.
 """
@@ -162,14 +162,18 @@ def _by_archive_host(parsed: ParsedName, client: CatalogClient) -> StarTarget | 
     # Keep the name the user knows ("pi Men", not the archive's "HD 39091"),
     # with the archive's capitalisation when it is the same name.
     name = planet.host if planet.host.lower() == host.lower() else host
+    target = None
     if planet.tic is not None:
         try:
-            return _by_tic(name, planet.tic, client)
+            target = _by_tic(name, planet.tic, client)
         except ResolveError:
             log.warning("archive host %s lists TIC %s, which the TIC lacks", planet.host, planet.tic)
-    if planet.ra is not None and planet.dec is not None:
-        return _by_position(name, planet.ra, planet.dec, client)
-    return None
+    if target is None and planet.ra is not None and planet.dec is not None:
+        target = _by_position(name, planet.ra, planet.dec, client)
+    if target is not None and target.kic is None:
+        # Kepler stars are found by KIC; any other host may have K2 light curves under an EPIC.
+        target.epic = archive.epic_for_host(planet.host, client)
+    return target
 
 
 def _resolve_parsed(parsed: ParsedName, client: CatalogClient) -> StarTarget:
@@ -182,6 +186,7 @@ def _resolve_parsed(parsed: ParsedName, client: CatalogClient) -> StarTarget:
         target = _by_lookup(parsed.text, client)
         if target is None:
             raise ResolveError(f"{parsed.text} is not known to the MAST name resolver")
+        target.epic = number
         target.mission_hint = "K2"  # EPIC numbers are K2's targets
         return target
     if kind == "koi":

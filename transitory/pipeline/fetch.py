@@ -322,6 +322,8 @@ def _query_for(target: StarTarget, mission: Mission) -> str:
         return f"TIC {target.tic}"
     if mission == "Kepler" and target.kic is not None:
         return f"KIC {target.kic}"
+    if mission == "K2" and target.epic is not None:
+        return f"EPIC {target.epic}"
     if target.name.strip():
         return target.name.strip()
     if target.ra is not None and target.dec is not None:

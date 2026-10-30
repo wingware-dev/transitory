@@ -38,7 +38,8 @@ HOSTS_KEEP = {"Kepler-10", "Kepler-7", "HAT-P-7", "Kepler-22", "HD 39091", "LHS 
               "TOI-270"}
 
 RESOLVED = ["TIC 261136679", "KIC 8006161", "EPIC 201367065", "KOI-72", "K00072.01", "TOI-270.01",
-            "Kepler-10 b", "Kepler-2", "pi Men", "pi Men c", "LHS 3844", "WASP-18b"]
+            "Kepler-10 b", "Kepler-2", "pi Men", "pi Men c", "LHS 3844", "WASP-18b",
+            "EPIC 201912552", "K2-18"]
 UNRESOLVED = ["TIC 99999999999", "nosuchstarxyz", "KOI-999999", "TOI-999999"]
 
 

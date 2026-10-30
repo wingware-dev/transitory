@@ -8,6 +8,7 @@ from transitory.catalog.client import CatalogClient, CatalogError, RecordedTrans
 from transitory.catalog.tic import TIC_CREDIT, TicStar
 from transitory.catalog.resolve import (ResolveError, parse_name, resolve, resolve_many,
                                         split_names)
+from transitory.models import StarTarget
 
 RECORDED = Path(__file__).parent / "data" / "catalog" / "recorded.json"
 
@@ -83,6 +84,8 @@ RESOLVED = [
     ("pi Men c", "pi Men", 261136679, None, "any"),
     ("LHS 3844", "LHS 3844", 410153553, None, "any"),
     ("WASP-18b", "WASP-18", 100100827, None, "any"),
+    ("EPIC 201912552", "EPIC 201912552", 388804061, None, "K2"),
+    ("K2-18", "K2-18", 388804061, None, "any"),
 ]
 
 
@@ -102,6 +105,23 @@ def test_resolved_values_come_from_the_tic(client):
     assert target.radius_rsun == pytest.approx(1.149, abs=1e-3)
     assert target.label == "pi Men (TIC 261136679)"
     assert target.credits == [TIC_CREDIT]
+
+
+@pytest.mark.parametrize("typed, epic", [
+    ("EPIC 201912552", 201912552),
+    ("EPIC 201367065", 201367065),
+    ("K2-18", 201912552),  # from the archive's K2 planets and candidates table
+    ("pi Men", None),  # a host K2 did not observe
+    ("Kepler-10", None),  # a Kepler star, found by its KIC
+])
+def test_resolve_fills_the_epic(client, typed, epic):
+    assert resolve(typed, client=client).epic == epic
+
+
+def test_label_names_the_epic_when_there_is_no_tic_or_kic():
+    assert StarTarget(name="K2-18", epic=201912552).label == "K2-18 (EPIC 201912552)"
+    assert StarTarget(name="EPIC 201912552", epic=201912552).label == "EPIC 201912552"
+    assert StarTarget(name="K2-18", tic=388804061, epic=201912552).label == "K2-18 (TIC 388804061)"
 
 
 def test_tic_credit_only_with_stellar_parameters():
