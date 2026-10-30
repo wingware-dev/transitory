@@ -5,8 +5,9 @@ about the pointer.  On a trackpad, two-finger scrolling pans and pinching
 zooms (Ctrl/Cmd + scroll zooms too).  Reset view (or Home) returns to the
 home view: all sky, or what ``set_home`` chose.  A
 click selects the nearest star (within a few pixels), highlights it and
-emits ``starClicked``.  Zoomed in below ``FIELD_ZOOM_DEG``, TIC stars in
-view are loaded from MAST in a worker thread.  The Kepler field (approx.)
+emits ``starClicked``.  Zoomed in so the view's shorter side is under
+``FIELD_ZOOM_DEG``, TIC stars in view are loaded from MAST in a worker
+thread; zoomed out, the status line says how far to zoom.  The Kepler field (approx.)
 and the TESS continuous viewing zones are outlined, and labelled outside
 the outlines, under the list's name labels.
 
@@ -48,7 +49,7 @@ from .sky_axes import DecAxis, RaAxis, format_dec, format_ra
 
 log = logging.getLogger(__name__)
 
-FIELD_ZOOM_DEG = 2.0  # view size (true degrees) below which TIC field stars load
+FIELD_ZOOM_DEG = 2.0  # shorter view side (true degrees) at or below which TIC field stars load
 FIELD_MAX_TMAG = 13.0
 FIELD_DEBOUNCE_MS = 400
 CLICK_PIXELS = 12  # how far from a star a click may land
@@ -419,6 +420,7 @@ class SkyView(QWidget):
         self.plot.scene().sigMouseMoved.connect(self._on_mouse_moved)
 
         self.show_all_sky()
+        self._show_zoom_hint()
         self._update_status()
 
     # -- outlines ----------------------------------------------------------------
@@ -518,7 +520,8 @@ class SkyView(QWidget):
         """Fetch TIC stars around (ra, dec) in the background, then show them."""
         request = (ra, dec, min(radius_deg, MAX_CONE_RADIUS_DEG))
         self._pending_field = request
-        self._field_status = "Loading TIC stars…"
+        self._field_status = (f"Loading TIC stars (Tmag ≤ {FIELD_MAX_TMAG:g}) within "
+                              f"{request[2]:.2f}° from MAST…")
         self._update_status()
         client = self.client
         self.runner.submit(
@@ -639,9 +642,10 @@ class SkyView(QWidget):
 
     def _maybe_load_field(self) -> None:
         ra, dec, width, height = self.view_region()
-        if max(width, height) > self.field_zoom_deg:
+        if min(width, height) > self.field_zoom_deg:  # a wide view's shorter side
             if self.field or self._pending_field:
                 self.clear_field()
+            self._show_zoom_hint()
             return
         radius = min(0.5 * math.hypot(width, height), MAX_CONE_RADIUS_DEG)
         loaded = self._pending_field or self.field_region
@@ -650,6 +654,16 @@ class SkyView(QWidget):
             if separation_deg(ra, dec, lra, ldec) + radius <= lradius * 1.001:
                 return  # the view is inside what is (being) loaded
         self.load_field(round(ra, 4), round(dec, 4), radius * 1.25)
+
+    def _show_zoom_hint(self) -> None:
+        """Say how far to zoom in for field stars (nothing when they are off, as in demo mode)."""
+        hint = ""
+        if self.field_zoom_deg > 0:
+            hint = (f"Zoom in below {self.field_zoom_deg:g}° to see TIC stars "
+                    f"(Tmag ≤ {FIELD_MAX_TMAG:g})")
+        if hint != self._field_status:
+            self._field_status = hint
+            self._update_status()
 
     # -- picking ---------------------------------------------------------------------
 

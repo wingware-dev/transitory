@@ -49,7 +49,7 @@ WINDOW_TITLE = "Transitory — transiting planet finder"
 # which can have 40+ sectors, to about 1.5 years of data.
 DEFAULT_MAX_PRODUCTS = 20
 MAX_PRODUCTS_CHOICES = (5, 10, 20, 40, None)  # None: all
-TARGET_ZOOM_DEG = 3.0
+TARGET_ZOOM_DEG = 1.5  # under the sky view's FIELD_ZOOM_DEG, so going to a star shows its field
 DEMO_SKY_CENTER = (289.0, 44.0)  # RA, Dec: the Kepler field
 DEMO_SKY_SIZE_DEG = 18.0
 

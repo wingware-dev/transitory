@@ -13,6 +13,7 @@ from sky_selection_host import (click, drag, make_sky_selection_window, pinch, r
                                 sky_center, sky_pixel, trackpad_scroll, wheel)
 from transitory.catalog import skycatalog
 from transitory.catalog.client import CatalogClient, CatalogError, ResponseCache
+from transitory.gui.main_window import TARGET_ZOOM_DEG
 from transitory.gui.selection_panel import SelectionPanel
 from transitory.models import StarTarget
 
@@ -223,7 +224,7 @@ def test_double_clicking_a_listed_star_centres_the_sky(window, qtbot):
     qtbot.mouseDClick(panel.list.viewport(), Qt.MouseButton.LeftButton, pos=rect.center())
     ra, dec, width, height = sky.view_region()
     assert (ra, dec) == (pytest.approx(120.0), pytest.approx(-30.0))
-    assert height == pytest.approx(3.0)
+    assert min(width, height) == pytest.approx(TARGET_ZOOM_DEG)
 
 
 # -- zooming and panning the sky ------------------------------------------------------------

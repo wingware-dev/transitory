@@ -17,6 +17,7 @@ from PySide6.QtWidgets import QApplication, QSplitter
 
 from transitory.catalog import skycatalog
 from transitory.catalog.client import CatalogClient, RecordedTransport, ResponseCache
+from transitory.gui.main_window import TARGET_ZOOM_DEG
 from transitory.gui.selection_panel import SelectionPanel
 from transitory.gui.sky_view import SkyView
 
@@ -45,7 +46,7 @@ class SkySelectionWindow(QSplitter):
         self.sky.starClicked.connect(self.panel.add_star)
         self.panel.targetsChanged.connect(self.sky.set_selected)
         self.panel.targetActivated.connect(
-            lambda t: t.ra is not None and self.sky.center_on(t.ra, t.dec, 3.0))
+            lambda t: t.ra is not None and self.sky.center_on(t.ra, t.dec, TARGET_ZOOM_DEG))
 
     def closeEvent(self, event):
         self.sky.close()

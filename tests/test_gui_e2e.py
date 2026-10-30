@@ -1,5 +1,6 @@
 """End to end: the dashboard in demo mode, and the analysis runner behind Submit."""
 
+import json
 import threading
 import time
 
@@ -12,14 +13,17 @@ from dashboard_host import click_star, hover_star, select_and_submit, type_stars
 from harness import shot
 from sky_selection_host import recorded_client
 from transitory.catalog.client import CatalogError
+from transitory.catalog.tic import MAX_CONE_RADIUS_DEG
 from transitory.gui.credits_dialog import credits_text
 from transitory.gui.main_window import (
     DEFAULT_MAX_PRODUCTS,
+    TARGET_ZOOM_DEG,
     MainWindow,
     demo_resolver,
     make_source,
     parse_args,
 )
+from transitory.gui.sky_view import FIELD_ZOOM_DEG
 from transitory.gui.workers import AnalysisRunner, ProgressPanel
 from transitory.models import StarAnalysis, StarTarget
 from transitory.pipeline import AnalysisCancelled
@@ -91,8 +95,9 @@ def test_demo_sky_shows_demo_stars_and_never_loads_fields(main_window):
     click_star(main_window, "Demo Quiet Star")
     assert [t.name for t in main_window.panel.targets()] == ["Demo Quiet Star"]
     main_window.panel.targetActivated.emit(main_window.panel.targets()[0])
-    sky._maybe_load_field()  # zoomed to 3 deg; a field load would go to MAST
+    sky._maybe_load_field()  # zoomed in on the star; a field load would go to MAST
     assert sky.field == [] and not sky.runner.busy
+    assert "TIC stars" not in sky.status_text  # nor a hint to zoom for them
 
 
 def test_hovering_stars_never_moves_the_sky_plot(main_window):
@@ -188,6 +193,44 @@ def test_mast_mode_loads_hosts_when_shown_and_caps_sectors(qtbot, tmp_path):
     next(a for a in menu.actions() if a.text() == "5").trigger()
     assert window.source.max_products == 5
     assert [a.text() for a in menu.actions() if a.isChecked()] == ["5"]
+
+
+def test_going_to_a_listed_star_loads_its_tic_field(qtbot, tmp_path):
+    client = recorded_client(tmp_path / "catalog")
+    recorded = client.transport
+    cone = next(e["body"] for e in recorded.recordings.values()
+                if "Filtered.Tic.Position" in e["params"].get("request", ""))
+    cones = []
+
+    def transport(method, url, params):  # the recorded Kepler-10 field, for any cone
+        if "Filtered.Tic.Position" in params.get("request", ""):
+            cones.append(json.loads(params["request"])["params"])
+            return cone
+        return recorded(method, url, params)
+
+    client.transport = transport
+    window = MainWindow(_NotDemo(), client=client)
+    qtbot.addWidget(window)
+    window.show()
+    sky = window.sky
+    qtbot.waitUntil(lambda: len(sky.hosts) > 0, timeout=10000)
+    assert "Zoom in below 2° to see TIC stars (Tmag ≤ 13)" in sky.status_text
+    kepler10 = next(s for s in sky.hosts if s.name == "Kepler-10")
+    with qtbot.waitSignal(sky.fieldLoaded, timeout=10000) as blocker:
+        window.panel.targetActivated.emit(kepler10.to_target())
+        assert "Loading TIC stars" not in sky.status_text  # not until the view settles
+    ra, dec, width, height = sky.view_region()
+    assert min(width, height) == pytest.approx(TARGET_ZOOM_DEG)
+    assert max(width, height) > FIELD_ZOOM_DEG  # the wide dock: only the shorter side counts
+    (request,) = cones
+    assert (request["ra"], request["dec"]) == (pytest.approx(kepler10.ra, abs=1e-3),
+                                               pytest.approx(kepler10.dec, abs=1e-3))
+    assert request["radius"] <= MAX_CONE_RADIUS_DEG
+    assert len(blocker.args[0]) == 10  # the recorded field, less Kepler-10 itself
+    assert "10 TIC stars (Tmag ≤ 13)" in sky.status_text
+    with qtbot.waitSignal(sky.fieldLoaded, timeout=10000):
+        sky.load_field(kepler10.ra, kepler10.dec, 5.0)
+        assert "Loading TIC stars (Tmag ≤ 13) within 1.00° from MAST…" in sky.status_text
 
 
 def test_sector_cap_disabled_in_demo(main_window):

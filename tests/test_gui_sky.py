@@ -23,6 +23,8 @@ from transitory.gui.sky_view import (CVZ_RADIUS_DEG, ECLIPTIC_POLES, SkyView, in
                                      separation_deg, small_circle)
 from transitory.models import StarTarget
 
+ZOOM_HINT = "  ·  Zoom in below 2° to see TIC stars (Tmag ≤ 13)"  # the status's field part, zoomed out
+
 
 def _down(method, url, params):
     raise CatalogError("connection refused")
@@ -92,13 +94,14 @@ def test_ra_increases_to_the_left(sky):
 # -- catalogs -----------------------------------------------------------------------
 
 def test_load_hosts_in_background_and_report_retrieval(sky, qtbot):
-    assert sky.status_text == "No catalog loaded"
+    assert sky.status_text == "No catalog loaded" + ZOOM_HINT
     with qtbot.waitSignal(sky.catalogLoaded, timeout=10000) as blocker:
         sky.load_hosts()
         assert "Loading planet hosts" in sky.status_text
     catalog = blocker.args[0]
     assert not catalog.offline and len(sky.hosts) == 32
-    assert sky.status_text == f"32 planet hosts · NASA Exoplanet Archive, retrieved {catalog.retrieved}"
+    assert sky.status_text == (f"32 planet hosts · NASA Exoplanet Archive, retrieved {catalog.retrieved}"
+                               + ZOOM_HINT)
     assert len(sky.host_item.data) == 32
 
 
@@ -120,7 +123,7 @@ def test_unexpected_catalog_failure_is_logged_and_shown(sky, qtbot, monkeypatch,
     monkeypatch.setattr(skycatalog, "host_stars", broken)
     sky.load_hosts()
     qtbot.waitUntil(lambda: "unavailable" in sky.status_text, timeout=10000)
-    assert sky.status_text == "Planet hosts unavailable: 'ra'"
+    assert sky.status_text == "Planet hosts unavailable: 'ra'" + ZOOM_HINT
     assert "loading planet hosts failed" in caplog.text
 
 
@@ -437,6 +440,21 @@ def test_deep_zoom_loads_tic_field_stars(cone_sky, qtbot):
     assert cone_sky.click_at(star.ra, star.dec) is star
 
 
+def test_a_wide_view_loads_the_field_when_its_shorter_side_is_zoomed_in(cone_sky, qtbot):
+    cone_sky.resize(1400, 400)
+    kepler10 = star_named(cone_sky, "Kepler-10")
+    with qtbot.waitSignal(cone_sky.fieldLoaded, timeout=10000):
+        cone_sky.center_on(kepler10.ra, kepler10.dec, 1.9)
+    _ra, _dec, width, height = cone_sky.view_region()
+    assert width > 2 * height > 2 * 1.8  # far wider than FIELD_ZOOM_DEG
+    (cone,) = cone_sky.transport.cones
+    assert cone["radius"] == 1.0  # capped at MAX_CONE_RADIUS_DEG
+
+
+def test_zoomed_out_status_says_how_far_to_zoom(sky):
+    assert sky.status_text.endswith(ZOOM_HINT)
+
+
 def test_small_pan_inside_the_loaded_field_does_not_reload(cone_sky, qtbot):
     kepler10 = star_named(cone_sky, "Kepler-10")
     with qtbot.waitSignal(cone_sky.fieldLoaded, timeout=10000):
@@ -453,7 +471,8 @@ def test_zooming_out_clears_the_field(cone_sky, qtbot):
     with qtbot.waitSignal(cone_sky.fieldLoaded, timeout=10000) as blocker:
         cone_sky.center_on(kepler10.ra, kepler10.dec, 30.0)
     assert blocker.args[0] == [] and cone_sky.field_region is None
-    assert "TIC stars" not in cone_sky.status_text
+    assert "10 TIC stars" not in cone_sky.status_text
+    assert "Zoom in below 2° to see TIC stars (Tmag ≤ 13)" in cone_sky.status_text
 
 
 def test_field_failure_is_shown(qtbot, tmp_path, hosts):
