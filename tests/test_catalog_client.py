@@ -290,6 +290,19 @@ def test_recorded_transport_replays_and_reports_missing():
     assert len(transport.missing) == 1
 
 
+def test_recorded_transport_follows_same_as(tmp_path):
+    first, second = {"query": "a"}, {"query": "b"}
+    path = tmp_path / "rec.json"
+    path.write_text(json.dumps({
+        C.request_key("GET", C.TAP_URL, first): {"method": "GET", "url": C.TAP_URL, "params": first,
+                                                 "body": ROWS},
+        C.request_key("GET", C.TAP_URL, second): {"method": "GET", "url": C.TAP_URL, "params": second,
+                                                  "same_as": C.request_key("GET", C.TAP_URL, first)},
+    }), encoding="utf-8")
+    transport = RecordedTransport(path)
+    assert transport("GET", C.TAP_URL, second) == transport("GET", C.TAP_URL, first) == ROWS
+
+
 def test_recording_transport_round_trips(tmp_path):
     recorder = C.RecordingTransport(inner=FakeTransport(ROWS), trim=lambda url, params, body: body.upper())
     assert recorder("GET", C.TAP_URL, {"query": "q"}) == ROWS.upper()

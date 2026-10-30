@@ -123,8 +123,10 @@ class RecordedTransport:
     """Replays responses recorded to a JSON file; for tests, no network.
 
     The file maps :func:`request_key` to ``{"method", "url", "params",
-    "body"}``.  A request that was not recorded raises ``CatalogError``, as
-    an unreachable service would, and is listed in ``missing``.
+    "body"}``, or ``"same_as"`` another key in place of ``"body"`` where two
+    requests got the same reply.  A request that was not recorded raises
+    ``CatalogError``, as an unreachable service would, and is listed in
+    ``missing``.
     """
 
     def __init__(self, path: Path | str):
@@ -139,6 +141,8 @@ class RecordedTransport:
         if entry is None:
             self.missing.append((method, url, params))
             raise CatalogError(f"no recorded response for {method} {url} {params}")
+        if "same_as" in entry:
+            entry = self.recordings[entry["same_as"]]
         return entry["body"]
 
 

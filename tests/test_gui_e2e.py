@@ -203,14 +203,11 @@ def test_mast_mode_loads_hosts_when_shown_and_caps_sectors(qtbot, tmp_path):
 def test_going_to_a_listed_star_loads_its_tic_field(qtbot, tmp_path):
     client = recorded_client(tmp_path / "catalog")
     recorded = client.transport
-    cone = next(e["body"] for e in recorded.recordings.values()
-                if "Filtered.Tic.Position" in e["params"].get("request", ""))
     cones = []
 
-    def transport(method, url, params):  # the recorded Kepler-10 field, for any cone
+    def transport(method, url, params):  # the recorded 1° Kepler-10 field; notes the cones
         if "Filtered.Tic.Position" in params.get("request", ""):
             cones.append(json.loads(params["request"])["params"])
-            return cone
         return recorded(method, url, params)
 
     client.transport = transport
@@ -230,9 +227,11 @@ def test_going_to_a_listed_star_loads_its_tic_field(qtbot, tmp_path):
     (request,) = cones
     assert (request["ra"], request["dec"]) == (pytest.approx(kepler10.ra, abs=1e-3),
                                                pytest.approx(kepler10.dec, abs=1e-3))
-    assert request["radius"] <= MAX_CONE_RADIUS_DEG
-    assert len(blocker.args[0]) == 10  # the recorded field, less Kepler-10 itself
-    assert "10 TIC stars (Tmag ≤ 13)" in sky.status_text
+    assert request["radius"] == MAX_CONE_RADIUS_DEG
+    field = blocker.args[0]
+    assert len(field) > 500  # the recorded 1° field, less Kepler-10 itself
+    assert kepler10.tic and kepler10.tic not in {s.tic for s in field}
+    assert f"{len(field)} TIC stars (Tmag ≤ 13)" in sky.status_text
     with qtbot.waitSignal(sky.fieldLoaded, timeout=10000):
         sky.load_field(kepler10.ra, kepler10.dec, 5.0)
         assert "Loading TIC stars (Tmag ≤ 13) within 1.00° from MAST…" in sky.status_text

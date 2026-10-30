@@ -778,9 +778,11 @@ def test_credits_name_the_sky_image_services():
 # -- deep zoom ----------------------------------------------------------------------------
 
 def _cone_body() -> str:
+    """The recorded 0.1° Kepler-10 field (11 stars), not the 1° one."""
     recordings = json.loads(RECORDED.read_text(encoding="utf-8"))
     return next(e["body"] for e in recordings.values()
-                if "Filtered.Tic.Position" in e["params"].get("request", ""))
+                if "Filtered.Tic.Position" in e["params"].get("request", "")
+                and json.loads(e["params"]["request"])["params"]["radius"] == 0.1)
 
 
 class ConeTransport:

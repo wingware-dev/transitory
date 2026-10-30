@@ -357,6 +357,16 @@ def test_typing_one_star_centres_the_sky_on_it(window, qtbot):
     assert min(width, height) == pytest.approx(TARGET_ZOOM_DEG)
 
 
+def test_typing_one_star_shows_its_tic_field(window, qtbot):
+    sky = window.sky
+    with qtbot.waitSignal(sky.fieldLoaded, timeout=10000) as blocker:
+        type_and_enter(qtbot, window.panel, "Kepler-10 b")
+    field = blocker.args[0]
+    assert len(field) > 500  # the recorded 1° field around Kepler-10
+    assert f"{len(field)} TIC stars (Tmag ≤ 13)" in sky.status_text
+    assert "unavailable" not in sky.status_text
+
+
 def test_typing_several_stars_or_a_listed_one_leaves_the_sky(panel, qtbot):
     with qtbot.assertNotEmitted(panel.targetActivated):
         type_and_enter(qtbot, panel, "TOI-270.01, KIC 8006161")
