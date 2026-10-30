@@ -148,3 +148,6 @@ Candidates that match no published planet. *Spurious* ones passed vetting (weak 
 - TESS SPOC light curves: doi:10.17909/t9-nmc8-f686
 - TESS-SPOC full-frame-image light curves: doi:10.17909/t9-wpz1-8s54
 - This research has made use of the NASA Exoplanet Archive, which is operated by the California Institute of Technology, under contract with the National Aeronautics and Space Administration under the Exoplanet Exploration Program.
+- Christiansen et al. 2025, The NASA Exoplanet Archive, PSJ: https://doi.org/10.3847/PSJ/ade3c2
+- Planetary Systems Composite Parameters Table: https://doi.org/10.26133/NEA13
+- Kepler Objects of Interest (KOI) Cumulative Table: https://doi.org/10.26133/NEA4

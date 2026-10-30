@@ -18,7 +18,7 @@ from matplotlib.figure import Figure
 from matplotlib.ticker import NullFormatter, ScalarFormatter
 
 from .. import plots
-from ..catalog.archive import ARCHIVE_CREDIT
+from ..catalog.archive import ARCHIVE_CREDIT, ARCHIVE_REFERENCES
 from ..config import MAX_PLANETS_PER_STAR, MIN_PERIOD_DAYS, PROJECT_ROOT, reports_dir
 from ..models import DUO_TRANSIT
 from ..pipeline.search import MIN_TRANSITS, SDE_THRESHOLD, SDE_TWO_TRANSITS, SNR_THRESHOLD
@@ -466,7 +466,7 @@ def report_markdown(run: ValidationRun, figures: dict[tuple[str, int], str]) -> 
             if line not in credits:
                 credits.append(line)
     if _uses_archive(run):
-        credits.append(ARCHIVE_CREDIT)
+        credits += [ARCHIVE_CREDIT, *ARCHIVE_REFERENCES]
     out += ["## Data credits", ""] + [f"- {line}" for line in credits] + [""]
     return "\n".join(out)
 

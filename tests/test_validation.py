@@ -148,6 +148,26 @@ def test_findings_summarise_patterns(tmp_path):
     assert "Sun-like" not in findings
 
 
+def test_report_credits_archive_paper_and_table_dois():
+    from datetime import UTC, datetime
+
+    from transitory.catalog.archive import ARCHIVE_CREDIT, ARCHIVE_REFERENCES
+    from transitory.validation.validate import TargetResult, ValidationRun
+
+    vt = ValidationTarget(target=StarTarget(name="Star"), role="planet-host")
+    published = PublishedSet(planets=[Published("Star b", 2.2)], retrieved="2026-10-29",
+                             source="NASA Exoplanet Archive pscomppars")
+    analysis = _analysis([_planet(2.2)])
+    result = TargetResult(vt=vt, analysis=analysis, published=published)
+    result.comparisons, result.others = compare(vt, analysis, published)
+    run = ValidationRun(results=[result], source_name="MAST", max_products=None, started=datetime.now(UTC))
+    credits = report.report_markdown(run, {}).split("## Data credits")[1]
+    for line in (ARCHIVE_CREDIT, *ARCHIVE_REFERENCES):
+        assert f"- {line}" in credits
+    assert "https://doi.org/10.3847/PSJ/ade3c2" in credits
+    assert "https://doi.org/10.26133/NEA13" in credits and "https://doi.org/10.26133/NEA4" in credits
+
+
 def test_period_difference_counts_the_published_error():
     from datetime import UTC, datetime
 
