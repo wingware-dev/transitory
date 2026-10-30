@@ -183,16 +183,25 @@ def _ensure_timeouts() -> None:
     _timeouts_set = True
 
 
+def _http_status(exc: BaseException | None) -> int | None:
+    """The HTTP status of the first ``HTTPError`` with a reply in ``exc``'s chain."""
+    while exc is not None:
+        if isinstance(exc, requests.HTTPError) and exc.response is not None:
+            return exc.response.status_code
+        exc = exc.__cause__ or exc.__context__
+    return None
+
+
 def _is_transient(exc: BaseException) -> bool:
     """Whether ``exc`` is MAST being slow or unreachable, worth one more try.
 
     Not the portal's ``TimeoutError``: that search already ran its full time.
+    Not HTTP 429 either: MAST is asking us to slow down.
     """
+    if _http_status(exc) in (500, 502, 503, 504):
+        return True
     while exc is not None:
         if isinstance(exc, (requests.Timeout, requests.ConnectionError, ConnectionError)):
-            return True
-        if isinstance(exc, requests.HTTPError) and exc.response is not None \
-                and exc.response.status_code in (500, 502, 503, 504):
             return True
         exc = exc.__cause__ or exc.__context__
     return False
@@ -215,11 +224,23 @@ def _with_retry(what: str, call, on_retry=None):
     return call()
 
 
+# Said with every failure that is MAST's side, so it is not read as "no data".
+_NOT_MISSING_DATA = "This is not a lack of data for the star: try again later."
+
+
 def _failure(what: str, exc: Exception) -> SourceError:
+    status = _http_status(exc)
+    if status == 429:
+        return SourceError(f"MAST is limiting requests from this machine (HTTP 429): {what} was "
+                           f"refused. {_NOT_MISSING_DATA} ({exc})")
     if _is_transient(exc):
-        return SourceError(f"{what} timed out or could not connect (tried twice): {exc}")
+        problem = f"MAST is having problems (HTTP {status})" if status else \
+            "MAST is down or cannot be reached from this network"
+        return SourceError(f"{problem}: {what} timed out or could not connect (tried twice). "
+                           f"{_NOT_MISSING_DATA} ({exc})")
     if isinstance(exc, TimeoutError):
-        return SourceError(f"{what} timed out: {exc}")
+        return SourceError(f"MAST is overloaded or down: {what} timed out. "
+                           f"{_NOT_MISSING_DATA} ({exc})")
     return SourceError(f"{what} failed: {exc}")
 
 

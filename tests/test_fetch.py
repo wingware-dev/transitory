@@ -377,7 +377,10 @@ def test_timed_out_star_is_a_per_star_error_in_the_analysis(fake_lk):
     result = run.analyze_star(StarTarget("Kepler-22", kic=10593626, mission_hint="Kepler"), MastSource())
     assert result.raw is None and not result.ok
     assert len(result.errors) == 1
-    assert result.errors[0].startswith("fetch: MAST search for 'KIC 10593626' timed out")
+    assert result.errors[0].startswith(
+        "fetch: MAST is down or cannot be reached from this network: "
+        "MAST search for 'KIC 10593626' timed out or could not connect (tried twice). "
+        "This is not a lack of data for the star: try again later.")
 
 
 def test_server_errors_are_tried_once_more(fake_lk):
@@ -387,6 +390,29 @@ def test_server_errors_are_tried_once_more(fake_lk):
     fake_lk.search_errors = [requests.HTTPError("503 Server Error", response=reply)]
     MastSource().fetch(StarTarget("x", tic=261136679, mission_hint="TESS"))
     assert len(fake_lk.searches) == 2
+
+
+def _http_error(status):
+    reply = requests.Response()
+    reply.status_code = status
+    return requests.HTTPError(f"{status} Error", response=reply)
+
+
+def test_server_errors_twice_say_mast_is_having_problems(fake_lk):
+    fake_lk.search_errors = [_http_error(503), _http_error(503)]
+    with pytest.raises(SourceError, match=r"^MAST is having problems \(HTTP 503\): .*"
+                                          r"not a lack of data"):
+        MastSource().fetch(StarTarget("x", tic=5, mission_hint="TESS"))
+    assert CacheIndex().keys() == []
+
+
+def test_rate_limit_is_not_retried_and_says_so(fake_lk):
+    fake_lk.search_errors = [_http_error(429)]
+    with pytest.raises(SourceError, match=r"^MAST is limiting requests from this machine "
+                                          r"\(HTTP 429\): .*not a lack of data"):
+        MastSource().fetch(StarTarget("x", tic=5, mission_hint="TESS"))
+    assert len(fake_lk.searches) == 1
+    assert CacheIndex().keys() == []
 
 
 def test_other_search_errors_are_not_retried(fake_lk):
@@ -484,8 +510,9 @@ def test_search_stuck_executing_fails_the_star_after_the_portal_limit(
     target = StarTarget("Kepler-22", kic=10593626, mission_hint="Kepler")
     result = run.analyze_star(target, MastSource())
     assert result.raw is None and not result.ok
-    assert result.errors == ["fetch: MAST search for 'KIC 10593626' timed out: "
-                             "Timeout limit of 180.0 exceeded."]
+    assert result.errors == ["fetch: MAST is overloaded or down: MAST search for 'KIC 10593626' "
+                             "timed out. This is not a lack of data for the star: try again later. "
+                             "(Timeout limit of 180.0 exceeded.)"]
     assert len(fake_lk.searches) == 1  # not tried again
     assert adapter.sent == 9
     assert CacheIndex().keys() == []
