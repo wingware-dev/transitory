@@ -8,7 +8,7 @@ import re
 
 import numpy as np
 import pytest
-from PySide6.QtCore import QPointF, Qt
+from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
 from PySide6.QtWidgets import QApplication
 
 from harness import shot
@@ -189,6 +189,50 @@ def test_hover_shows_coordinates_and_star(sky, hosts):
     sky._on_mouse_moved(scene)
     assert sky.coord_label.text().startswith(
         "RA 19h02m43.0s  Dec +50°14′29″  (285.679°, +50.241°)\nKepler-10")
+
+
+def test_hover_rings_the_star_under_the_pointer(sky, hosts, qtbot):
+    sky.set_catalog(hosts)
+    kepler10 = star_named(sky, "Kepler-10")
+    sky.center_on(kepler10.ra, kepler10.dec, 20.0)
+    qtbot.wait(10)
+    viewport = sky.plot.viewport()
+    geometry = (sky.plot.geometry(), sky.view_box.sceneBoundingRect())
+    pos = screen_pos(sky, kepler10.ra, kepler10.dec)
+    qtbot.mouseMove(viewport, pos + QPoint(3, 0))
+    qtbot.waitUntil(lambda: sky.hovered is kepler10, timeout=2000)
+    assert sky.hover_item.data["x"][0] == pytest.approx(kepler10.ra)
+    assert sky.hover_item.zValue() > sky.selected_item.zValue()
+    assert (sky.plot.geometry(), sky.view_box.sceneBoundingRect()) == geometry  # drawn in the plot
+    qtbot.wait(40)  # pyqtgraph drops moves faster than its event rate
+    qtbot.mouseMove(viewport, pos + QPoint(60, 60))  # empty sky
+    qtbot.waitUntil(lambda: sky.hovered is None, timeout=2000)
+    assert len(sky.hover_item.data) == 0
+
+
+def test_hover_ring_goes_when_the_pointer_leaves_or_the_star_does(sky, hosts):
+    sky.set_catalog(hosts)
+    kepler10 = star_named(sky, "Kepler-10")
+    sky.set_hovered(kepler10)
+    QApplication.sendEvent(sky.plot.viewport(), QEvent(QEvent.Type.Leave))
+    assert sky.hovered is None
+    field_star = SkyStar(name="F", ra=kepler10.ra, dec=kepler10.dec + 0.1, tmag=10.0, kind="field")
+    sky.set_field([field_star])
+    sky.set_hovered(field_star)
+    sky.clear_field()
+    assert sky.hovered is None and len(sky.hover_item.data) == 0
+
+
+def test_click_emits_star_toggled(sky, hosts, qtbot):
+    sky.set_catalog(hosts)
+    kepler10 = star_named(sky, "Kepler-10")
+    sky.center_on(kepler10.ra, kepler10.dec, 20.0)
+    with qtbot.waitSignal(sky.starToggled, timeout=2000) as blocker:
+        sky.click_at(kepler10.ra, kepler10.dec)
+    assert blocker.args[0] is kepler10
+    assert not sky.is_listed(kepler10)
+    sky.set_selected([kepler10.to_target()])
+    assert sky.is_listed(kepler10)
 
 
 
@@ -453,6 +497,8 @@ def test_a_wide_view_loads_the_field_when_its_shorter_side_is_zoomed_in(cone_sky
 
 def test_zoomed_out_status_says_how_far_to_zoom(sky):
     assert sky.status_text.endswith(ZOOM_HINT)
+    sky.field_zoom_deg = 0.0  # field stars off, as in demo mode: no hint, at once
+    assert "TIC stars" not in sky.status_text
 
 
 def test_small_pan_inside_the_loaded_field_does_not_reload(cone_sky, qtbot):

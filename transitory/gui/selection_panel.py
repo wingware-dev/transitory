@@ -4,7 +4,7 @@ The entry box takes one name or a comma-separated list (planet names, TIC /
 KIC / EPIC numbers, KOI / TOI, SIMBAD names); names resolve in a worker
 thread through ``catalog.resolve.resolve_many``, and the ones that fail are
 reported without dropping the rest.  Stars clicked in the sky view come in
-through ``add_star``.  Submit emits the list with the chosen mission
+through ``toggle_star``, which adds them or, when listed, removes them.  Submit emits the list with the chosen mission
 preference applied.
 """
 
@@ -167,6 +167,24 @@ class SelectionPanel(QWidget):
         if added:
             self._show_message(f"Added {star.name}.")
         return added
+
+    def remove_target(self, target: StarTarget) -> bool:
+        """Remove the listed star that is the same as ``target``; returns whether one was."""
+        key = target_key(target)
+        row = next((i for i, t in enumerate(self._targets) if target_key(t) == key), None)
+        if row is None:
+            return False
+        self.list.takeItem(row)
+        del self._targets[row]
+        self._changed()
+        return True
+
+    def toggle_star(self, star: SkyStar) -> bool:
+        """Add a star clicked in the sky view, or remove it if listed; returns whether it is listed now."""
+        if self.remove_target(star.to_target()):
+            self._show_message(f"Removed {star.name}.")
+            return False
+        return self.add_star(star)
 
     def remove_selected(self) -> None:
         rows = sorted((self.list.row(item) for item in self.list.selectedItems()), reverse=True)

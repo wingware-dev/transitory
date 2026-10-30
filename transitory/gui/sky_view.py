@@ -3,9 +3,12 @@
 RA increases to the left, as on the sky.  Drag pans; the mouse wheel zooms
 about the pointer.  On a trackpad, two-finger scrolling pans and pinching
 zooms (Ctrl/Cmd + scroll zooms too).  Reset view (or Home) returns to the
-home view: all sky, or what ``set_home`` chose.  A
-click selects the nearest star (within a few pixels), highlights it and
-emits ``starClicked``.  Zoomed in so the view's shorter side is under
+home view: all sky, or what ``set_home`` chose.  The star under the pointer
+(within a few pixels) gets a white ring.  A click on a star marks it as last
+clicked and emits ``starClicked`` and ``starToggled``; the window adds it
+to the selection list, or removes it when it is listed already.  A
+right-click opens a menu: Add to / Remove from the list, Centre here, and
+Copy name / Copy TIC ID.  Zoomed in so the view's shorter side is under
 ``FIELD_ZOOM_DEG``, TIC stars in view are loaded from MAST in a worker
 thread; zoomed out, the status line says how far to zoom.  The Kepler field (approx.)
 and the TESS continuous viewing zones are outlined, and labelled outside
@@ -37,7 +40,8 @@ import numpy as np
 import pyqtgraph as pg
 from PySide6.QtCore import QEvent, QObject, QPointF, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QKeySequence, QShortcut, QTextLayout
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QToolButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QMenu, QSizePolicy, QToolButton,
+                               QVBoxLayout, QWidget)
 
 from ..catalog import skycatalog
 from ..catalog.client import CatalogClient, CatalogError
@@ -45,6 +49,7 @@ from ..catalog.skycatalog import SkyCatalog, SkyStar
 from ..catalog.tic import MAX_CONE_RADIUS_DEG
 from ..models import StarTarget
 from .catalog_jobs import JobRunner
+from .selection_panel import target_key
 from .sky_axes import DecAxis, RaAxis, format_dec, format_ra
 
 log = logging.getLogger(__name__)
@@ -70,6 +75,8 @@ NULL_COLOR = QColor(110, 170, 255)
 FIELD_COLOR = QColor(170, 170, 170)
 SELECTED_COLOR = QColor(255, 70, 70)
 CURRENT_COLOR = QColor(255, 255, 90)
+HOVER_COLOR = QColor(255, 255, 255, 210)
+HOVER_RING_PX = 14  # inside the list's 18 px ring, so both show on a listed star
 OUTLINE_COLORS = {"Kepler": QColor(120, 200, 255), "TESS": QColor(150, 230, 150)}
 
 # Markers are drawn at full size up to FULL_SIZE_DEG_PER_PX (true degrees per
@@ -79,7 +86,8 @@ MIN_MARKER_SCALE = 0.5
 MARKER_SCALE_STEP = 0.05  # sizes change in steps, so panning never resizes them
 
 # z order: field stars, hosts, outlines and their labels, list rings, the
-# last-clicked square, then the list's name labels, which nothing covers.
+# hover ring, the last-clicked square, then the list's name labels, which
+# nothing covers.
 OUTLINE_Z = 2.5
 SELECTION_LABEL_Z = 5
 
@@ -327,6 +335,7 @@ class SkyLegend(pg.LegendItem):
 
 class SkyView(QWidget):
     starClicked = Signal(object)  # SkyStar
+    starToggled = Signal(object)  # SkyStar to add to the selection list, or remove if listed
     catalogLoaded = Signal(object)  # SkyCatalog
     fieldLoaded = Signal(list)  # list[SkyStar]
 
@@ -334,7 +343,7 @@ class SkyView(QWidget):
                  field_zoom_deg: float = FIELD_ZOOM_DEG):
         super().__init__(parent)
         self.client = client
-        self.field_zoom_deg = field_zoom_deg
+        self._field_zoom_deg = field_zoom_deg
         self.catalog: SkyCatalog | None = None
         self.hosts: list[SkyStar] = []
         self.field: list[SkyStar] = []
@@ -374,8 +383,12 @@ class SkyView(QWidget):
                                                 size=18, symbol="o")
         self.current_item = pg.ScatterPlotItem(pen=pg.mkPen(CURRENT_COLOR, width=2), brush=None,
                                                size=24, symbol="s")
+        self.hover_item = pg.ScatterPlotItem(pen=pg.mkPen(HOVER_COLOR, width=1.5), brush=None,
+                                             size=HOVER_RING_PX, symbol="o")
+        self.hovered: SkyStar | None = None
+        self.menu: QMenu | None = None  # the last right-click menu
         for item, z in ((self.field_item, 1), (self.host_item, 2), (self.selected_item, 3),
-                        (self.current_item, 4)):
+                        (self.hover_item, 3.5), (self.current_item, 4)):
             item.setZValue(z)
             self.plot.addItem(item)
         self._labels: list[pg.TextItem] = []
@@ -418,6 +431,7 @@ class SkyView(QWidget):
         self.view_box.sigResized.connect(lambda *_: self._update_marker_sizes())
         self.plot.scene().sigMouseClicked.connect(self._on_mouse_clicked)
         self.plot.scene().sigMouseMoved.connect(self._on_mouse_moved)
+        self.plot.viewport().installEventFilter(self)  # to drop the hover ring on leaving
 
         self.show_all_sky()
         self._show_zoom_hint()
@@ -640,6 +654,16 @@ class SkyView(QWidget):
         width = abs(x1 - x0) * math.cos(math.radians(max(-89.9, min(89.9, dec))))
         return ra, dec, width, abs(y1 - y0)
 
+    @property
+    def field_zoom_deg(self) -> float:
+        """Shorter view side (true degrees) at or below which field stars load; 0 turns them off."""
+        return self._field_zoom_deg
+
+    @field_zoom_deg.setter
+    def field_zoom_deg(self, value: float) -> None:
+        self._field_zoom_deg = value
+        self._maybe_load_field()  # and the status hint follows at once
+
     def _maybe_load_field(self) -> None:
         ra, dec, width, height = self.view_region()
         if min(width, height) > self.field_zoom_deg:  # a wide view's shorter side
@@ -671,6 +695,8 @@ class SkyView(QWidget):
         self._stars = self.hosts + self.field
         self._ra = np.array([s.ra for s in self._stars], dtype=float)
         self._dec = np.array([s.dec for s in self._stars], dtype=float)
+        if self.hovered is not None and not any(s is self.hovered for s in self._stars):
+            self.set_hovered(None)
 
     def nearest_star(self, ra: float, dec: float, max_pixels: float = CLICK_PIXELS) -> SkyStar | None:
         """The displayed star nearest (ra, dec) on screen, if within ``max_pixels``."""
@@ -686,11 +712,43 @@ class SkyView(QWidget):
         return self._stars[i] if dist[i] <= max_pixels else None
 
     def click_at(self, ra: float, dec: float) -> SkyStar | None:
-        """Select the star nearest (ra, dec), as a click there would."""
+        """Select the star nearest (ra, dec) and toggle it in the list, as a click there would."""
         star = self.nearest_star(ra, dec)
         if star is not None:
             self.select_star(star)
+            self.starToggled.emit(star)
         return star
+
+    def is_listed(self, star: SkyStar) -> bool:
+        """Whether ``star`` is in the selection list (as last given to ``set_selected``)."""
+        key = target_key(star.to_target())
+        return any(target_key(t) == key for t in self.selected)
+
+    def set_hovered(self, star: SkyStar | None) -> None:
+        """Ring ``star`` as the one under the pointer (None: no ring)."""
+        if star is self.hovered:
+            return
+        self.hovered = star
+        self.hover_item.setData([] if star is None else [{"pos": (star.ra, star.dec)}])
+
+    def context_menu(self, ra: float, dec: float) -> QMenu:
+        """The right-click menu for (ra, dec): for the star there, if any, else just Centre here."""
+        menu = QMenu(self)
+        menu.setObjectName("skyMenu")
+        star = self.nearest_star(ra, dec)
+        if star is None:
+            menu.addAction("Centre here", lambda: self.center_on(ra % 360.0, dec))
+            return menu
+        if self.is_listed(star):
+            menu.addAction(f"Remove {star.name} from the list", lambda: self.starToggled.emit(star))
+        else:
+            menu.addAction(f"Add {star.name} to the list", lambda: self.starToggled.emit(star))
+        menu.addAction("Centre here", lambda: self.center_on(star.ra, star.dec))
+        menu.addSeparator()
+        menu.addAction("Copy name", lambda: QApplication.clipboard().setText(star.name))
+        if star.tic is not None:
+            menu.addAction("Copy TIC ID", lambda: QApplication.clipboard().setText(f"TIC {star.tic}"))
+        return menu
 
     def select_star(self, star: SkyStar) -> None:
         self.current = star
@@ -714,21 +772,35 @@ class SkyView(QWidget):
             self._labels.append(label)
 
     def _on_mouse_clicked(self, event) -> None:
-        if event.button() != Qt.MouseButton.LeftButton or event.double():
+        button = event.button()
+        if button not in (Qt.MouseButton.LeftButton, Qt.MouseButton.RightButton) or event.double():
             return
         pos = event.scenePos()
         if (not self.view_box.sceneBoundingRect().contains(pos)
                 or self.legend.sceneBoundingRect().contains(pos)):
             return
         point = self.view_box.mapSceneToView(pos)
-        self.click_at(point.x(), point.y())
+        if button == Qt.MouseButton.LeftButton:
+            self.click_at(point.x(), point.y())
+            return
+        if self.menu is not None:
+            self.menu.deleteLater()
+        self.menu = self.context_menu(point.x(), point.y())
+        self.menu.popup(event.screenPos().toPoint())
+
+    def eventFilter(self, obj, event) -> bool:
+        if event.type() == QEvent.Type.Leave:
+            self.set_hovered(None)
+        return super().eventFilter(obj, event)
 
     def _on_mouse_moved(self, pos) -> None:
         if not self.view_box.sceneBoundingRect().contains(pos):
+            self.set_hovered(None)
             return
         point = self.view_box.mapSceneToView(pos)
         ra, dec = point.x() % 360.0, point.y()
         star = self.nearest_star(ra, dec)
+        self.set_hovered(star)
         text = self.position_text(ra, dec)
         self.coord_label.setText(f"{text}\n{self._describe(star)}" if star else text)
 

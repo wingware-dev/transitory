@@ -115,7 +115,7 @@ class MainWindow(QMainWindow):
             self.sky.set_catalog(demo_catalog(source))
             # Most demo stars sit in the Kepler field; all-sky, their labels overlap.
             self.sky.set_home(*DEMO_SKY_CENTER, DEMO_SKY_SIZE_DEG)
-        self.sky.starClicked.connect(self.panel.add_star)
+        self.sky.starToggled.connect(self.panel.toggle_star)
         self.panel.targetsChanged.connect(self.sky.set_selected)
         self.panel.targetActivated.connect(self._target_activated)
         self.panel.submitted.connect(self.analyse)

@@ -43,7 +43,7 @@ class SkySelectionWindow(QSplitter):
         self.addWidget(self.panel)
         self.setStretchFactor(0, 3)
         self.setStretchFactor(1, 1)
-        self.sky.starClicked.connect(self.panel.add_star)
+        self.sky.starToggled.connect(self.panel.toggle_star)
         self.panel.targetsChanged.connect(self.sky.set_selected)
         self.panel.targetActivated.connect(
             lambda t: t.ra is not None and self.sky.center_on(t.ra, t.dec, TARGET_ZOOM_DEG))
@@ -130,10 +130,10 @@ def drag(sky: SkyView, start: QPoint, end: QPoint, steps: int = 8) -> None:
     QApplication.processEvents()
 
 
-def click(sky: SkyView, pos: QPoint) -> None:
-    """A left click at ``pos``, after a pause so it isn't taken for a double click."""
+def click(sky: SkyView, pos: QPoint, button=Qt.MouseButton.LeftButton) -> None:
+    """A click (left by default) at ``pos``, after a pause so it isn't taken for a double click."""
     _pause(QApplication.doubleClickInterval() + 50)
-    QTest.mouseClick(sky.plot.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, pos)
+    QTest.mouseClick(sky.plot.viewport(), button, Qt.KeyboardModifier.NoModifier, pos)
     QApplication.processEvents()
 
 

@@ -202,9 +202,77 @@ def test_clicking_a_star_on_the_sky_adds_it(window, qtbot):
     assert (target.name, target.tic, target.mission_hint) == ("TOI-270", 259377017, "TESS")
     assert panel.message.text() == "Added TOI-270."
     assert [t.name for t in sky.selected] == ["TOI-270"]  # ringed on the sky
+
+def test_clicking_a_listed_star_on_the_sky_removes_it(window, qtbot):
+    sky, panel = window.sky, window.panel
+    toi270 = next(s for s in sky.hosts if s.name == "TOI-270")
+    panel.add_target(StarTarget(name="Elsewhere", ra=10.0, dec=10.0))
     sky.click_at(toi270.ra, toi270.dec)
-    assert len(panel.targets()) == 1
-    assert panel.message.text() == "TOI-270 (TIC 259377017) is already in the list."
+    assert sky.is_listed(toi270)
+    with qtbot.waitSignal(panel.targetsChanged):
+        sky.click_at(toi270.ra, toi270.dec)
+    assert [t.name for t in panel.targets()] == ["Elsewhere"]
+    assert [panel.list.item(i).text() for i in range(panel.list.count())] == ["Elsewhere"]
+    assert panel.message.text() == "Removed TOI-270."
+    assert not sky.is_listed(toi270) and [t.name for t in sky.selected] == ["Elsewhere"]
+    sky.click_at(toi270.ra, toi270.dec)  # and a third click adds it back
+    assert [t.name for t in panel.targets()] == ["Elsewhere", "TOI-270"]
+
+
+def test_remove_target_matches_by_tic_or_name(window):
+    panel = window.panel
+    panel.add_target(StarTarget(name="TOI-270", tic=259377017))
+    panel.add_target(StarTarget(name="Somewhere", ra=1.0, dec=2.0))
+    assert panel.remove_target(StarTarget(name="TIC 259377017", tic=259377017))
+    assert not panel.remove_target(StarTarget(name="TOI-270", tic=259377017))  # gone already
+    assert panel.remove_target(StarTarget(name="somewhere"))
+    assert panel.targets() == [] and panel.list.count() == 0
+
+
+def _menu_actions(menu):
+    return {a.text(): a for a in menu.actions() if not a.isSeparator()}
+
+
+def test_right_click_menu_adds_removes_centres_and_copies(window, qtbot):
+    sky, panel = window.sky, window.panel
+    toi270 = next(s for s in sky.hosts if s.name == "TOI-270")
+    sky.center_on(toi270.ra + 3, toi270.dec, 20.0)
+    QApplication.processEvents()
+    click(sky, sky_pixel(sky, toi270.ra, toi270.dec), Qt.MouseButton.RightButton)
+    qtbot.waitUntil(lambda: sky.menu is not None and sky.menu.isVisible(), timeout=2000)
+    actions = _menu_actions(sky.menu)
+    assert list(actions) == ["Add TOI-270 to the list", "Centre here", "Copy name", "Copy TIC ID"]
+    assert panel.targets() == []  # a right-click adds nothing by itself
+    sky.menu.close()
+
+    actions["Add TOI-270 to the list"].trigger()
+    assert [t.name for t in panel.targets()] == ["TOI-270"]
+    actions = _menu_actions(sky.context_menu(toi270.ra, toi270.dec))
+    assert "Remove TOI-270 from the list" in actions
+
+    actions["Centre here"].trigger()
+    ra, dec, _width, height = sky.view_region()
+    assert (ra, dec) == (pytest.approx(toi270.ra), pytest.approx(toi270.dec))
+    assert height == pytest.approx(20.0, rel=0.01)  # centring keeps the zoom
+
+    actions["Copy name"].trigger()
+    assert QApplication.clipboard().text() == "TOI-270"
+    actions["Copy TIC ID"].trigger()
+    assert QApplication.clipboard().text() == "TIC 259377017"
+
+    actions["Remove TOI-270 from the list"].trigger()
+    assert panel.targets() == []
+
+
+def test_right_click_on_empty_sky_offers_only_centre_here(window):
+    sky = window.sky
+    sky.center_on(180.0, -10.0, 5.0)  # no recorded host here
+    menu = sky.context_menu(181.0, -9.0)
+    assert list(_menu_actions(menu)) == ["Centre here"]
+    menu.actions()[0].trigger()
+    ra, dec, _width, height = sky.view_region()
+    assert (ra, dec) == (pytest.approx(181.0), pytest.approx(-9.0))
+    assert height == pytest.approx(5.0, rel=0.01)  # the aspect re-locks for the new Dec
 
 
 def test_typed_stars_are_ringed_on_the_sky(window, qtbot):
