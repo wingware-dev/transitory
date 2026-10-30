@@ -66,7 +66,7 @@ def describe_target(target: StarTarget) -> str:
 
 class SelectionPanel(QWidget):
     targetsChanged = Signal(list)  # list[StarTarget]
-    targetActivated = Signal(object)  # StarTarget, double-clicked in the list
+    targetActivated = Signal(object)  # StarTarget to show on the sky: double-clicked, Show on sky, or typed alone
     submitted = Signal(list)  # list[StarTarget], mission preference applied
 
     def __init__(self, client: CatalogClient | None = None, resolver: Resolver | None = None,
@@ -106,6 +106,10 @@ class SelectionPanel(QWidget):
         QShortcut(QKeySequence(Qt.Key.Key_Backspace), self.list, self.remove_selected,
                   context=Qt.ShortcutContext.WidgetShortcut)
 
+        self.show_button = QPushButton("Show on sky")
+        self.show_button.setObjectName("showOnSkyButton")
+        self.show_button.setToolTip("Centre the sky on the selected star (or double-click it)")
+        self.show_button.clicked.connect(self.show_selected)
         self.remove_button = QPushButton("Remove")
         self.remove_button.setObjectName("removeButton")
         self.remove_button.clicked.connect(self.remove_selected)
@@ -113,6 +117,7 @@ class SelectionPanel(QWidget):
         self.clear_button.setObjectName("clearButton")
         self.clear_button.clicked.connect(self.clear)
         list_buttons = QHBoxLayout()
+        list_buttons.addWidget(self.show_button)
         list_buttons.addWidget(self.remove_button)
         list_buttons.addWidget(self.clear_button)
         list_buttons.addStretch(1)
@@ -194,6 +199,20 @@ class SelectionPanel(QWidget):
         if rows:
             self._changed()
 
+    def _shown_target(self) -> StarTarget | None:
+        """The one selected star, when it has a position to show on the sky."""
+        items = self.list.selectedItems()
+        if len(items) != 1:
+            return None
+        target = items[0].data(Qt.ItemDataRole.UserRole)
+        return target if target.ra is not None and target.dec is not None else None
+
+    def show_selected(self) -> None:
+        """Centre the sky on the selected star (``targetActivated``)."""
+        target = self._shown_target()
+        if target is not None:
+            self.targetActivated.emit(target)
+
     def clear(self) -> None:
         self.list.clear()
         self._targets.clear()
@@ -207,6 +226,7 @@ class SelectionPanel(QWidget):
         n = len(self._targets)
         self.count_label.setText(f"{n} star{'s' if n != 1 else ''} selected")
         self.remove_button.setEnabled(bool(self.list.selectedItems()))
+        self.show_button.setEnabled(self._shown_target() is not None)
         self.clear_button.setEnabled(n > 0)
         self.submit_button.setEnabled(n > 0)
 
@@ -231,6 +251,8 @@ class SelectionPanel(QWidget):
         added, duplicates = [], []
         for target in targets:
             (added if self.add_target(target) else duplicates).append(target.name)
+        if len(added) == 1:
+            self.targetActivated.emit(self._targets[-1])  # one new star: show it on the sky
         lines = []
         if added:
             lines.append(f"Added {', '.join(added)}.")

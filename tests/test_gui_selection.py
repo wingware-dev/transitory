@@ -295,6 +295,45 @@ def test_double_clicking_a_listed_star_centres_the_sky(window, qtbot):
     assert min(width, height) == pytest.approx(TARGET_ZOOM_DEG)
 
 
+def test_show_on_sky_centres_the_selected_star(window, qtbot):
+    panel, sky = window.panel, window.sky
+    panel.add_target(StarTarget(name="Somewhere", ra=120.0, dec=-30.0))
+    panel.add_target(StarTarget(name="Elsewhere", ra=200.0, dec=15.0))
+    panel.add_target(StarTarget(name="Nowhere"))  # no position
+    assert not panel.show_button.isEnabled()  # nothing selected
+    panel.list.setCurrentRow(1)
+    assert panel.show_button.isEnabled()
+    qtbot.mouseClick(panel.show_button, Qt.MouseButton.LeftButton)
+    ra, dec, width, height = sky.view_region()
+    assert (ra, dec) == (pytest.approx(200.0), pytest.approx(15.0))
+    assert min(width, height) == pytest.approx(TARGET_ZOOM_DEG)
+    panel.list.selectAll()  # several rows: which to show is unclear
+    assert not panel.show_button.isEnabled()
+    panel.list.setCurrentRow(2)
+    assert not panel.show_button.isEnabled()
+
+
+def test_typing_one_star_centres_the_sky_on_it(window, qtbot):
+    panel, sky = window.panel, window.sky
+    with qtbot.waitSignal(panel.targetActivated, timeout=10000) as blocker:
+        type_and_enter(qtbot, panel, "pi Men c")
+    target = blocker.args[0]
+    assert target.name == "pi Men"
+    ra, dec, width, height = sky.view_region()
+    assert (ra, dec) == (pytest.approx(target.ra), pytest.approx(target.dec))
+    assert min(width, height) == pytest.approx(TARGET_ZOOM_DEG)
+
+
+def test_typing_several_stars_or_a_listed_one_leaves_the_sky(panel, qtbot):
+    with qtbot.assertNotEmitted(panel.targetActivated):
+        type_and_enter(qtbot, panel, "TOI-270.01, KIC 8006161")
+    assert len(panel.targets()) == 2
+    with qtbot.assertNotEmitted(panel.targetActivated):
+        type_and_enter(qtbot, panel, "TOI-270")  # already listed
+    with qtbot.waitSignal(panel.targetActivated, timeout=10000):
+        type_and_enter(qtbot, panel, "Kepler-10 b, KOI-72")  # one new star, one duplicate of it
+
+
 # -- zooming and panning the sky ------------------------------------------------------------
 
 def _centred_on_toi270(sky, size_deg=20.0):
