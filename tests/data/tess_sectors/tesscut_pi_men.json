@@ -1,0 +1,154 @@
+{
+"results": [
+{
+"sectorName": "tess-s0001-4-2",
+"sector": "0001",
+"camera": "4",
+"ccd": "2"
+},
+{
+"sectorName": "tess-s0004-4-3",
+"sector": "0004",
+"camera": "4",
+"ccd": "3"
+},
+{
+"sectorName": "tess-s0008-4-4",
+"sector": "0008",
+"camera": "4",
+"ccd": "4"
+},
+{
+"sectorName": "tess-s0011-4-1",
+"sector": "0011",
+"camera": "4",
+"ccd": "1"
+},
+{
+"sectorName": "tess-s0012-3-4",
+"sector": "0012",
+"camera": "3",
+"ccd": "4"
+},
+{
+"sectorName": "tess-s0013-3-3",
+"sector": "0013",
+"camera": "3",
+"ccd": "3"
+},
+{
+"sectorName": "tess-s0027-3-3",
+"sector": "0027",
+"camera": "3",
+"ccd": "3"
+},
+{
+"sectorName": "tess-s0028-4-2",
+"sector": "0028",
+"camera": "4",
+"ccd": "2"
+},
+{
+"sectorName": "tess-s0031-4-3",
+"sector": "0031",
+"camera": "4",
+"ccd": "3"
+},
+{
+"sectorName": "tess-s0034-4-4",
+"sector": "0034",
+"camera": "4",
+"ccd": "4"
+},
+{
+"sectorName": "tess-s0035-4-4",
+"sector": "0035",
+"camera": "4",
+"ccd": "4"
+},
+{
+"sectorName": "tess-s0038-4-1",
+"sector": "0038",
+"camera": "4",
+"ccd": "1"
+},
+{
+"sectorName": "tess-s0039-3-4",
+"sector": "0039",
+"camera": "3",
+"ccd": "4"
+},
+{
+"sectorName": "tess-s0061-4-4",
+"sector": "0061",
+"camera": "4",
+"ccd": "4"
+},
+{
+"sectorName": "tess-s0062-4-4",
+"sector": "0062",
+"camera": "4",
+"ccd": "4"
+},
+{
+"sectorName": "tess-s0064-4-1",
+"sector": "0064",
+"camera": "4",
+"ccd": "1"
+},
+{
+"sectorName": "tess-s0065-3-4",
+"sector": "0065",
+"camera": "3",
+"ccd": "4"
+},
+{
+"sectorName": "tess-s0066-3-4",
+"sector": "0066",
+"camera": "3",
+"ccd": "4"
+},
+{
+"sectorName": "tess-s0067-3-3",
+"sector": "0067",
+"camera": "3",
+"ccd": "3"
+},
+{
+"sectorName": "tess-s0068-4-2",
+"sector": "0068",
+"camera": "4",
+"ccd": "2"
+},
+{
+"sectorName": "tess-s0088-4-4",
+"sector": "0088",
+"camera": "4",
+"ccd": "4"
+},
+{
+"sectorName": "tess-s0089-4-4",
+"sector": "0089",
+"camera": "4",
+"ccd": "4"
+},
+{
+"sectorName": "tess-s0093-3-4",
+"sector": "0093",
+"camera": "3",
+"ccd": "4"
+},
+{
+"sectorName": "tess-s0094-3-3",
+"sector": "0094",
+"camera": "3",
+"ccd": "3"
+},
+{
+"sectorName": "tess-s0095-3-3",
+"sector": "0095",
+"camera": "3",
+"ccd": "3"
+}
+]
+}
