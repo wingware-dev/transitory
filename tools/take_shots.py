@@ -6,6 +6,8 @@
 
 Each later step registers its shot in SHOTS: a function that drives a
 demo-mode window into the state to capture and returns the widget to grab.
+The sky shots use the live archive, MAST and CDS; when a service they need
+doesn't answer, the shot is skipped and its old file kept.
 """
 
 from __future__ import annotations
@@ -24,7 +26,7 @@ from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from dashboard_host import shot_credits, shot_gallery, shot_running, shot_table  # noqa: E402
 from harness import make_main_window, shot  # noqa: E402
-from sky_selection_host import shot_sky_selection  # noqa: E402
+from sky_selection_host import ShotUnavailable, shot_sky_selection, shot_sky_zoomed  # noqa: E402
 from transitory.config import shots_dir  # noqa: E402
 
 
@@ -61,6 +63,7 @@ SHOTS = {
     "credits": ("06-credits.png", shot_credits),
     "validation": ("07-validation.png", shot_validation),
     "final": ("08-final.png", shot_final),
+    "sky-zoomed": ("09-sky-zoomed.png", shot_sky_zoomed),
 }
 
 
@@ -71,14 +74,20 @@ def main(argv: list[str]) -> int:
         print(f"unknown shot(s): {', '.join(unknown)}; known: {', '.join(SHOTS)}", file=sys.stderr)
         return 2
     app = QApplication.instance() or QApplication([])
+    skipped = []
     for name in names:
         filename, func = SHOTS[name]
-        widget = func(app)
+        try:
+            widget = func(app)
+        except ShotUnavailable as exc:
+            print(f"skipped {filename} (kept as it was): {exc}", file=sys.stderr)
+            skipped.append(filename)
+            continue
         app.processEvents()
         path = shot(widget, filename, shots_dir())
         print(f"wrote {path.relative_to(ROOT)}")
         widget.close()
-    return 0
+    return 1 if skipped else 0
 
 
 if __name__ == "__main__":

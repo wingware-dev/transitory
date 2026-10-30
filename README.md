@@ -42,11 +42,10 @@ After `pip install -e .` the same is available as the `transitory` command.
 
 In the window:
 
-1. **Choose stars.**  Drag to pan and use the wheel to zoom the sky map,
-   which shows the known planet hosts and, zoomed in to a few degrees, the
-   TESS Input Catalog stars in view; click a star to add it.  Or type names in
-   the selection panel and press Enter: planet names, TIC / KIC / EPIC
-   numbers, KOI / TOI numbers or SIMBAD names, one or comma-separated.
+1. **Choose stars.**  Click a star on the sky map to add it (see
+   [The sky map](#the-sky-map)).  Or type names in the selection panel and
+   press Enter: planet names, TIC / KIC / EPIC numbers, KOI / TOI numbers or
+   SIMBAD names, one or comma-separated.
 2. **Submit.**  The stars are analysed in background workers, with the
    mission preference chosen in the panel; the progress panel shows each
    star's step.
@@ -57,6 +56,46 @@ In the window:
    vetting notes.
 4. **Keep them.**  *File ▸ Save all plots as PNG…* and *File ▸ Export table
    as CSV…*.  Every plot carries the data credits of its star.
+
+### The sky map
+
+![The sky map and selection panel](docs/shots/02-sky-selection.png)
+
+The map plots the known planet hosts from the NASA Exoplanet Archive by
+right ascension and declination, with RA increasing to the left as on the
+sky.  The Kepler field and the TESS continuous viewing zones are outlined,
+and faint lines mark the ecliptic and the galactic plane.  The legend in
+the top-right corner keys the markers: planet host (orange, translucent so
+the Kepler field's CCD modules show through), no known planets (blue), TIC
+field star (grey), in the selection list (red ring), and last clicked
+(yellow square).  Marker size follows brightness (Tmag).
+
+- **Pan:** drag, or scroll with two fingers on a trackpad.  Panning carries on
+  across 0h.
+- **Zoom:** use the mouse wheel, pinch on a trackpad, or hold Ctrl (Cmd on
+  macOS) and scroll.  On a Windows touchpad that doesn't report scroll
+  phases, two-finger scrolling zooms instead of panning.
+- **Reset view** (or the Home key) returns to the starting view.
+- **Click** a star to add it to the selection list, or to remove it if it's
+  already listed.  The white ring shows which star a click will pick.
+- **Right-click** for a menu: add or remove the star, *Centre here*, *Copy
+  name* / *Copy TIC ID*, and *Show ecliptic and galactic plane*, which turns
+  the two lines off and on.
+- **Show on sky** in the selection panel, or double-clicking a listed star,
+  centres the map on that star at 1.5°.  Typing one new name does the same.
+
+The two lines under the map show the catalog status, the hovered position
+and the star under the pointer.  Zoomed out, the status says *Zoom in below
+2° to see TIC stars (Tmag ≤ 13)*.  Below 2°, the TESS Input Catalog stars in
+view are loaded from MAST.  Below 10°, a survey image is drawn behind the
+stars.  Choose it with the **Background** button under Reset view: DSS2
+(the default), 2MASS, PanSTARRS (PS1), or *Sky off*.  Images come from CDS
+hips2fits and are cached.
+
+![Zoomed in on Kepler-10, with its TIC field](docs/shots/09-sky-zoomed.png)
+
+In demo mode the map shows only the demo stars: no TIC stars are loaded,
+and the Background button is disabled.
 
 ### Sectors / quarters per star
 
@@ -139,7 +178,8 @@ Downloaded data are kept so nothing is fetched twice:
 - light-curve FITS files (via lightkurve) under `cache/mastDownload/`, with
   `cache/index.json` recording which files answer which query;
 - MAST and Exoplanet Archive query results under `cache/catalog/` (archive
-  results are refreshed after 30 days).
+  results are refreshed after 30 days);
+- sky-map background images from CDS hips2fits under `cache/hips/`.
 
 `cache/` is in the checkout by default and is not committed (`.gitignore`).
 Set `TRANSITORY_CACHE_DIR` to put it elsewhere, and `TRANSITORY_REPORTS_DIR`
@@ -155,7 +195,10 @@ pytest -n auto         # in parallel (pytest-xdist)
 ```
 
 The GUI tests run headless (pytest-qt).  The screenshots in `docs/shots/` are
-made with `python tools/take_shots.py`.
+made with `python tools/take_shots.py`.  The sky shots use the live services
+(Exoplanet Archive, MAST, CDS).  When a service doesn't answer, the TIC-field
+shot keeps its old file and the zoomed shot is taken without the sky
+image.
 
 ## Platform notes
 

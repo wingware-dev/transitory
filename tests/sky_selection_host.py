@@ -1,12 +1,15 @@
 """A test-only window holding the sky view and selection panel, wired as the dashboard will be.
 
 Used by tests/test_gui_sky.py, tests/test_gui_selection.py and the
-02-sky-selection.png screenshot.  Catalog data come from the responses
-recorded in tests/data/catalog/recorded.json, so nothing touches the network.
+02-sky-selection.png and 09-sky-zoomed.png screenshots.  In the tests,
+catalog data come from the responses recorded in
+tests/data/catalog/recorded.json and sky images from a recorded cutout, so
+nothing touches the network; the screenshots use the live services.
 """
 
 from __future__ import annotations
 
+import sys
 import tempfile
 from pathlib import Path
 
@@ -17,6 +20,7 @@ from PySide6.QtWidgets import QApplication, QSplitter
 
 from transitory.catalog import skycatalog
 from transitory.catalog.client import CatalogClient, RecordedTransport, ResponseCache
+from transitory.catalog.hips import CutoutCache
 from transitory.gui.main_window import TARGET_ZOOM_DEG
 from transitory.gui.selection_panel import SelectionPanel
 from transitory.gui.sky_view import SkyView
@@ -24,6 +28,7 @@ from transitory.gui.sky_view import SkyView
 RECORDED = Path(__file__).resolve().parent / "data" / "catalog" / "recorded.json"
 HIPS_CUTOUT = Path(__file__).resolve().parent / "data" / "catalog" / "hips_cutout.jpg"
 SHOT_NAME = "02-sky-selection.png"
+SHOT_WAIT_S = 90  # for a live TIC field or sky image
 
 
 class RecordedHipsTransport:
@@ -46,11 +51,18 @@ def recorded_client(cache_dir: Path | str | None = None) -> CatalogClient:
 
 
 class SkySelectionWindow(QSplitter):
-    def __init__(self, client: CatalogClient):
+    """``live_sky``: sky images from CDS hips2fits, not the recorded cutout.
+
+    Either way cutouts go to a fresh temporary cache, so the recorded one
+    never lands in the user's cache and a live shot never shows it.
+    """
+
+    def __init__(self, client: CatalogClient, live_sky: bool = False):
         super().__init__(Qt.Orientation.Horizontal)
         self.setWindowTitle("Sky and selection")
         self.client = client
-        self.sky = SkyView(client=client, hips_transport=RecordedHipsTransport())
+        self.sky = SkyView(client=client, hips_transport=None if live_sky else RecordedHipsTransport(),
+                           hips_cache=CutoutCache(tempfile.mkdtemp(prefix="transitory-hips-")))
         self.panel = SelectionPanel(client=client)
         self.addWidget(self.sky)
         self.addWidget(self.panel)
@@ -67,8 +79,9 @@ class SkySelectionWindow(QSplitter):
         super().closeEvent(event)
 
 
-def make_sky_selection_window(client: CatalogClient | None = None) -> SkySelectionWindow:
-    window = SkySelectionWindow(client or recorded_client())
+def make_sky_selection_window(client: CatalogClient | None = None,
+                              live_sky: bool = False) -> SkySelectionWindow:
+    window = SkySelectionWindow(client or recorded_client(), live_sky=live_sky)
     window.resize(1400, 800)
     window.setSizes([1020, 380])
     window.show()
@@ -157,7 +170,15 @@ def shot_sky_selection(app, client: CatalogClient | None = None):
     cached query; the bundled targets when offline) so the shot shows the
     real sky; the listed stars are bundled targets, so no name lookups run.
     """
-    window = make_sky_selection_window(client or CatalogClient())
+    window = _listed_window(app, client)
+    window.panel.entry.setText("KOI-72, LHS 3844")
+    app.processEvents()
+    return window
+
+
+def _listed_window(app, client: CatalogClient | None, live_sky: bool = False) -> SkySelectionWindow:
+    """The shots' window: hosts on the sky; TOI-270, pi Men and (clicked on the sky) Kepler-10 listed."""
+    window = make_sky_selection_window(client or CatalogClient(), live_sky=live_sky)
     sky, panel = window.sky, window.panel
     sky.set_catalog(skycatalog.host_stars(client=window.client))
     bundled = {s.name: s for s in skycatalog.offline_targets()}
@@ -166,6 +187,51 @@ def shot_sky_selection(app, client: CatalogClient | None = None):
     app.processEvents()
     kepler10 = next(s for s in sky.hosts if s.name == "Kepler-10")
     sky.click_at(kepler10.ra, kepler10.dec)  # adds it to the list through the wiring
-    panel.entry.setText("KOI-72, LHS 3844")
+    app.processEvents()
+    return window
+
+
+class ShotUnavailable(RuntimeError):
+    """A live service a screenshot needs did not answer; the shot is not taken."""
+
+
+def wait_until(condition, timeout_s: float) -> bool:
+    """Run the event loop until ``condition()`` holds or ``timeout_s`` passes; whether it held."""
+    for _ in range(int(timeout_s * 10)):
+        if condition():
+            return True
+        QTest.qWait(100)
+    return condition()
+
+
+def shot_sky_zoomed(app, client: CatalogClient | None = None, attempts: int = 3):
+    """Screenshot state: Kepler-10 shown on the sky from the list, with its TIC field and sky image.
+
+    With no ``client`` the field comes from live MAST and the image from
+    live CDS hips2fits.  A field that won't load raises ``ShotUnavailable``;
+    an image that won't load after ``attempts`` tries leaves the background
+    off (the status line says so), with a warning.
+    """
+    window = _listed_window(app, client, live_sky=client is None)
+    sky, panel = window.sky, window.panel
+    items = panel.list.findItems("Kepler-10", Qt.MatchFlag.MatchStartsWith)
+    panel.list.setCurrentItem(items[0])
+    panel.show_button.click()  # centres on it at TARGET_ZOOM_DEG: the field and image load
+    background = sky.background
+    field_failed = lambda: "TIC stars unavailable" in sky.status_label.text()  # noqa: E731
+    if not wait_until(lambda: sky.field_region is not None or field_failed(), SHOT_WAIT_S) or not sky.field:
+        status = sky.status_label.text()
+        window.close()
+        raise ShotUnavailable(f"no TIC field for Kepler-10: {status}")
+    for attempt in range(attempts):
+        if wait_until(lambda: background.shown is not None or "unavailable" in background.status, SHOT_WAIT_S) \
+                and background.shown is not None:
+            break
+        print(f"sky image, try {attempt + 1} of {attempts}: {background.status or 'no reply'}", file=sys.stderr)
+        background.clear()
+        background.update()
+    else:
+        print("warning: no sky image; the zoomed shot has the background off", file=sys.stderr)
+        sky.set_background(None)
     app.processEvents()
     return window
