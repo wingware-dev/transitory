@@ -38,3 +38,5 @@ htmlcov/
 cache/
 reports/
 *.fits
+# except recorded test fixtures
+!tests/data/**/*.fits

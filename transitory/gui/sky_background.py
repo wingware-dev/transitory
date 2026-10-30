@@ -2,7 +2,8 @@
 
 Zoomed in so the view's shorter side is under ``BACKGROUND_ZOOM_DEG``, a
 cutout of the chosen survey (DSS2, 2MASS or PanSTARRS colour) is fetched
-from CDS hips2fits in a worker thread and drawn under everything else.
+from CDS hips2fits (NASA SkyView when hips2fits fails, said in the status)
+in a worker thread and drawn under everything else.
 Closing the view never waits for a fetch under way (``stop``).
 The sky view plots plain RA/Dec, and :func:`~transitory.catalog.hips.view_wcs`
 asks for a CAR image that is linear in RA and Dec, so the image only needs
@@ -223,28 +224,29 @@ class SkyBackground(QObject):
     def load(self, request: tuple) -> None:
         self._pending = request
         survey = hips.SURVEYS[request[0]]
-        self._set_status(f"Loading the {survey.label} sky image from CDS…")
+        self._set_status(f"Loading the {survey.label} sky image…")
         transport, cache, offline = self.transport, self.cache, self.offline
 
         def fetch():
             if not self._is_pending(request):
                 return None  # the view moved on before this job's turn
             wcs = hips.view_wcs(request[1], request[2], request[3], request[4])
-            data = hips.fetch_cutout(survey, wcs, transport=transport, cache=cache, offline=offline)
-            return image_array(data)
+            cutout = hips.fetch_sky_image(survey, wcs, transport=transport, cache=cache,
+                                          offline=offline)
+            return image_array(cutout.data), cutout.service
 
-        self.runner.submit(fetch, lambda image: self._done(request, image),
+        self.runner.submit(fetch, lambda result: self._done(request, *(result or (None,))),
                            lambda exc: self._failed(request, exc))
 
     def _is_pending(self, request: tuple) -> bool:
         """Whether ``request`` is the load under way, perhaps since moved a whole turn (``shift_ra``)."""
         return self._pending is not None and same_sky(request, self._pending)
 
-    def _done(self, request: tuple, image: np.ndarray | None) -> None:
+    def _done(self, request: tuple, image: np.ndarray | None, service: str = "hips2fits") -> None:
         if not self._is_pending(request) or image is None:
             return  # the view moved on; a newer request is coming
         request, self._pending = self._pending, None
-        self.show_image(request, image)
+        self.show_image(request, image, service)
 
     def _failed(self, request: tuple, exc: Exception) -> None:
         if not self._is_pending(request):
@@ -254,14 +256,22 @@ class SkyBackground(QObject):
             log.error("loading the sky image failed", exc_info=exc)
         self._set_status(f"{hips.SURVEYS[request[0]].label} sky image unavailable: {exc}")
 
-    def show_image(self, request: tuple, image: np.ndarray) -> None:
-        """Draw ``image`` (as from :func:`image_array`) over ``request``'s RA/Dec rectangle."""
+    def show_image(self, request: tuple, image: np.ndarray, service: str = "hips2fits") -> None:
+        """Draw ``image`` (as from :func:`image_array`) over ``request``'s RA/Dec rectangle.
+
+        ``service`` is where it came from (a key of ``hips.SERVICES``); the
+        status names the stand-in when it isn't the usual CDS hips2fits.
+        """
         (ra0, ra1), (dec0, dec1) = request[1], request[2]
         self.item.setImage(image, autoLevels=False, levels=(0, 255))
         self.item.setRect(QRectF(ra0, dec0, ra1 - ra0, dec1 - dec0))
         self.item.setVisible(True)
         self.shown = request
-        self._set_status("")
+        if service == "hips2fits":
+            self._set_status("")
+        else:
+            self._set_status(f"{hips.SURVEYS[request[0]].label} sky image from "
+                             f"{hips.SERVICES[service]} ({hips.SERVICES['hips2fits']} unavailable)")
         self.loaded.emit(request)
 
     def shift_ra(self, turn: float) -> None:
@@ -285,7 +295,7 @@ class SkyBackground(QObject):
     def stop(self) -> None:
         """Stop loading, for the view's close, without waiting for a fetch under way.
 
-        A stalled hips2fits request may take two 60 s timeouts; it runs on,
+        A stalled hips2fits or SkyView request may take a minute or more; it runs on,
         detached, and its reply is dropped (``_pending`` no longer matches).
         """
         self.timer.stop()

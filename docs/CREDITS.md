@@ -91,12 +91,14 @@ The archive is queried over its TAP service with plain HTTP.
 (transitory.gui.sky_background.SKY_IMAGES is off), so their credits are left
 out.  Restore this section when the switch is turned back on.
 
-## Sky images (CDS hips2fits; DSS2, 2MASS, Pan-STARRS1)
+## Sky images (CDS hips2fits, NASA SkyView; DSS2, 2MASS, Pan-STARRS1)
 
 Zoomed in, the sky view draws a survey image behind the stars, cut out by
-the CDS hips2fits service from the chosen HiPS survey.  Wording checked on
+the CDS hips2fits service from the chosen HiPS survey, or by NASA SkyView
+(DSS2 and 2MASS only) when hips2fits doesn't answer.  Wording checked on
 2026-10-30.
-In code: `transitory.catalog.hips.HIPS2FITS_CREDIT`, `SURVEY_CREDITS`.
+In code: `transitory.catalog.hips.HIPS2FITS_CREDIT`, `SKYVIEW_CREDIT`,
+`SURVEY_CREDITS`.
 
 hips2fits, as the [astroquery hips2fits docs](https://docs.astropy.org/projects/astroquery/en/latest/hips2fits/hips2fits.html)
 ask (CDS's own site could not be reached to confirm it):
@@ -104,6 +106,13 @@ ask (CDS's own site could not be reached to confirm it):
 > This research has made use of the hips2fits, a tool developed at CDS,
 > Strasbourg, France aiming at extracting FITS images from HiPS sky maps with
 > respect to a WCS.
+
+SkyView, from the [SkyView FAQ](https://skyview.gsfc.nasa.gov/current/help/faq.html)
+("How can I acknowledge SkyView in my publications?"; SkyView asks for it
+but doesn't require it):
+
+> We acknowledge the use of NASA's SkyView facility
+> (http://skyview.gsfc.nasa.gov) located at NASA Goddard Space Flight Center.
 
 DSS2, from [Acknowledging the DSS](https://archive.stsci.edu/dss/acknowledging.html):
 

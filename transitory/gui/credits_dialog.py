@@ -2,7 +2,7 @@
 
 The general section lists what the dashboard can use (TESS and Kepler data
 from MAST, the NASA Exoplanet Archive, Lightkurve / Astropy / Astroquery,
-and the CDS hips2fits sky images and their surveys while the sky view shows
+and the CDS hips2fits / NASA SkyView sky images and their surveys while the sky view shows
 them, ``sky_background.SKY_IMAGES``);
 the session section collects the credit lines of each star analysed so far,
 mission data DOIs included, so they can be copied into a paper or talk.
@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..catalog.archive import ARCHIVE_CREDIT, ARCHIVE_REFERENCES
-from ..catalog.hips import HIPS2FITS_CREDIT, SURVEY_CREDITS
+from ..catalog.hips import HIPS2FITS_CREDIT, SKYVIEW_CREDIT, SURVEY_CREDITS
 from ..catalog.tic import TIC_CREDIT
 from ..models import StarAnalysis
 from ..pipeline.fetch import DOI_TITLES, LIGHTKURVE_CREDIT, MAST_CREDITS, doi_line
@@ -45,6 +45,7 @@ def sky_image_credits() -> list[tuple[str, list[str]]]:
     """(heading, lines) for the sky view's survey images."""
     return [
         ("Sky images (CDS hips2fits)", [HIPS2FITS_CREDIT]),
+        ("Sky images when hips2fits fails (NASA SkyView)", [SKYVIEW_CREDIT]),
         ("Digitized Sky Survey (DSS2)", [SURVEY_CREDITS["dss2"]]),
         ("Two Micron All Sky Survey (2MASS)", [SURVEY_CREDITS["2mass"]]),
         ("Pan-STARRS1", [SURVEY_CREDITS["panstarrs"]]),
