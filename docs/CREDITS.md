@@ -51,7 +51,7 @@ For a paper covering several stars, combine their sector ranges.
 
 Star names are resolved, and stellar Teff, log g, mass and radius taken,
 through the MAST API's name lookup and TESS Input Catalog services.
-In code: `transitory.gui.credits_dialog.TIC_CREDIT`.
+In code: `transitory.catalog.tic.TIC_CREDIT`.
 
 - Stassun, K. G., et al. 2019, *The Revised TESS Input Catalog and Candidate
   Target List*, AJ 158, 138.

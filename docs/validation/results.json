@@ -1,6 +1,6 @@
 {
- "started": "2026-10-29T23:23:25.255140+00:00",
- "finished": "2026-10-29T23:57:01.798638+00:00",
+ "started": "2026-10-30T00:12:16.335079+00:00",
+ "finished": "2026-10-30T00:46:40.765984+00:00",
  "source": "MAST",
  "max_products": null,
  "cancelled": false,
@@ -23,7 +23,7 @@
   {
    "name": "Kepler-10",
    "role": "planet-host",
-   "elapsed_s": 92.6,
+   "elapsed_s": 93.3,
    "errors": [],
    "published_source": "NASA Exoplanet Archive pscomppars",
    "published_retrieved": "2026-10-29",
@@ -89,7 +89,7 @@
   {
    "name": "Kepler-7",
    "role": "planet-host",
-   "elapsed_s": 103.1,
+   "elapsed_s": 102.6,
    "errors": [],
    "published_source": "NASA Exoplanet Archive pscomppars",
    "published_retrieved": "2026-10-29",
@@ -140,7 +140,7 @@
   {
    "name": "Kepler-2",
    "role": "planet-host",
-   "elapsed_s": 110.6,
+   "elapsed_s": 110.1,
    "errors": [],
    "published_source": "NASA Exoplanet Archive pscomppars",
    "published_retrieved": "2026-10-29",
@@ -191,7 +191,7 @@
   {
    "name": "Kepler-22",
    "role": "planet-host",
-   "elapsed_s": 146.1,
+   "elapsed_s": 145.1,
    "errors": [],
    "published_source": "NASA Exoplanet Archive pscomppars",
    "published_retrieved": "2026-10-29",
@@ -242,7 +242,7 @@
   {
    "name": "pi Men",
    "role": "planet-host",
-   "elapsed_s": 706.6,
+   "elapsed_s": 697.9,
    "errors": [],
    "published_source": "NASA Exoplanet Archive pscomppars",
    "published_retrieved": "2026-10-29",
@@ -276,7 +276,7 @@
   {
    "name": "LHS 3844",
    "role": "planet-host",
-   "elapsed_s": 147.3,
+   "elapsed_s": 145.8,
    "errors": [],
    "published_source": "NASA Exoplanet Archive pscomppars",
    "published_retrieved": "2026-10-29",
@@ -327,7 +327,7 @@
   {
    "name": "WASP-18",
    "role": "planet-host",
-   "elapsed_s": 133.2,
+   "elapsed_s": 133.0,
    "errors": [],
    "published_source": "NASA Exoplanet Archive pscomppars",
    "published_retrieved": "2026-10-29",
@@ -378,7 +378,7 @@
   {
    "name": "TOI-270",
    "role": "planet-host",
-   "elapsed_s": 169.4,
+   "elapsed_s": 168.9,
    "errors": [],
    "published_source": "NASA Exoplanet Archive pscomppars",
    "published_retrieved": "2026-10-29",
@@ -477,7 +477,7 @@
   {
    "name": "KIC 6106415",
    "role": "null",
-   "elapsed_s": 103.5,
+   "elapsed_s": 118.0,
    "errors": [],
    "published_source": "NASA Exoplanet Archive pscomppars, cumulative KOI and TOI tables",
    "published_retrieved": "2026-10-29",
@@ -512,7 +512,7 @@
   {
    "name": "TIC 31410749",
    "role": "null",
-   "elapsed_s": 166.2,
+   "elapsed_s": 211.9,
    "errors": [],
    "published_source": "NASA Exoplanet Archive pscomppars, cumulative KOI and TOI tables",
    "published_retrieved": "2026-10-29",
