@@ -243,13 +243,17 @@ def mission_credits(lc: LightCurve) -> list[str]:
     if lc.mission not in ("TESS", "Kepler"):
         return []
     lines = [MAST_CREDITS[lc.mission]]
-    used = ""
-    if lc.sectors_or_quarters:
-        unit = "sectors" if lc.mission == "TESS" else "quarters"
-        used = f" ({unit} {number_ranges(lc.sectors_or_quarters)})"
-    lines += [doi_line(doi, lc.mission) + used for doi in lc.dois]
+    for doi in lc.dois:
+        sectors = lc.sectors_for(doi)
+        used = f" ({sector_unit(lc.mission)} {number_ranges(sectors)})" if sectors else ""
+        lines.append(doi_line(doi, lc.mission) + used)
     lines.append(LIGHTKURVE_CREDIT)
     return lines
+
+
+def sector_unit(mission: str) -> str:
+    """What a mission's observing periods are called: TESS sectors, Kepler quarters."""
+    return "sectors" if mission == "TESS" else "quarters"
 
 
 def _mission_order(target: StarTarget) -> list[Mission]:
@@ -479,6 +483,7 @@ class MastSource:
     def _stitch(self, products: Iterable[dict], mission: Mission) -> LightCurve:
         times, fluxes, errs = [], [], []
         seqs, ids, authors, exptimes, kinds = set(), [], [], [], set()
+        doi_seqs: dict[str, set[int]] = {}
         for p in products:
             try:
                 lc, kind = self._read(p["path"])
@@ -500,6 +505,8 @@ class MastSource:
             kinds.add(kind)
             if p.get("seq") is not None:
                 seqs.add(int(p["seq"]))
+                if p.get("author") in DOIS:
+                    doi_seqs.setdefault(DOIS[p["author"]], set()).add(int(p["seq"]))
             ids.append(p.get("product") or p.get("obs_id", ""))
             authors.append(p.get("author", ""))
             exptimes.append(float(p.get("exptime", np.nan)))
@@ -524,4 +531,5 @@ class MastSource:
             dois=[DOIS[a] for a in uniq_authors if a in DOIS],
             author=author,
             cadence_s=float(np.nanmedian(exptimes)) if exptimes else None,
+            doi_sectors={doi: sorted(s) for doi, s in doi_seqs.items()} if len(doi_seqs) > 1 else {},
         )

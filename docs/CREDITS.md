@@ -45,7 +45,9 @@ TESS with the sector range used.  The products Transitory downloads:
 A star's credits list only the DOIs of the products actually used for it,
 each followed by the sectors or quarters used, e.g.
 `TESS Light Curves - All Sectors: https://doi.org/10.17909/t9-nmc8-f686 (sectors 1-13, 27-39)`.
-For a paper covering several stars, combine their sector ranges.
+For a paper covering several stars, combine their sector ranges, as the
+validation report's credits do (each star's ranges listed under the combined
+line).
 
 ## TESS Input Catalog (MAST)
 

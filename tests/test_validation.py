@@ -388,6 +388,95 @@ def test_star_credits_acknowledge_archive_planets_and_tic_parameters():
     assert ARCHIVE_CREDIT not in synthetic.analysis.credits
 
 
+def _mission_star(name, mission, sectors, doi_sectors=None):
+    """A star's credit entry for MAST data, as a live run records it."""
+    import numpy as np
+
+    from transitory.models import LightCurve
+    from transitory.pipeline.fetch import DOIS, mission_credits
+
+    dois = list(doi_sectors) if doi_sectors else [DOIS["SPOC" if mission == "TESS" else "Kepler"]]
+    lc = LightCurve(np.zeros(1), np.ones(1), np.ones(1), mission, sectors_or_quarters=sectors, dois=dois,
+                    doi_sectors=doi_sectors or {})
+    return name, report.credit_entry(lc, mission_credits(lc) + [TIC_CREDIT, ARCHIVE_CREDIT])
+
+
+def _grouped_credits_stars():
+    from transitory.pipeline.fetch import DOIS
+
+    return [_mission_star("Kepler-10", "Kepler", [0, 1, 2]),
+            _mission_star("pi Men", "TESS", [1, 4, 27]),
+            _mission_star("Kepler-22", "Kepler", [2, 3, 5]),
+            _mission_star("TIC 31410749", "TESS", [2, 6, 9],
+                          {DOIS["SPOC"]: [2, 9], DOIS["TESS-SPOC"]: [6]})]
+
+
+def test_report_credits_group_each_data_product_with_its_stars():
+    from transitory.catalog.archive import ARCHIVE_REFERENCES
+    from transitory.pipeline.fetch import LIGHTKURVE_CREDIT, MAST_CREDITS
+
+    stars = [report.StarCredits.from_entry(*s) for s in _grouped_credits_stars()]
+    lines = report.credits_markdown(stars, uses_archive=False)
+    assert lines == [
+        "## Data credits", "",
+        f"- {MAST_CREDITS['TESS']}",
+        f"- {MAST_CREDITS['Kepler']}",
+        "- TESS Light Curves - All Sectors: https://doi.org/10.17909/t9-nmc8-f686 (sectors 1-2, 4, 9, 27)",
+        "  - pi Men: sectors 1, 4, 27",
+        "  - TIC 31410749: sectors 2, 9",
+        '- TESS Light Curves From Full Frame Images ("TESS-SPOC"): https://doi.org/10.17909/t9-wpz1-8s54 '
+        "(sectors 6)",
+        "  - TIC 31410749: sectors 6",
+        "- Kepler LC, Q0-Q17: https://doi.org/10.17909/T9488N (quarters 0-3, 5)",
+        "  - Kepler-10: quarters 0-2",
+        "  - Kepler-22: quarters 2-3, 5",
+        f"- {LIGHTKURVE_CREDIT}",
+        f"- {TIC_CREDIT}",
+        f"- {ARCHIVE_CREDIT}",
+        *[f"- {line}" for line in ARCHIVE_REFERENCES],
+        ""]
+
+
+def test_report_credits_keep_lines_from_other_sources():
+    stars = [report.StarCredits(name="Demo", lines=["Synthetic light curve", "Synthetic light curve"]),
+             report.StarCredits(name="Other", lines=["Another credit"])]
+    assert report.credits_markdown(stars, uses_archive=False) == [
+        "## Data credits", "", "- Synthetic light curve", "- Another credit", ""]
+
+
+def test_rebuild_credits_backfills_then_reads_results_json(tmp_path):
+    entries = dict(_grouped_credits_stars())
+    old_json = {"max_products": None, "targets": [
+        {"name": name, "published_source": "NASA Exoplanet Archive pscomppars"} for name in entries]}
+    (tmp_path / report.JSON_NAME).write_text(json.dumps(old_json))
+    (tmp_path / report.REPORT_NAME).write_text("# Report\n\nBody.\n\n## Data credits\n\n- old line\n")
+
+    with pytest.raises(ValueError, match="no credits for Kepler-10, pi Men"):
+        report.rebuild_credits(tmp_path)
+    asked = []
+    path = report.rebuild_credits(tmp_path, lambda name: asked.append(name) or entries[name])
+    assert asked == list(entries)
+    text = path.read_text()
+    assert text.startswith("# Report\n\nBody.\n\n## Data credits\n\n- This paper includes data collected with the TESS")
+    assert "old line" not in text and text.count(ARCHIVE_CREDIT) == 1 and text.endswith("NEA4\n")
+    saved = json.loads((tmp_path / report.JSON_NAME).read_text())
+    assert saved["targets"][3]["data"]["sectors"]["10.17909/t9-wpz1-8s54"] == [6]
+
+    # The second time, results.json holds all it needs.
+    assert report.rebuild_credits(tmp_path).read_text() == text
+
+
+def test_written_report_records_credits_for_a_rebuild(tmp_path):
+    source = SyntheticSource(stars=[s for s in demo_stars() if s.target.name == "Demo Hot Jupiter"])
+    run = run_validation(synthetic_targets(source), source, synthetic_provider(source), max_products=None)
+    path = report.write_report(run, tmp_path)
+    data = json.loads((tmp_path / report.JSON_NAME).read_text())
+    assert data["targets"][0]["credits"] == run.results[0].analysis.credits != []
+    assert data["targets"][0]["data"]["mission"] == run.results[0].analysis.raw.mission
+    text = path.read_text()
+    assert report.rebuild_credits(tmp_path).read_text() == text
+
+
 # -- command line and GUI --------------------------------------------------------------
 
 def test_cli_demo_writes_report(tmp_path, capsys):
@@ -396,6 +485,12 @@ def test_cli_demo_writes_report(tmp_path, capsys):
     assert "1 found, 0 at aliases, 0 missed of 1 published" in out
     assert (tmp_path / "validation.md").is_file()
     assert cli_main(["--demo", "--targets", "Kepler-10"]) == 2
+
+    # Only the credits are rewritten, here from the results.json the run wrote.
+    text = (tmp_path / "validation.md").read_text()
+    assert cli_main(["--demo", "--rebuild-credits", "--out", str(tmp_path)]) == 0
+    assert (tmp_path / "validation.md").read_text() == text
+    assert cli_main(["--demo", "--rebuild-credits", "--out", str(tmp_path / "none")]) == 2
 
 
 def test_gui_menu_runs_validation_and_shows_report(qtbot, tmp_path):

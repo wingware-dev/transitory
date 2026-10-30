@@ -84,7 +84,36 @@
      "sde": 17.032290456895325,
      "explanation": "near 1\u00d7 the Kepler orbit (372.5 d); only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: only 2 transits observed, and they fail the checks; odd/even depths differ by 5.8 sigma (281 vs 14 ppm): likely eclipsing binary; marginal SNR 14.7."
     }
-   ]
+   ],
+   "credits": [
+    "This paper includes data collected by the Kepler mission and obtained from the MAST data archive at the Space Telescope Science Institute (STScI). Funding to US Institutions for the Kepler mission was provided by the NASA Science Mission Directorate. STScI is operated by the Association of Universities for Research in Astronomy, Inc., under NASA contract NAS5-26555.",
+    "Kepler LC, Q0-Q17: https://doi.org/10.17909/T9488N (quarters 0-7, 9-11, 13-15, 17)",
+    "This research made use of Lightkurve, a Python package for Kepler and TESS data analysis (Lightkurve Collaboration, 2018).",
+    "Stellar parameters from the TESS Input Catalog (Stassun et al. 2019, AJ 158, 138), via the MAST API.",
+    "This research has made use of the NASA Exoplanet Archive, which is operated by the California Institute of Technology, under contract with the National Aeronautics and Space Administration under the Exoplanet Exploration Program."
+   ],
+   "data": {
+    "mission": "Kepler",
+    "sectors": {
+     "10.17909/T9488N": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      9,
+      10,
+      11,
+      13,
+      14,
+      15,
+      17
+     ]
+    }
+   }
   },
   {
    "name": "Kepler-7",
@@ -135,7 +164,39 @@
      "sde": 25.919015255862252,
      "explanation": "only 2 events covered, passing every vetting check: a duo-transit, which may be a planet on a long period or two unrelated dips from systematics or stellar variability; more data must show a third transit; vetting: only 2 transits observed (SNR 16.9, SDE 25.9, odd/even consistent): a possible long-period planet, not a planet candidate until more transits confirm it."
     }
-   ]
+   ],
+   "credits": [
+    "This paper includes data collected by the Kepler mission and obtained from the MAST data archive at the Space Telescope Science Institute (STScI). Funding to US Institutions for the Kepler mission was provided by the NASA Science Mission Directorate. STScI is operated by the Association of Universities for Research in Astronomy, Inc., under NASA contract NAS5-26555.",
+    "Kepler LC, Q0-Q17: https://doi.org/10.17909/T9488N (quarters 0-17)",
+    "This research made use of Lightkurve, a Python package for Kepler and TESS data analysis (Lightkurve Collaboration, 2018).",
+    "Stellar parameters from the TESS Input Catalog (Stassun et al. 2019, AJ 158, 138), via the MAST API.",
+    "This research has made use of the NASA Exoplanet Archive, which is operated by the California Institute of Technology, under contract with the National Aeronautics and Space Administration under the Exoplanet Exploration Program."
+   ],
+   "data": {
+    "mission": "Kepler",
+    "sectors": {
+     "10.17909/T9488N": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17
+     ]
+    }
+   }
   },
   {
    "name": "Kepler-2",
@@ -186,7 +247,39 @@
      "sde": 17.327811605568982,
      "explanation": "only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: only 2 transits observed, and they fail the checks; marginal SNR 11.3."
     }
-   ]
+   ],
+   "credits": [
+    "This paper includes data collected by the Kepler mission and obtained from the MAST data archive at the Space Telescope Science Institute (STScI). Funding to US Institutions for the Kepler mission was provided by the NASA Science Mission Directorate. STScI is operated by the Association of Universities for Research in Astronomy, Inc., under NASA contract NAS5-26555.",
+    "Kepler LC, Q0-Q17: https://doi.org/10.17909/T9488N (quarters 0-17)",
+    "This research made use of Lightkurve, a Python package for Kepler and TESS data analysis (Lightkurve Collaboration, 2018).",
+    "Stellar parameters from the TESS Input Catalog (Stassun et al. 2019, AJ 158, 138), via the MAST API.",
+    "This research has made use of the NASA Exoplanet Archive, which is operated by the California Institute of Technology, under contract with the National Aeronautics and Space Administration under the Exoplanet Exploration Program."
+   ],
+   "data": {
+    "mission": "Kepler",
+    "sectors": {
+     "10.17909/T9488N": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17
+     ]
+    }
+   }
   },
   {
    "name": "Kepler-22",
@@ -237,7 +330,39 @@
      "sde": 19.9802828713777,
      "explanation": "near 2\u00d7 the Kepler orbit (372.5 d); only 2 events covered, passing every vetting check: a duo-transit, which may be a planet on a long period or two unrelated dips from systematics or stellar variability; more data must show a third transit; vetting: only 2 transits observed (SNR 17.9, SDE 20.0, odd/even consistent): a possible long-period planet, not a planet candidate until more transits confirm it."
     }
-   ]
+   ],
+   "credits": [
+    "This paper includes data collected by the Kepler mission and obtained from the MAST data archive at the Space Telescope Science Institute (STScI). Funding to US Institutions for the Kepler mission was provided by the NASA Science Mission Directorate. STScI is operated by the Association of Universities for Research in Astronomy, Inc., under NASA contract NAS5-26555.",
+    "Kepler LC, Q0-Q17: https://doi.org/10.17909/T9488N (quarters 0-17)",
+    "This research made use of Lightkurve, a Python package for Kepler and TESS data analysis (Lightkurve Collaboration, 2018).",
+    "Stellar parameters from the TESS Input Catalog (Stassun et al. 2019, AJ 158, 138), via the MAST API.",
+    "This research has made use of the NASA Exoplanet Archive, which is operated by the California Institute of Technology, under contract with the National Aeronautics and Space Administration under the Exoplanet Exploration Program."
+   ],
+   "data": {
+    "mission": "Kepler",
+    "sectors": {
+     "10.17909/T9488N": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17
+     ]
+    }
+   }
   },
   {
    "name": "pi Men",
@@ -271,7 +396,45 @@
      "letter": "b"
     }
    ],
-   "others": []
+   "others": [],
+   "credits": [
+    "This paper includes data collected with the TESS mission, obtained from the MAST data archive at the Space Telescope Science Institute (STScI). Funding for US Institutions for the TESS mission is provided by the NASA Explorer Program. STScI is operated by the Association of Universities for Research in Astronomy, Inc., under NASA contract NAS5-26555.",
+    "TESS Light Curves - All Sectors: https://doi.org/10.17909/t9-nmc8-f686 (sectors 1, 4, 8, 11-13, 27-28, 31, 34, 38-39, 61-62, 64-68, 88-89, 93-95)",
+    "This research made use of Lightkurve, a Python package for Kepler and TESS data analysis (Lightkurve Collaboration, 2018).",
+    "Stellar parameters from the TESS Input Catalog (Stassun et al. 2019, AJ 158, 138), via the MAST API.",
+    "This research has made use of the NASA Exoplanet Archive, which is operated by the California Institute of Technology, under contract with the National Aeronautics and Space Administration under the Exoplanet Exploration Program."
+   ],
+   "data": {
+    "mission": "TESS",
+    "sectors": {
+     "10.17909/t9-nmc8-f686": [
+      1,
+      4,
+      8,
+      11,
+      12,
+      13,
+      27,
+      28,
+      31,
+      34,
+      38,
+      39,
+      61,
+      62,
+      64,
+      65,
+      66,
+      67,
+      68,
+      88,
+      89,
+      93,
+      94,
+      95
+     ]
+    }
+   }
   },
   {
    "name": "LHS 3844",
@@ -322,7 +485,32 @@
      "sde": 10.139024169399079,
      "explanation": "only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: only 2 transits observed, and they fail the checks; odd/even depths differ by 4.3 sigma (2541 vs 4964 ppm): likely eclipsing binary; marginal SDE 10.1."
     }
-   ]
+   ],
+   "credits": [
+    "This paper includes data collected with the TESS mission, obtained from the MAST data archive at the Space Telescope Science Institute (STScI). Funding for US Institutions for the TESS mission is provided by the NASA Explorer Program. STScI is operated by the Association of Universities for Research in Astronomy, Inc., under NASA contract NAS5-26555.",
+    "TESS Light Curves - All Sectors: https://doi.org/10.17909/t9-nmc8-f686 (sectors 1, 27-28, 67-68, 94-95, 101-104)",
+    "This research made use of Lightkurve, a Python package for Kepler and TESS data analysis (Lightkurve Collaboration, 2018).",
+    "Stellar parameters from the TESS Input Catalog (Stassun et al. 2019, AJ 158, 138), via the MAST API.",
+    "This research has made use of the NASA Exoplanet Archive, which is operated by the California Institute of Technology, under contract with the National Aeronautics and Space Administration under the Exoplanet Exploration Program."
+   ],
+   "data": {
+    "mission": "TESS",
+    "sectors": {
+     "10.17909/t9-nmc8-f686": [
+      1,
+      27,
+      28,
+      67,
+      68,
+      94,
+      95,
+      101,
+      102,
+      103,
+      104
+     ]
+    }
+   }
   },
   {
    "name": "WASP-18",
@@ -373,7 +561,31 @@
      "sde": 10.028395590209033,
      "explanation": "only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: only 2 transits observed, and they fail the checks; marginal SNR 13.0; marginal SDE 10.0; rp/rs 0.34 is large for a planet."
     }
-   ]
+   ],
+   "credits": [
+    "This paper includes data collected with the TESS mission, obtained from the MAST data archive at the Space Telescope Science Institute (STScI). Funding for US Institutions for the TESS mission is provided by the NASA Explorer Program. STScI is operated by the Association of Universities for Research in Astronomy, Inc., under NASA contract NAS5-26555.",
+    "TESS Light Curves - All Sectors: https://doi.org/10.17909/t9-nmc8-f686 (sectors 2-3, 29-30, 69, 96, 103-106)",
+    "This research made use of Lightkurve, a Python package for Kepler and TESS data analysis (Lightkurve Collaboration, 2018).",
+    "Stellar parameters from the TESS Input Catalog (Stassun et al. 2019, AJ 158, 138), via the MAST API.",
+    "This research has made use of the NASA Exoplanet Archive, which is operated by the California Institute of Technology, under contract with the National Aeronautics and Space Administration under the Exoplanet Exploration Program."
+   ],
+   "data": {
+    "mission": "TESS",
+    "sectors": {
+     "10.17909/t9-nmc8-f686": [
+      2,
+      3,
+      29,
+      30,
+      69,
+      96,
+      103,
+      104,
+      105,
+      106
+     ]
+    }
+   }
   },
   {
    "name": "TOI-270",
@@ -453,7 +665,28 @@
      "letter": "c"
     }
    ],
-   "others": []
+   "others": [],
+   "credits": [
+    "This paper includes data collected with the TESS mission, obtained from the MAST data archive at the Space Telescope Science Institute (STScI). Funding for US Institutions for the TESS mission is provided by the NASA Explorer Program. STScI is operated by the Association of Universities for Research in Astronomy, Inc., under NASA contract NAS5-26555.",
+    "TESS Light Curves - All Sectors: https://doi.org/10.17909/t9-nmc8-f686 (sectors 3-5, 30, 32, 97-98)",
+    "This research made use of Lightkurve, a Python package for Kepler and TESS data analysis (Lightkurve Collaboration, 2018).",
+    "Stellar parameters from the TESS Input Catalog (Stassun et al. 2019, AJ 158, 138), via the MAST API.",
+    "This research has made use of the NASA Exoplanet Archive, which is operated by the California Institute of Technology, under contract with the National Aeronautics and Space Administration under the Exoplanet Exploration Program."
+   ],
+   "data": {
+    "mission": "TESS",
+    "sectors": {
+     "10.17909/t9-nmc8-f686": [
+      3,
+      4,
+      5,
+      30,
+      32,
+      97,
+      98
+     ]
+    }
+   }
   },
   {
    "name": "KIC 8006161",
@@ -472,7 +705,39 @@
      "sde": 33.3768961943893,
      "explanation": "only 3 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: rp/rs 0.31 is large for a planet."
     }
-   ]
+   ],
+   "credits": [
+    "This paper includes data collected by the Kepler mission and obtained from the MAST data archive at the Space Telescope Science Institute (STScI). Funding to US Institutions for the Kepler mission was provided by the NASA Science Mission Directorate. STScI is operated by the Association of Universities for Research in Astronomy, Inc., under NASA contract NAS5-26555.",
+    "Kepler LC, Q0-Q17: https://doi.org/10.17909/T9488N (quarters 0-17)",
+    "This research made use of Lightkurve, a Python package for Kepler and TESS data analysis (Lightkurve Collaboration, 2018).",
+    "Stellar parameters from the TESS Input Catalog (Stassun et al. 2019, AJ 158, 138), via the MAST API.",
+    "This research has made use of the NASA Exoplanet Archive, which is operated by the California Institute of Technology, under contract with the National Aeronautics and Space Administration under the Exoplanet Exploration Program."
+   ],
+   "data": {
+    "mission": "Kepler",
+    "sectors": {
+     "10.17909/T9488N": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17
+     ]
+    }
+   }
   },
   {
    "name": "KIC 6106415",
@@ -507,7 +772,35 @@
      "sde": 19.39595314583038,
      "explanation": "only 2 events covered: more likely individual systematics or stellar variability than a periodic signal; vetting: only 2 transits observed, and they fail the checks; odd/even depths differ by 23.1 sigma (626 vs 1465 ppm): likely eclipsing binary."
     }
-   ]
+   ],
+   "credits": [
+    "This paper includes data collected by the Kepler mission and obtained from the MAST data archive at the Space Telescope Science Institute (STScI). Funding to US Institutions for the Kepler mission was provided by the NASA Science Mission Directorate. STScI is operated by the Association of Universities for Research in Astronomy, Inc., under NASA contract NAS5-26555.",
+    "Kepler LC, Q0-Q17: https://doi.org/10.17909/T9488N (quarters 0-4, 6-8, 10-12, 14-16)",
+    "This research made use of Lightkurve, a Python package for Kepler and TESS data analysis (Lightkurve Collaboration, 2018).",
+    "Stellar parameters from the TESS Input Catalog (Stassun et al. 2019, AJ 158, 138), via the MAST API.",
+    "This research has made use of the NASA Exoplanet Archive, which is operated by the California Institute of Technology, under contract with the National Aeronautics and Space Administration under the Exoplanet Exploration Program."
+   ],
+   "data": {
+    "mission": "Kepler",
+    "sectors": {
+     "10.17909/T9488N": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      6,
+      7,
+      8,
+      10,
+      11,
+      12,
+      14,
+      15,
+      16
+     ]
+    }
+   }
   },
   {
    "name": "TIC 31410749",
@@ -517,7 +810,37 @@
    "published_source": "NASA Exoplanet Archive pscomppars, cumulative KOI and TOI tables",
    "published_retrieved": "2026-10-29",
    "planets": [],
-   "others": []
+   "others": [],
+   "credits": [
+    "This paper includes data collected with the TESS mission, obtained from the MAST data archive at the Space Telescope Science Institute (STScI). Funding for US Institutions for the TESS mission is provided by the NASA Explorer Program. STScI is operated by the Association of Universities for Research in Astronomy, Inc., under NASA contract NAS5-26555.",
+    "TESS Light Curves - All Sectors: https://doi.org/10.17909/t9-nmc8-f686 (sectors 2, 9, 12, 29, 39)",
+    "TESS Light Curves From Full Frame Images (\"TESS-SPOC\"): https://doi.org/10.17909/t9-wpz1-8s54 (sectors 6, 36, 61-62, 66-69)",
+    "This research made use of Lightkurve, a Python package for Kepler and TESS data analysis (Lightkurve Collaboration, 2018).",
+    "Stellar parameters from the TESS Input Catalog (Stassun et al. 2019, AJ 158, 138), via the MAST API.",
+    "This research has made use of the NASA Exoplanet Archive, which is operated by the California Institute of Technology, under contract with the National Aeronautics and Space Administration under the Exoplanet Exploration Program."
+   ],
+   "data": {
+    "mission": "TESS",
+    "sectors": {
+     "10.17909/t9-nmc8-f686": [
+      2,
+      9,
+      12,
+      29,
+      39
+     ],
+     "10.17909/t9-wpz1-8s54": [
+      6,
+      36,
+      61,
+      62,
+      66,
+      67,
+      68,
+      69
+     ]
+    }
+   }
   }
  ]
 }

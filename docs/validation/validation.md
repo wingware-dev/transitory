@@ -141,20 +141,26 @@ Candidates that match no published planet. *Spurious* ones passed vetting (weak 
 
 ## Data credits
 
+- This paper includes data collected with the TESS mission, obtained from the MAST data archive at the Space Telescope Science Institute (STScI). Funding for US Institutions for the TESS mission is provided by the NASA Explorer Program. STScI is operated by the Association of Universities for Research in Astronomy, Inc., under NASA contract NAS5-26555.
 - This paper includes data collected by the Kepler mission and obtained from the MAST data archive at the Space Telescope Science Institute (STScI). Funding to US Institutions for the Kepler mission was provided by the NASA Science Mission Directorate. STScI is operated by the Association of Universities for Research in Astronomy, Inc., under NASA contract NAS5-26555.
-- Kepler LC, Q0-Q17: https://doi.org/10.17909/T9488N (quarters 0-7, 9-11, 13-15, 17)
+- TESS Light Curves - All Sectors: https://doi.org/10.17909/t9-nmc8-f686 (sectors 1-5, 8-9, 11-13, 27-32, 34, 38-39, 61-62, 64-69, 88-89, 93-98, 101-106)
+  - pi Men: sectors 1, 4, 8, 11-13, 27-28, 31, 34, 38-39, 61-62, 64-68, 88-89, 93-95
+  - LHS 3844: sectors 1, 27-28, 67-68, 94-95, 101-104
+  - WASP-18: sectors 2-3, 29-30, 69, 96, 103-106
+  - TOI-270: sectors 3-5, 30, 32, 97-98
+  - TIC 31410749: sectors 2, 9, 12, 29, 39
+- TESS Light Curves From Full Frame Images ("TESS-SPOC"): https://doi.org/10.17909/t9-wpz1-8s54 (sectors 6, 36, 61-62, 66-69)
+  - TIC 31410749: sectors 6, 36, 61-62, 66-69
+- Kepler LC, Q0-Q17: https://doi.org/10.17909/T9488N (quarters 0-17)
+  - Kepler-10: quarters 0-7, 9-11, 13-15, 17
+  - Kepler-7: quarters 0-17
+  - Kepler-2: quarters 0-17
+  - Kepler-22: quarters 0-17
+  - KIC 8006161: quarters 0-17
+  - KIC 6106415: quarters 0-4, 6-8, 10-12, 14-16
 - This research made use of Lightkurve, a Python package for Kepler and TESS data analysis (Lightkurve Collaboration, 2018).
 - Stellar parameters from the TESS Input Catalog (Stassun et al. 2019, AJ 158, 138), via the MAST API.
 - This research has made use of the NASA Exoplanet Archive, which is operated by the California Institute of Technology, under contract with the National Aeronautics and Space Administration under the Exoplanet Exploration Program.
-- Kepler LC, Q0-Q17: https://doi.org/10.17909/T9488N (quarters 0-17)
-- This paper includes data collected with the TESS mission, obtained from the MAST data archive at the Space Telescope Science Institute (STScI). Funding for US Institutions for the TESS mission is provided by the NASA Explorer Program. STScI is operated by the Association of Universities for Research in Astronomy, Inc., under NASA contract NAS5-26555.
-- TESS Light Curves - All Sectors: https://doi.org/10.17909/t9-nmc8-f686 (sectors 1, 4, 8, 11-13, 27-28, 31, 34, 38-39, 61-62, 64-68, 88-89, 93-95)
-- TESS Light Curves - All Sectors: https://doi.org/10.17909/t9-nmc8-f686 (sectors 1, 27-28, 67-68, 94-95, 101-104)
-- TESS Light Curves - All Sectors: https://doi.org/10.17909/t9-nmc8-f686 (sectors 2-3, 29-30, 69, 96, 103-106)
-- TESS Light Curves - All Sectors: https://doi.org/10.17909/t9-nmc8-f686 (sectors 3-5, 30, 32, 97-98)
-- Kepler LC, Q0-Q17: https://doi.org/10.17909/T9488N (quarters 0-4, 6-8, 10-12, 14-16)
-- TESS Light Curves - All Sectors: https://doi.org/10.17909/t9-nmc8-f686 (sectors 2, 6, 9, 12, 29, 36, 39, 61-62, 66-69)
-- TESS Light Curves From Full Frame Images ("TESS-SPOC"): https://doi.org/10.17909/t9-wpz1-8s54 (sectors 2, 6, 9, 12, 29, 36, 39, 61-62, 66-69)
 - Christiansen et al. 2025, The NASA Exoplanet Archive, PSJ: https://doi.org/10.3847/PSJ/ade3c2
 - Planetary Systems Composite Parameters Table: https://doi.org/10.26133/NEA13
 - Kepler Objects of Interest (KOI) Cumulative Table: https://doi.org/10.26133/NEA4

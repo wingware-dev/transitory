@@ -128,7 +128,9 @@ python -m transitory.validation --targets "Kepler-10, pi Men c" --max-sectors 10
 ```
 
 Reports go to `reports/validation/`; `--publish` also copies one to
-`docs/validation/`.
+`docs/validation/`.  `--rebuild-credits` rewrites only the last report's data
+credits, from its `results.json` (and the light-curve cache for an older
+report), without searching again.
 
 ## Cache
 

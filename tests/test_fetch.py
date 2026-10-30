@@ -184,6 +184,7 @@ def test_fetch_tess_stitches_normalised_sectors(fake_lk):
     assert lc.sectors_or_quarters == [14, 15, 16]
     assert lc.author == "SPOC+TESS-SPOC"
     assert lc.dois == [DOIS["SPOC"], DOIS["TESS-SPOC"]]
+    assert lc.doi_sectors == {DOIS["SPOC"]: [14, 16], DOIS["TESS-SPOC"]: [15]}
     assert lc.source_ids == [d[0] + "_lc" for d in fake_lk.downloads]  # product file names
     assert lc.cadence_s == 120.0
     assert np.all(np.diff(lc.time) >= 0)
@@ -540,6 +541,10 @@ def test_credits():
     tess = mission_credits(LightCurve(np.zeros(1), np.ones(1), np.ones(1), "TESS", dois=[DOIS["SPOC"]],
                                       sectors_or_quarters=[27, 1, 2, 3, 13, 28]))
     assert tess[1].endswith("https://doi.org/10.17909/t9-nmc8-f686 (sectors 1-3, 13, 27-28)")
+    both = mission_credits(LightCurve(np.zeros(1), np.ones(1), np.ones(1), "TESS",
+                                      dois=[DOIS["SPOC"], DOIS["TESS-SPOC"]], sectors_or_quarters=[2, 6, 9],
+                                      doi_sectors={DOIS["SPOC"]: [2, 9], DOIS["TESS-SPOC"]: [6]}))
+    assert both[1].endswith("t9-nmc8-f686 (sectors 2, 9)") and both[2].endswith("t9-wpz1-8s54 (sectors 6)")
     assert mission_credits(LightCurve(np.zeros(1), np.ones(1), np.ones(1), "Synthetic")) == []
 
 

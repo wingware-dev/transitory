@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
 from pathlib import Path
@@ -10,7 +11,7 @@ from pathlib import Path
 from ..sources import SyntheticSource
 from . import report
 from .targets import select, validation_targets
-from .validate import archive_provider, run_validation, synthetic_provider, synthetic_targets
+from .validate import archive_provider, fetch_credits, run_validation, synthetic_provider, synthetic_targets
 
 
 def _max_products(text: str) -> int | None:
@@ -34,21 +35,48 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--publish", action="store_true",
                         help=f"also copy the report to {report.DOCS_DIR.relative_to(report.PROJECT_ROOT)}")
     parser.add_argument("--refresh", action="store_true", help="re-query the archive instead of using its cache")
+    parser.add_argument("--rebuild-credits", action="store_true",
+                        help="only rewrite the report's data credits from its results.json (and the "
+                             "light-curve cache, for a report that did not record them); no search")
     return parser.parse_args(argv)
+
+
+def rebuild_credits(args: argparse.Namespace) -> int:
+    directory = args.out if args.out is not None else report.default_directory()
+    try:
+        saved = json.loads((directory / report.JSON_NAME).read_text(encoding="utf-8"))
+    except OSError as exc:
+        print(f"no report to rebuild: {exc}", file=sys.stderr)
+        return 2
+    source, targets, provider = _inputs(args, saved.get("max_products"))
+    by_name = {vt.target.name: vt for vt in targets}
+
+    def backfill(name: str) -> dict:
+        print(f"reading the light curve of {name}", file=sys.stderr, flush=True)
+        return report.credit_entry(*fetch_credits(by_name[name], source, provider))
+
+    path = report.rebuild_credits(directory, backfill)
+    print(f"rewrote the data credits in {path}")
+    if args.publish:
+        print(f"published {report.publish(path.parent)}")
+    return 0
+
+
+def _inputs(args: argparse.Namespace, max_products: int | None):
+    """The light-curve source, targets and published-value provider the arguments ask for."""
+    if args.demo:
+        source = SyntheticSource()
+        return source, synthetic_targets(source), synthetic_provider(source)
+    from ..pipeline.fetch import MastSource
+    return MastSource(max_products=max_products), validation_targets(), archive_provider(refresh=args.refresh)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s: %(message)s")
-    if args.demo:
-        source = SyntheticSource()
-        targets = synthetic_targets(source)
-        provider = synthetic_provider(source)
-    else:
-        from ..pipeline.fetch import MastSource
-        source = MastSource(max_products=args.max_sectors)
-        targets = validation_targets()
-        provider = archive_provider(refresh=args.refresh)
+    if args.rebuild_credits:
+        return rebuild_credits(args)
+    source, targets, provider = _inputs(args, args.max_sectors)
     if args.targets:
         try:
             targets = select(targets, args.targets.split(","))

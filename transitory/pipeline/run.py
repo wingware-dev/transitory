@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 
-from ..models import PlanetResult, ProgressCallback, StarAnalysis, StarTarget
+from ..models import LightCurve, PlanetResult, ProgressCallback, StarAnalysis, StarTarget
 from ..sources import LightCurveSource
 from . import AnalysisCancelled
 from .clean import clean_light_curve
@@ -28,6 +28,11 @@ def _stage_error(result: StarAnalysis, stage: str, exc: Exception) -> None:
     result.errors.append(f"{stage}: {exc}")
 
 
+def data_credits(source: LightCurveSource, raw: LightCurve, target: StarTarget) -> list[str]:
+    """A star's credit lines: the mission data's, then the target's own (TIC, archive)."""
+    return list(dict.fromkeys([*source.credits(raw), *target.credits]))
+
+
 def analyze_star(
     target: StarTarget,
     source: LightCurveSource,
@@ -42,7 +47,7 @@ def analyze_star(
     progress("fetching light curve", 0.0)
     try:
         result.raw = source.fetch(target, progress_cb=lambda m, f: progress(m, 0.3 * f))
-        result.credits = list(dict.fromkeys([*source.credits(result.raw), *target.credits]))
+        result.credits = data_credits(source, result.raw, target)
     except AnalysisCancelled:
         raise
     except Exception as exc:

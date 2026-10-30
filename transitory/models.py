@@ -67,9 +67,16 @@ class LightCurve:
     dois: list[str] = field(default_factory=list)  # mission data DOIs
     author: str = ""  # pipeline that produced it, e.g. "SPOC", "Kepler"
     cadence_s: float | None = None
+    # Sectors or quarters each DOI's products cover, where they differ (SPOC + TESS-SPOC);
+    # a DOI not listed covers all of sectors_or_quarters.
+    doi_sectors: dict[str, list[int]] = field(default_factory=dict)
 
     def __len__(self) -> int:
         return len(self.time)
+
+    def sectors_for(self, doi: str) -> list[int]:
+        """The sectors or quarters whose products came under ``doi``."""
+        return self.doi_sectors.get(doi, self.sectors_or_quarters)
 
     @property
     def baseline_days(self) -> float:

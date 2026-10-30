@@ -34,9 +34,9 @@ import numpy as np
 from ..catalog import archive
 from ..catalog.client import CatalogClient, CatalogError
 from ..config import MAX_PLANETS_PER_STAR, MIN_PERIOD_DAYS
-from ..models import DUO_TRANSIT, PlanetResult, ProgressCallback, StarAnalysis
+from ..models import DUO_TRANSIT, LightCurve, PlanetResult, ProgressCallback, StarAnalysis
 from ..pipeline import AnalysisCancelled
-from ..pipeline.run import analyze_star
+from ..pipeline.run import analyze_star, data_credits
 from ..pipeline.noise import beta_factor, robust_std
 from ..pipeline.search import SNR_THRESHOLD, count_transits
 from ..sources import LightCurveSource, SyntheticSource
@@ -431,6 +431,15 @@ def validate_target(vt: ValidationTarget, source: LightCurveSource, provider: Pu
         result.comparisons, result.others = compare(vt, result.analysis, result.published)
     result.elapsed_s = time.monotonic() - start
     return result
+
+
+def fetch_credits(vt: ValidationTarget, source: LightCurveSource, provider: PublishedProvider
+                  ) -> tuple[LightCurve, list[str]]:
+    """A target's light curve and credit lines as ``validate_target`` gives them, without the
+    search: for credits a saved report did not record (from the cache, for a cached star)."""
+    raw = source.fetch(vt.target)
+    credits = data_credits(source, raw, vt.target)
+    return raw, credits + [line for line in provider(vt).credits if line not in credits]
 
 
 def run_validation(targets: list[ValidationTarget], source: LightCurveSource, provider: PublishedProvider,

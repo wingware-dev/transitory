@@ -11,6 +11,8 @@ from __future__ import annotations
 import json
 import math
 import shutil
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -20,7 +22,8 @@ from matplotlib.ticker import NullFormatter, ScalarFormatter
 from .. import plots
 from ..catalog.archive import ARCHIVE_CREDIT, ARCHIVE_REFERENCES
 from ..config import MAX_PLANETS_PER_STAR, MIN_PERIOD_DAYS, PROJECT_ROOT, reports_dir
-from ..models import DUO_TRANSIT
+from ..models import DUO_TRANSIT, LightCurve
+from ..pipeline.fetch import MAST_CREDITS, doi_line, number_ranges, sector_unit
 from ..pipeline.search import MIN_TRANSITS, SDE_THRESHOLD, SDE_TWO_TRANSITS, SNR_THRESHOLD
 from .validate import PlanetComparison, TargetResult, ValidationRun, found_period
 
@@ -460,15 +463,101 @@ def report_markdown(run: ValidationRun, figures: dict[tuple[str, int], str]) -> 
     out += [f"- {_md_escape(ref)}" for ref in refs] or ["None."]
     out.append("")
 
-    credits = []
-    for r in run.results:
-        for line in (r.analysis.credits if r.analysis else []):
-            if line not in credits:
-                credits.append(line)
-    if _uses_archive(run):
-        credits += [line for line in (ARCHIVE_CREDIT, *ARCHIVE_REFERENCES) if line not in credits]
-    out += ["## Data credits", ""] + [f"- {line}" for line in credits] + [""]
+    stars = [StarCredits.from_entry(r.name, credit_entry(r.analysis.raw if r.analysis else None,
+                                                         r.analysis.credits if r.analysis else []))
+             for r in run.results]
+    out += credits_markdown(stars, _uses_archive(run))
     return "\n".join(out)
+
+
+# -- data credits ----------------------------------------------------------------------
+
+CREDITS_HEADING = "## Data credits"
+
+
+@dataclass
+class StarCredits:
+    """One star's credit lines, with the mission data products they cite."""
+
+    name: str
+    lines: list[str] = field(default_factory=list)
+    mission: str = ""
+    sectors: dict[str, list[int]] = field(default_factory=dict)  # by DOI, in the order used
+
+    @classmethod
+    def from_entry(cls, name: str, entry: dict) -> StarCredits:
+        data = entry.get("data") or {}
+        return cls(name=name, lines=list(entry.get("credits", [])), mission=data.get("mission", ""),
+                   sectors={doi: [int(n) for n in s] for doi, s in data.get("sectors", {}).items()})
+
+
+def credit_entry(raw: LightCurve | None, credits: list[str]) -> dict:
+    """A star's credits and the mission data they cite, as ``results.json`` records them."""
+    data = {} if raw is None else {"mission": raw.mission,
+                                   "sectors": {doi: list(raw.sectors_for(doi)) for doi in raw.dois}}
+    return {"credits": list(credits), "data": data}
+
+
+def credits_markdown(stars: list[StarCredits], uses_archive: bool) -> list[str]:
+    """The "Data credits" section: mission acknowledgements, one line per data product with
+    the sectors / quarters used for all stars (then each star's), the other credits, and the
+    Exoplanet Archive's acknowledgement and references last."""
+    used: dict[str, list[StarCredits]] = {}
+    for s in stars:
+        if s.mission in MAST_CREDITS:
+            for doi in s.sectors:
+                used.setdefault(doi, []).append(s)
+    missions = [m for m in MAST_CREDITS if any(users[0].mission == m for users in used.values())]
+    out = [CREDITS_HEADING, ""] + [f"- {MAST_CREDITS[m]}" for m in missions]
+    for m in missions:
+        unit = sector_unit(m)
+        for doi, users in used.items():
+            if users[0].mission != m:
+                continue
+            union = sorted({n for s in users for n in s.sectors[doi]})
+            out.append(f"- {doi_line(doi, m)}" + (f" ({unit} {number_ranges(union)})" if union else ""))
+            out += [f"  - {s.name}: {unit} {number_ranges(s.sectors[doi])}" for s in users if s.sectors[doi]]
+
+    # Each star's own mission lines are replaced by the ones above.
+    mission_lines = set(MAST_CREDITS.values()) | {doi_line(doi, s.mission) for s in stars for doi in s.sectors}
+    archive = [ARCHIVE_CREDIT, *ARCHIVE_REFERENCES]
+    others: list[str] = []
+    for s in stars:
+        for line in s.lines:
+            if line in archive:
+                uses_archive = True
+            elif line not in others and not any(line.startswith(m) for m in mission_lines):
+                others.append(line)
+    out += [f"- {line}" for line in others + (archive if uses_archive else [])]
+    return out + [""]
+
+
+def rebuild_credits(directory: Path | str | None = None,
+                    backfill: Callable[[str], dict] | None = None) -> Path:
+    """Rewrite the "Data credits" section of the report in ``directory`` from its ``results.json``,
+    without running the pipeline again.
+
+    A report written before ``results.json`` recorded each star's credits needs ``backfill``,
+    which gives a star's ``credit_entry`` by name; what it gives is saved for later rebuilds.
+    """
+    directory = Path(directory) if directory is not None else default_directory()
+    json_path, path = directory / JSON_NAME, directory / REPORT_NAME
+    data = json.loads(json_path.read_text(encoding="utf-8"))
+    missing = [t for t in data["targets"] if "credits" not in t]
+    if missing and backfill is None:
+        raise ValueError(f"{json_path} has no credits for {', '.join(t['name'] for t in missing)}")
+    for t in missing:
+        t.update(backfill(t["name"]))
+    text = path.read_text(encoding="utf-8")
+    head, heading, _ = text.partition(CREDITS_HEADING)
+    if not heading:
+        raise ValueError(f"{path} has no '{CREDITS_HEADING}' section")
+    stars = [StarCredits.from_entry(t["name"], t) for t in data["targets"]]
+    uses_archive = any("Exoplanet Archive" in (t.get("published_source") or "") for t in data["targets"])
+    path.write_text(head + "\n".join(credits_markdown(stars, uses_archive)), encoding="utf-8")
+    if missing:
+        json_path.write_text(json.dumps(data, indent=1, default=str) + "\n", encoding="utf-8")
+    return path
 
 
 def results_json(run: ValidationRun) -> dict:
@@ -484,6 +573,7 @@ def results_json(run: ValidationRun) -> dict:
             "others": [{"index": o.index, "kind": o.kind, "period": found_period(r.planet(o.index)),
                         "snr": r.planet(o.index).candidate.snr, "sde": r.planet(o.index).candidate.sde,
                         "explanation": o.explanation} for o in r.others],
+            **credit_entry(r.analysis.raw if r.analysis else None, r.analysis.credits if r.analysis else []),
         } for r in run.results],
     }
 
