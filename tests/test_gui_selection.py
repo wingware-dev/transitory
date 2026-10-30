@@ -279,8 +279,8 @@ def test_reset_view_button_and_home_key(window, qtbot):
     sky = window.sky
     _centred_on_toi270(sky)
     qtbot.mouseClick(sky.reset_button, Qt.MouseButton.LeftButton)
-    (x0, x1), (y0, y1) = sky.view_box.viewRange()
-    assert x1 - x0 > 360 and y1 - y0 > 180  # all sky
+    ra, dec, width, height = sky.view_region()
+    assert (ra, dec) == (pytest.approx(180.0), pytest.approx(0.0)) and height >= 180  # pole to pole
     sky.set_home(290.0, 44.0, 10.0)
     _centred_on_toi270(sky)
     window.activateWindow()

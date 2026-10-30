@@ -9,12 +9,15 @@ emits ``starClicked``.  Zoomed in below ``FIELD_ZOOM_DEG``, TIC stars in
 view are loaded from MAST in a worker thread.  The Kepler field (approx.)
 and the TESS continuous viewing zones are outlined.
 
-Positions are plotted as plain RA/Dec degrees, which stretches RA near
-the poles; the nearest-star search measures in screen pixels, so clicks
-still pick what the user sees.
+Positions are plotted as plain RA/Dec degrees, with the aspect locked so a
+degree of RA is cos(Dec) as wide as a degree of Dec at the view's centre:
+shapes there are true at any widget size, and the lock follows the view as
+it pans.  The axes are labelled in hours and degrees (``sky_axes``).  The
+nearest-star search measures in screen pixels, so clicks still pick what
+the user sees.
 
 Under the plot, the catalog status (two word-wrapped lines) and the
-hovered position and star (one line) are elided to the view's width, so
+hovered position and star (a line each) are elided to the view's width, so
 changing text never resizes the footer or moves the plot under the mouse.
 """
 
@@ -35,6 +38,7 @@ from ..catalog.skycatalog import SkyCatalog, SkyStar
 from ..catalog.tic import MAX_CONE_RADIUS_DEG
 from ..models import StarTarget
 from .catalog_jobs import JobRunner
+from .sky_axes import DecAxis, RaAxis, format_dec, format_ra
 
 log = logging.getLogger(__name__)
 
@@ -42,6 +46,7 @@ FIELD_ZOOM_DEG = 2.0  # view size (true degrees) below which TIC field stars loa
 FIELD_MAX_TMAG = 13.0
 FIELD_DEBOUNCE_MS = 400
 CLICK_PIXELS = 12  # how far from a star a click may land
+MIN_COS_DEC = 0.05  # caps RA stretching near the poles (about 87 deg)
 
 # Kepler: 21 CCD modules (a 5x5 grid less its corners) centred on
 # RA 19h22m40s, Dec +44.5; module pitch and roll are approximate.
@@ -150,27 +155,35 @@ class ElidedLabel(QLabel):
 
     def _elide(self) -> None:
         width = self.contentsRect().width()
-        text = self._full_text
-        shown = []
-        if self._lines > 1 and width > 0:
-            # Word-wrap all but the last line; the last takes the rest, elided.
-            layout = QTextLayout(text, self.font())
-            layout.beginLayout()
-            start = 0
-            while len(shown) < self._lines - 1:
-                line = layout.createLine()
-                if not line.isValid():
-                    break
-                line.setLineWidth(width)
-                end = line.textStart() + line.textLength()
+        shown: list[str] = []
+        paragraphs = self._full_text.split("\n")  # "\n" starts a new line
+        for i, text in enumerate(paragraphs):
+            while len(shown) < self._lines - 1 and width > 0:
+                end = self._first_line_end(text, width)
                 if end >= len(text):
                     break  # the rest fits on this line
-                shown.append(text[line.textStart():end].rstrip())
-                start = end
-            layout.endLayout()
-            text = text[start:]
-        shown.append(self.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, width))
+                shown.append(text[:end].rstrip())
+                text = text[end:]
+            if len(shown) == self._lines - 1 or width <= 0:
+                # The last line: what is left of this paragraph and the rest, elided.
+                rest = "  ".join([text] + paragraphs[i + 1:])
+                shown.append(self.fontMetrics().elidedText(rest, Qt.TextElideMode.ElideRight, width))
+                break
+            shown.append(text)
         super().setText("\n".join(shown))
+
+    def _first_line_end(self, text: str, width: int) -> int:
+        """Where ``text`` word-wraps at ``width`` pixels: the end of its first line."""
+        layout = QTextLayout(text, self.font())
+        layout.beginLayout()
+        line = layout.createLine()
+        if line.isValid():
+            line.setLineWidth(width)
+            end = line.textStart() + line.textLength()
+        else:
+            end = len(text)
+        layout.endLayout()
+        return max(end, 1)
 
 
 class TrackpadNavigator(QObject):
@@ -238,6 +251,7 @@ class SkyView(QWidget):
         self.current: SkyStar | None = None
         self.selected: list[StarTarget] = []
         self._pending_field: tuple[float, float, float] | None = None
+        self._setting_view = False
         self._catalog_status = "No catalog loaded"
         self._field_status = ""
         self._stars: list[SkyStar] = []
@@ -245,14 +259,15 @@ class SkyView(QWidget):
         self._dec = np.empty(0)
         self.runner = JobRunner(self)
 
-        self.plot = pg.PlotWidget(background="#0b1020")
+        self.plot = pg.PlotWidget(background="#0b1020",
+                                  axisItems={"bottom": RaAxis("bottom"), "left": DecAxis("left")})
         self.plot.setObjectName("skyPlot")
         self.view_box = self.plot.getViewBox()
         self.view_box.invertX(True)
         self.view_box.setMenuEnabled(False)
         self.view_box.setLimits(xMin=-5, xMax=365, yMin=-92, yMax=92, minXRange=0.01, minYRange=0.01)
-        self.plot.setLabel("bottom", "RA (deg)")
-        self.plot.setLabel("left", "Dec (deg)")
+        self.plot.setLabel("bottom", "RA")
+        self.plot.setLabel("left", "Dec")
         self.plot.showGrid(x=True, y=True, alpha=0.15)
         self.plot.hideButtons()
 
@@ -275,7 +290,7 @@ class SkyView(QWidget):
 
         self.status_label = ElidedLabel(lines=2)
         self.status_label.setObjectName("skyStatus")
-        self.coord_label = ElidedLabel()
+        self.coord_label = ElidedLabel(lines=2)  # position, then the star under the pointer
         self.coord_label.setObjectName("skyCoords")
         self.reset_button = QToolButton()
         self.reset_button.setObjectName("skyReset")
@@ -298,6 +313,7 @@ class SkyView(QWidget):
         self._field_timer.setInterval(FIELD_DEBOUNCE_MS)
         self._field_timer.timeout.connect(self._maybe_load_field)
         self.view_box.sigRangeChanged.connect(lambda *_: self._field_timer.start())
+        self.view_box.sigRangeChanged.connect(lambda *_: self._follow_aspect())
         self.plot.scene().sigMouseClicked.connect(self._on_mouse_clicked)
         self.plot.scene().sigMouseMoved.connect(self._on_mouse_moved)
 
@@ -413,7 +429,8 @@ class SkyView(QWidget):
     # -- view ----------------------------------------------------------------------------
 
     def show_all_sky(self) -> None:
-        self.view_box.setRange(xRange=(0, 360), yRange=(-90, 90), padding=0.01)
+        """Pole to pole, and as much RA as the widget's shape allows (all of it when 2:1 or wider)."""
+        self.center_on(180.0, 0.0, 182.0)
 
     def set_home(self, ra: float, dec: float, size_deg: float) -> None:
         """Make (ra, dec), ``size_deg`` high, the view Reset view returns to, and show it."""
@@ -426,16 +443,56 @@ class SkyView(QWidget):
         else:
             self.center_on(*self.home)
 
+    @staticmethod
+    def aspect_at(dec: float) -> float:
+        """The x/y pixel-scale ratio that draws the sky true at ``dec``: cos(dec)."""
+        return max(math.cos(math.radians(max(-90.0, min(90.0, dec)))), MIN_COS_DEC)
+
+    def _follow_aspect(self) -> None:
+        """Re-lock the aspect for the view's centre Dec, when it has moved enough to matter.
+
+        Keeps the Dec range and centre, so panning never zooms; only the RA
+        width changes.
+        """
+        if self._setting_view:
+            return
+        (x0, x1), (y0, y1) = self.view_box.viewRange()
+        aspect = self.aspect_at((y0 + y1) / 2)
+        locked = self.view_box.state["aspectLocked"]
+        if locked and abs(aspect - locked) <= 1e-4 * locked:
+            return
+        bounds = self.view_box.rect()
+        if bounds.height() > 0:
+            width = abs(y1 - y0) * bounds.width() / bounds.height() / aspect
+        else:
+            width = abs(x1 - x0)
+        ra = (x0 + x1) / 2
+        self._set_view(aspect, (ra - width / 2, ra + width / 2), (y0, y1))
+
+    def _set_view(self, aspect: float, x_range, y_range) -> None:
+        """Lock ``aspect`` and show the ranges, without re-entering ``_follow_aspect``."""
+        self._setting_view = True
+        try:
+            self.view_box.setAspectLocked(True, ratio=aspect)
+            self.view_box.setRange(xRange=x_range, yRange=y_range, padding=0)
+        finally:
+            self._setting_view = False
+
     def center_on(self, ra: float, dec: float, size_deg: float | None = None) -> None:
-        """Centre the view on (ra, dec); ``size_deg`` sets the visible height in degrees."""
+        """Centre the view on (ra, dec).
+
+        With ``size_deg``, a ``size_deg`` square of sky (true degrees) fills
+        the view's shorter side, so it is all visible; without, the visible
+        area keeps its size.
+        """
         (x0, x1), (y0, y1) = self.view_box.viewRange()
         if size_deg is None:
             width, height = abs(x1 - x0), abs(y1 - y0)
         else:
             height = size_deg
-            width = size_deg / max(math.cos(math.radians(dec)), 0.05)
-        self.view_box.setRange(xRange=(ra - width / 2, ra + width / 2),
-                               yRange=(dec - height / 2, dec + height / 2), padding=0)
+            width = size_deg / self.aspect_at(dec)
+        self._set_view(self.aspect_at(dec), (ra - width / 2, ra + width / 2),
+                       (dec - height / 2, dec + height / 2))
 
     def view_region(self) -> tuple[float, float, float, float]:
         """(ra, dec, true width, height) of the visible area, in degrees."""
@@ -521,8 +578,13 @@ class SkyView(QWidget):
         point = self.view_box.mapSceneToView(pos)
         ra, dec = point.x() % 360.0, point.y()
         star = self.nearest_star(ra, dec)
-        text = f"RA {ra:.3f}°  Dec {dec:+.3f}°"
-        self.coord_label.setText(f"{text}  —  {self._describe(star)}" if star else text)
+        text = self.position_text(ra, dec)
+        self.coord_label.setText(f"{text}\n{self._describe(star)}" if star else text)
+
+    @staticmethod
+    def position_text(ra: float, dec: float) -> str:
+        """``RA 19h22m40.0s  Dec +44°30′00″  (290.667°, +44.500°)``."""
+        return f"RA {format_ra(ra, decimals=1)}  Dec {format_dec(dec)}  ({ra % 360.0:.3f}°, {dec:+.3f}°)"
 
     @staticmethod
     def _describe(star: SkyStar) -> str:

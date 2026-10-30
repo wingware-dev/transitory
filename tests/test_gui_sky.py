@@ -4,10 +4,12 @@ Catalog data are the recorded MAST / Exoplanet Archive responses; no network.
 """
 
 import json
+import re
 
 import numpy as np
 import pytest
 from PySide6.QtCore import QPointF, Qt
+from PySide6.QtWidgets import QApplication
 
 from harness import shot
 from sky_selection_host import RECORDED, SHOT_NAME, recorded_client, shot_sky_selection
@@ -15,6 +17,8 @@ from transitory.catalog import skycatalog
 from transitory.catalog.client import CatalogClient, CatalogError, ResponseCache
 from transitory.catalog.skycatalog import SkyCatalog, SkyStar
 from transitory.gui import sky_view
+from transitory.gui.sky_axes import (DEC_STEPS, RA_STEPS, dec_precision, format_dec, format_ra,
+                                     ra_precision, tick_steps)
 from transitory.gui.sky_view import (CVZ_RADIUS_DEG, ECLIPTIC_POLES, SkyView, in_kepler_field,
                                      separation_deg, small_circle)
 from transitory.models import StarTarget
@@ -180,7 +184,108 @@ def test_hover_shows_coordinates_and_star(sky, hosts):
     sky.center_on(kepler10.ra, kepler10.dec, 20.0)
     scene = sky.view_box.mapViewToScene(QPointF(kepler10.ra, kepler10.dec))
     sky._on_mouse_moved(scene)
-    assert sky.coord_label.text().startswith("RA 285.679°  Dec +50.241°  —  Kepler-10")
+    assert sky.coord_label.text().startswith(
+        "RA 19h02m43.0s  Dec +50°14′29″  (285.679°, +50.241°)\nKepler-10")
+
+
+
+# -- aspect and sexagesimal axes ------------------------------------------------------------
+
+@pytest.mark.parametrize("ra, precision, decimals, text", [
+    (290.6667, "s", 0, "19h22m40s"),
+    (290.6667, "m", 0, "19h23m"),
+    (290.6667, "h", 0, "19h"),
+    (285.679, "s", 1, "19h02m43.0s"),
+    (359.9999, "s", 0, "00h00m00s"),  # rounds up past 24h
+    (-15.0, "h", 0, "23h"),
+    (14.99999, "s", 1, "01h00m00.0s"),  # 59.99..s carries into the minute
+])
+def test_format_ra(ra, precision, decimals, text):
+    assert format_ra(ra, precision, decimals) == text
+
+
+@pytest.mark.parametrize("dec, precision, text", [
+    (44.5, "s", "+44°30′00″"),
+    (44.5, "m", "+44°30′"),
+    (-51.9573937, "s", "-51°57′27″"),
+    (-51.9573937, "d", "-52°"),
+    (-0.0001, "s", "+00°00′00″"),  # no minus on a value that rounds to zero
+    (-0.5, "m", "-00°30′"),
+    (89.99999, "s", "+90°00′00″"),
+    (5.25, "m", "+05°15′"),
+])
+def test_format_dec(dec, precision, text):
+    assert format_dec(dec, precision) == text
+
+
+def test_tick_steps_are_whole_units_and_label_only_what_the_step_needs():
+    major, minor = tick_steps(360.0, 420, 90, RA_STEPS)
+    assert (major, minor) == (90.0, 30.0)  # 6h, minors at 2h
+    assert ra_precision(major) == "h"
+    major, minor = tick_steps(20.0, 900, 90, RA_STEPS)
+    assert (major, minor) == (2.5, 0.5) and ra_precision(major) == "m"  # 10m, minors at 2m
+    major, minor = tick_steps(0.05, 900, 90, RA_STEPS)
+    assert major == pytest.approx(2 / 240) and ra_precision(major) == "s"
+    assert tick_steps(180.0, 700, 40, DEC_STEPS) == (15, 5)
+    assert dec_precision(15) == "d" and dec_precision(0.5) == "m" and dec_precision(10 / 3600) == "s"
+    assert tick_steps(1e6, 100, 90, RA_STEPS)[0] == RA_STEPS[-1]  # never coarser than 12h
+
+
+def test_axes_are_labelled_in_hours_and_degrees(sky):
+    sky.center_on(290.0, 44.0, 2.0)
+    QApplication.processEvents()
+    for axis, pattern in (("bottom", r"^\d\dh\d\dm(\d\ds)?$"), ("left", r"^[+-]\d\d°\d\d′$")):
+        item = sky.plot.getAxis(axis)
+        ticks = item.tickValues(*item.range, item.geometry().width() if axis == "bottom"
+                                else item.geometry().height())
+        major_spacing, values = ticks[0]
+        labels = item.tickStrings(values, 1.0, major_spacing)
+        assert len(labels) >= 2 and all(re.match(pattern, t) for t in labels), labels
+
+
+def _screen_extent(view: SkyView, ra, dec) -> tuple[float, float]:
+    points = [screen_pos(view, r, d) for r, d in zip(ra, dec)]
+    xs, ys = [p.x() for p in points], [p.y() for p in points]
+    return max(xs) - min(xs), max(ys) - min(ys)
+
+
+@pytest.mark.parametrize("size", [(900, 600), (420, 800)])
+def test_cvz_circle_is_round_on_screen_at_any_widget_shape(sky, size):
+    sky.resize(*size)
+    QApplication.processEvents()
+    ra0, dec0 = ECLIPTIC_POLES[0]
+    sky.center_on(ra0, dec0, 2.5 * CVZ_RADIUS_DEG)
+    QApplication.processEvents()
+    width, height = _screen_extent(sky, *small_circle(ra0, dec0, CVZ_RADIUS_DEG))
+    assert min(width, height) > 150
+    # Plain RA/Dec bulges a 12 deg circle at Dec 66.6 by about 5% across.
+    assert width == pytest.approx(height, rel=0.07)
+
+
+def test_aspect_follows_the_view_centre_as_it_pans(sky):
+    sky.center_on(0.0, 0.0, 10.0)
+    QApplication.processEvents()
+    assert sky.view_box.state["aspectLocked"] == pytest.approx(1.0)
+    sky.view_box.translateBy(y=60.0)
+    QApplication.processEvents()
+    ra, dec, width, height = sky.view_region()
+    assert dec == pytest.approx(60.0)
+    assert sky.view_box.state["aspectLocked"] == pytest.approx(0.5)
+    # A small square at the centre is still square on screen.
+    w, h = _screen_extent(sky, [ra - 0.5 / 0.5, ra + 0.5 / 0.5], [dec - 0.5, dec + 0.5])
+    assert w == pytest.approx(h, rel=0.01)
+
+
+def test_center_on_fits_the_square_in_the_shorter_side(sky):
+    for size in ((900, 600), (420, 800)):
+        sky.resize(*size)
+        QApplication.processEvents()
+        sky.center_on(100.0, -30.0, 5.0)
+        QApplication.processEvents()
+        ra, dec, width, height = sky.view_region()
+        assert (ra, dec) == (pytest.approx(100.0), pytest.approx(-30.0))
+        assert min(width, height) == pytest.approx(5.0)
+        assert (width > height) == (size[0] > size[1])
 
 
 # -- deep zoom ----------------------------------------------------------------------------
@@ -234,8 +339,8 @@ def test_deep_zoom_loads_tic_field_stars(cone_sky, qtbot):
 def test_small_pan_inside_the_loaded_field_does_not_reload(cone_sky, qtbot):
     kepler10 = star_named(cone_sky, "Kepler-10")
     with qtbot.waitSignal(cone_sky.fieldLoaded, timeout=10000):
-        cone_sky.center_on(kepler10.ra, kepler10.dec, 1.0)
-    cone_sky.center_on(kepler10.ra + 0.02, kepler10.dec + 0.02, 1.0)
+        cone_sky.center_on(kepler10.ra, kepler10.dec, 0.8)  # 1.35 x 0.8 deg: a 0.98 deg cone
+    cone_sky.center_on(kepler10.ra + 0.02, kepler10.dec + 0.02, 0.8)
     qtbot.wait(100)
     assert len(cone_sky.transport.cones) == 1
 

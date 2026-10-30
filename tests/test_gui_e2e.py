@@ -86,7 +86,8 @@ def test_demo_sky_shows_demo_stars_and_never_loads_fields(main_window):
     assert {s.name for s in sky.hosts} == {t.name for t in main_window.source.targets()}
     assert "demo mode" in sky.status_text
     ra, dec, width, height = sky.view_region()
-    assert abs(ra - 289) < 1 and abs(dec - 44) < 1 and height < 20  # starts on the Kepler field
+    assert abs(ra - 289) < 1 and abs(dec - 44) < 1  # starts on the Kepler field
+    assert min(width, height) == pytest.approx(18.0)
     click_star(main_window, "Demo Quiet Star")
     assert [t.name for t in main_window.panel.targets()] == ["Demo Quiet Star"]
     main_window.panel.targetActivated.emit(main_window.panel.targets()[0])
