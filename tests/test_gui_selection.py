@@ -4,6 +4,7 @@ Names resolve against the recorded MAST / Exoplanet Archive responses; no networ
 """
 
 import threading
+import time
 
 import pytest
 from PySide6.QtCore import QPoint, Qt
@@ -174,6 +175,34 @@ def test_entry_is_disabled_while_resolving(qtbot):
     qtbot.waitUntil(lambda: panel.entry.isEnabled(), timeout=10000)
     assert [t.name for t in panel.targets()] == ["Slow star"]
     panel.close()
+
+
+def test_closing_never_waits_for_a_stalled_lookup(qtbot):
+    started, release, returned = threading.Event(), threading.Event(), threading.Event()
+
+    def stalled(text):
+        started.set()
+        release.wait(30)
+        returned.set()
+        return [StarTarget(name=text, tic=5)], []
+
+    panel = _make_panel(qtbot, resolver=stalled)
+    try:
+        with qtbot.assertNotEmitted(panel.targetsChanged):
+            qtbot.keyClicks(panel.entry, "Stalled star")
+            qtbot.keyClick(panel.entry, Qt.Key.Key_Return)
+            qtbot.waitUntil(started.is_set, timeout=10000)
+            start = time.monotonic()
+            panel.close()
+            assert time.monotonic() - start < 1.0
+            # Ready for use again, should it be shown again.
+            assert not panel.resolving and panel.entry.isEnabled() and panel.message.text() == ""
+            release.set()
+            assert returned.wait(10) and panel.runner.wait(10000)
+            QApplication.processEvents()  # delivers the late reply, which is dropped
+    finally:
+        release.set()
+    assert panel.targets() == []
 
 
 def test_empty_entry_does_nothing(panel):

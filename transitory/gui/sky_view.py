@@ -55,7 +55,7 @@ from ..catalog.client import CatalogClient, CatalogError
 from ..catalog.skycatalog import SkyCatalog, SkyStar
 from ..catalog.tic import MAX_CONE_RADIUS_DEG
 from ..models import StarTarget
-from .catalog_jobs import JobRunner
+from .catalog_jobs import DetachedJobRunner
 from .selection_panel import target_key
 from .sky_background import BACKGROUND_ZOOM_DEG, CHOICES, DEFAULT_SURVEY, SkyBackground
 from .sky_axes import DecAxis, RaAxis, format_dec, format_ra
@@ -368,7 +368,7 @@ class SkyView(QWidget):
         self._stars: list[SkyStar] = []
         self._ra = np.empty(0)
         self._dec = np.empty(0)
-        self.runner = JobRunner(self)
+        self.runner = DetachedJobRunner(self, name="sky-catalog")  # closing never waits for it
 
         self.plot = pg.PlotWidget(background="#0b1020",
                                   axisItems={"bottom": RaAxis("bottom"), "left": DecAxis("left")})
@@ -904,7 +904,9 @@ class SkyView(QWidget):
         self.status_label.setText("  ·  ".join(parts))
 
     def closeEvent(self, event) -> None:
+        # Never wait for a MAST request under way: it may be stalled on a timeout.
         self._field_timer.stop()
         self.background.stop()
-        self.runner.wait()
+        self._pending_field = None
+        self.runner.discard()
         super().closeEvent(event)

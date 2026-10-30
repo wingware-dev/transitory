@@ -81,9 +81,9 @@ class DetachedJobRunner(QObject):
     """A ``JobRunner`` whose jobs never hold up closing or quitting.
 
     Jobs run one at a time, in order, on a daemon thread that exists only
-    while there are jobs.  Nothing waits for a job under way: when the
-    runner is closed, call ``discard`` and leave it; a result that arrives
-    for a deleted runner is dropped.
+    while there are jobs.  Nothing waits for a job under way: when its
+    widget closes, call ``discard``, and no callback of the jobs so far
+    runs.  A result that arrives for a deleted runner is dropped too.
     """
 
     def __init__(self, parent: QObject | None = None, name: str = "detached-jobs"):
@@ -104,8 +104,14 @@ class DetachedJobRunner(QObject):
         self._relays.add(relay)
 
         def finish(callback, value):
-            self._relays.discard(relay)
             relay.deleteLater()
+            if relay not in self._relays:  # discarded while it ran
+                if isinstance(value, Exception):
+                    log.warning("%s: a discarded job failed: %s", self.name, value)
+                else:
+                    log.debug("%s: result dropped, its job was discarded", self.name)
+                return
+            self._relays.discard(relay)
             callback(value)
 
         relay.done.connect(lambda value: finish(on_done, value))
@@ -117,13 +123,17 @@ class DetachedJobRunner(QObject):
                 threading.Thread(target=self._work, name=self.name, daemon=True).start()
 
     def discard(self) -> None:
-        """Drop the jobs not yet started; the one under way runs on, unwaited for."""
+        """Drop every job submitted so far, for a close: no callback of theirs will run.
+
+        Jobs not yet started never run; the one under way runs on, unwaited
+        for, and its result is dropped.  The runner takes new jobs as before.
+        """
         with self._lock:
-            dropped = [relay for _fn, relay in self._jobs]
+            queued = [relay for _fn, relay in self._jobs]
             self._jobs.clear()
-        for relay in dropped:
-            self._relays.discard(relay)
-            relay.deleteLater()
+        self._relays.clear()
+        for relay in queued:
+            relay.deleteLater()  # the one under way is deleted when its result arrives
 
     def wait(self, msecs: int = 30000) -> bool:
         """Block until queued jobs have run (their callbacks still need the event loop)."""

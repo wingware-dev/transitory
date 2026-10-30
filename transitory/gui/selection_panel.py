@@ -33,7 +33,7 @@ from ..catalog.client import CatalogClient, CatalogError
 from ..catalog.resolve import resolve_many
 from ..catalog.skycatalog import SkyStar
 from ..models import MissionHint, StarTarget
-from .catalog_jobs import JobRunner
+from .catalog_jobs import DetachedJobRunner
 
 log = logging.getLogger(__name__)
 
@@ -74,7 +74,7 @@ class SelectionPanel(QWidget):
         super().__init__(parent)
         self.resolver: Resolver = resolver or (lambda text: resolve_many(text, client=client))
         self._targets: list[StarTarget] = []
-        self.runner = JobRunner(self)
+        self.runner = DetachedJobRunner(self, name="name-lookup")  # closing never waits for it
 
         self.entry = QLineEdit()
         self.entry.setObjectName("starEntry")
@@ -298,5 +298,9 @@ class SelectionPanel(QWidget):
         return targets
 
     def closeEvent(self, event) -> None:
-        self.runner.wait()
+        # Never wait for a lookup under way: it may be stalled on a timeout.
+        if self.resolving:
+            self.runner.discard()
+            self._show_message("")
+            self._entry_done(clear=False)
         super().closeEvent(event)

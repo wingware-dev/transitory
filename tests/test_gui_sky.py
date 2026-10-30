@@ -17,7 +17,7 @@ from harness import shot
 from sky_selection_host import (RECORDED, SHOT_NAME, RecordedHipsTransport, recorded_client,
                                 shot_sky_selection)
 from transitory.catalog import hips, skycatalog
-from transitory.catalog.client import CatalogClient, CatalogError, ResponseCache
+from transitory.catalog.client import CatalogClient, CatalogError, RecordedTransport, ResponseCache
 from transitory.catalog.hips import CutoutCache
 from transitory.catalog.skycatalog import SkyCatalog, SkyStar
 from transitory.gui import credits_dialog, sky_background, sky_view
@@ -720,6 +720,62 @@ def test_field_failure_is_shown(qtbot, tmp_path, hosts):
     qtbot.waitUntil(lambda: "TIC stars unavailable" in view.status_text, timeout=10000)
     assert "connection refused" in view.status_text
     view.close()
+
+
+class StalledTransport:
+    """Passes catalog requests on to ``inner``, but only once ``release`` is set."""
+
+    def __init__(self, inner):
+        self.inner = inner
+        self.started = threading.Event()
+        self.release = threading.Event()
+        self.returned = threading.Event()
+
+    def __call__(self, method, url, params):
+        self.started.set()
+        self.release.wait(30)
+        try:
+            return self.inner(method, url, params)
+        finally:
+            self.returned.set()
+
+
+def _close_promptly_then_release(view: SkyView, stalled: StalledTransport, qtbot) -> None:
+    """Close ``view`` while ``stalled`` holds its request, then let the request finish."""
+    qtbot.waitUntil(stalled.started.is_set, timeout=10000)
+    start = time.monotonic()
+    view.close()
+    assert time.monotonic() - start < 1.0
+    assert not view.runner.busy
+    stalled.release.set()
+    assert stalled.returned.wait(10) and view.runner.wait(10000)
+    QApplication.processEvents()  # delivers the late reply, which is dropped
+
+
+def test_closing_never_waits_for_a_stalled_field_load(qtbot, tmp_path, hosts, monkeypatch):
+    monkeypatch.setattr(sky_view, "FIELD_DEBOUNCE_MS", 10)
+    stalled = StalledTransport(ConeTransport())
+    view = _make_sky(qtbot, CatalogClient(transport=stalled, cache=ResponseCache(tmp_path / "c")))
+    view.set_catalog(hosts)
+    try:
+        with qtbot.assertNotEmitted(view.fieldLoaded):
+            view.center_on(285.68, 50.24, 1.0)
+            _close_promptly_then_release(view, stalled, qtbot)
+    finally:
+        stalled.release.set()
+    assert view.field == [] and view.field_region is None
+
+
+def test_closing_never_waits_for_a_stalled_host_catalog(qtbot, tmp_path):
+    stalled = StalledTransport(RecordedTransport(RECORDED))
+    view = _make_sky(qtbot, CatalogClient(transport=stalled, cache=ResponseCache(tmp_path / "c")))
+    try:
+        with qtbot.assertNotEmitted(view.catalogLoaded):
+            view.load_hosts()
+            _close_promptly_then_release(view, stalled, qtbot)
+    finally:
+        stalled.release.set()
+    assert view.catalog is None and view.hosts == []
 
 
 def test_stale_field_results_are_dropped(sky):
