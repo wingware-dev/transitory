@@ -41,6 +41,9 @@ class StarTarget:
     teff_k: float | None = None  # effective temperature, for limb darkening
     logg: float | None = None  # surface gravity, log10(cm s^-2)
     mass_msun: float | None = None  # stellar mass; with the radius, a density prior on a/Rs
+    # Acknowledgement lines for the catalogs these values came from (TIC, Exoplanet Archive);
+    # analyze_star adds them to the star's credits after the mission data credits.
+    credits: list[str] = field(default_factory=list)
 
     @property
     def label(self) -> str:

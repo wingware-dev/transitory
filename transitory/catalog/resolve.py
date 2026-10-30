@@ -115,7 +115,8 @@ def resolve_many(text: str, mission_hint: MissionHint | None = None,
 def _from_tic_star(name: str, star: ticdb.TicStar, mission_hint: MissionHint = "any") -> StarTarget:
     return StarTarget(name=name, tic=star.tic, kic=star.kic, ra=star.ra, dec=star.dec,
                       tmag=star.tmag, mission_hint=mission_hint, radius_rsun=star.radius_rsun,
-                      teff_k=star.teff_k, logg=star.logg, mass_msun=star.mass_msun)
+                      teff_k=star.teff_k, logg=star.logg, mass_msun=star.mass_msun,
+                      credits=star.credits)
 
 
 def _by_tic(name: str, number: int, client: CatalogClient, hint: MissionHint = "any") -> StarTarget:

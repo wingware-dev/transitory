@@ -9,7 +9,9 @@ import math
 
 import pytest
 
+from transitory.catalog.archive import ARCHIVE_CREDIT
 from transitory.catalog.client import CatalogClient, ResponseCache
+from transitory.catalog.tic import TIC_CREDIT
 from transitory.models import (
     FitResult,
     PlanetResult,
@@ -359,6 +361,31 @@ def test_archive_provider_records_dates_and_refs(tmp_path):
     null = next(t for t in validation_targets() if t.target.name == "KIC 8006161")
     signals = provide(null)
     assert "TOI" in signals.source and [p.disposition for p in signals.planets] == ["FP"]
+    assert published.credits == signals.credits == [ARCHIVE_CREDIT]
+
+
+def test_star_credits_acknowledge_archive_planets_and_tic_parameters():
+    from datetime import UTC, datetime
+
+    from transitory.validation.validate import ValidationRun, validate_target
+
+    vt = next(t for t in validation_targets() if t.target.name == "TIC 31410749")
+    assert vt.target.credits == [TIC_CREDIT]
+
+    def analyzer(target, source, progress_cb=None):
+        return StarAnalysis(target=target, credits=["MAST line", *target.credits])
+
+    def provider(vt):
+        return PublishedSet(source="NASA Exoplanet Archive pscomppars", credits=[ARCHIVE_CREDIT])
+
+    result = validate_target(vt, SyntheticSource(), provider, analyzer)
+    assert result.analysis.credits == ["MAST line", TIC_CREDIT, ARCHIVE_CREDIT]
+    run = ValidationRun(results=[result], source_name="MAST", max_products=None, started=datetime.now(UTC))
+    credits = report.report_markdown(run, {}).split("## Data credits")[1]
+    assert credits.count(ARCHIVE_CREDIT) == 1 and f"- {TIC_CREDIT}" in credits
+
+    synthetic = validate_target(vt, SyntheticSource(), lambda vt: PublishedSet(), analyzer)
+    assert ARCHIVE_CREDIT not in synthetic.analysis.credits
 
 
 # -- command line and GUI --------------------------------------------------------------

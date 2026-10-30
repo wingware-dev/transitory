@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from ..catalog.skycatalog import offline_targets
+from ..catalog.tic import TIC_CREDIT
 from ..models import StarTarget
 
 Role = Literal["planet-host", "null"]
@@ -48,10 +49,10 @@ EXPECTATIONS = {
 EXTRA_NULL_STARS = [
     StarTarget(name="KIC 6106415", tic=120495825, kic=6106415, ra=285.415326, dec=41.490090,
                tmag=6.674, mission_hint="Kepler", radius_rsun=1.271,
-               teff_k=6007.0, logg=4.275, mass_msun=1.11),
+               teff_k=6007.0, logg=4.275, mass_msun=1.11, credits=[TIC_CREDIT]),
     StarTarget(name="TIC 31410749", tic=31410749, ra=89.004307, dec=-67.066291,
                tmag=8.304, mission_hint="TESS", radius_rsun=1.218,
-               teff_k=5927.0, logg=4.3, mass_msun=1.08),
+               teff_k=5927.0, logg=4.3, mass_msun=1.08, credits=[TIC_CREDIT]),
 ]
 NULL_NOTES = {
     "KIC 8006161": "Bright (Tmag 6.8), quiet dwarf (HD 173701), Kepler asteroseismology target, 18 quarters.",

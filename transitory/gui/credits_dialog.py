@@ -21,12 +21,9 @@ from PySide6.QtWidgets import (
 )
 
 from ..catalog.archive import ARCHIVE_CREDIT, ARCHIVE_REFERENCES
+from ..catalog.tic import TIC_CREDIT
 from ..models import StarAnalysis
 from ..pipeline.fetch import DOI_TITLES, LIGHTKURVE_CREDIT, MAST_CREDITS, doi_line
-
-# Stellar parameters and cross-identifications come from the TIC, through the MAST API.
-TIC_CREDIT = ("Stellar parameters from the TESS Input Catalog (Stassun et al. 2019, AJ 158, 138), "
-              "via the MAST API.")
 
 # As each package's citation page asks (checked 2026-10-29).  Astroquery is
 # used for the MAST light-curve searches; the catalog queries are plain HTTP.

@@ -7,10 +7,13 @@ that search, fit and vetting hold up on cleaned (not ideal) data.
 import numpy as np
 import pytest
 
-from transitory.models import StarTarget
+from transitory.catalog.archive import ARCHIVE_CREDIT
+from transitory.catalog.tic import TIC_CREDIT
+from transitory.models import LightCurve, StarTarget
 from transitory.pipeline import AnalysisCancelled, run
+from transitory.pipeline.fetch import DOIS, mission_credits
 from transitory.pipeline.run import analyze_star
-from transitory.sources import SourceError, SyntheticSource
+from transitory.sources import SYNTHETIC_CREDIT, SourceError, SyntheticSource
 from transitory.synthetic import InjectedPlanet, SyntheticStar
 
 
@@ -51,6 +54,41 @@ def test_two_planet_star(source):
     assert len(found) == 2
     for inj in injected:
         assert any(matches(p, inj) for p in found)
+
+
+class _TessSource:
+    """A MAST stand-in: a short, flat TESS light curve with the real mission credits."""
+
+    name = "MAST"
+
+    def fetch(self, target, progress_cb=None):
+        rng = np.random.default_rng(1)
+        time = np.arange(0.0, 27.0, 2.0 / 1440 * 30)
+        return LightCurve(time, 1.0 + 3e-4 * rng.standard_normal(len(time)), np.full(len(time), 3e-4),
+                          "TESS", sectors_or_quarters=[1, 2], dois=[DOIS["SPOC"]], author="SPOC")
+
+    def credits(self, lc):
+        return mission_credits(lc)
+
+
+def test_credits_without_catalog_data_are_the_mission_credits():
+    source = _TessSource()
+    result = analyze_star(StarTarget(name="TIC 5", tic=5), source)
+    assert result.credits == mission_credits(source.fetch(None))
+    assert ARCHIVE_CREDIT not in result.credits and TIC_CREDIT not in result.credits
+
+
+def test_credits_add_the_catalogs_the_target_came_from():
+    source = _TessSource()
+    target = StarTarget(name="Host", tic=5, radius_rsun=1.0, credits=[TIC_CREDIT, ARCHIVE_CREDIT])
+    result = analyze_star(target, source)
+    mission = mission_credits(source.fetch(target))
+    assert result.credits == [*mission, TIC_CREDIT, ARCHIVE_CREDIT]
+
+
+def test_catalog_credits_are_listed_once():
+    target = StarTarget(name="Demo Quiet Star", credits=[SYNTHETIC_CREDIT, TIC_CREDIT, TIC_CREDIT])
+    assert analyze_star(target, SyntheticSource()).credits == [SYNTHETIC_CREDIT, TIC_CREDIT]
 
 
 def test_eclipsing_binary_flagged(source):

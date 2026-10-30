@@ -19,6 +19,10 @@ from .client import CatalogClient, CatalogError, default_client
 MAX_CONE_RADIUS_DEG = 1.0
 MAX_CONE_ROWS = 5000
 
+# Stellar parameters and cross-identifications come from the TIC, through the MAST API.
+TIC_CREDIT = ("Stellar parameters from the TESS Input Catalog (Stassun et al. 2019, AJ 158, 138), "
+              "via the MAST API.")
+
 
 @dataclass
 class TicStar:
@@ -33,6 +37,12 @@ class TicStar:
     mass_msun: float | None = None
     obj_type: str = "STAR"
     dist_arcsec: float | None = None  # from the cone centre, for cone searches
+
+    @property
+    def credits(self) -> list[str]:
+        """``[TIC_CREDIT]`` when the star has stellar parameters for the fit or table to use."""
+        values = (self.radius_rsun, self.teff_k, self.logg, self.mass_msun)
+        return [TIC_CREDIT] if any(v is not None for v in values) else []
 
 
 @dataclass

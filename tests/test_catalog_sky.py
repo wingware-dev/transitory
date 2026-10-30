@@ -7,6 +7,8 @@ from pathlib import Path
 import pytest
 
 from transitory.catalog import skycatalog, tic
+from transitory.catalog.archive import ARCHIVE_CREDIT
+from transitory.catalog.tic import TIC_CREDIT
 from transitory.catalog.client import CatalogClient, CatalogError, RecordedTransport, ResponseCache
 from transitory.catalog.skycatalog import (field_stars, host_stars, hosts_from_rows, offline_catalog,
                                            offline_known_planets, offline_targets)
@@ -67,6 +69,15 @@ def test_hosts_from_rows_skips_rows_without_position():
     (star,) = hosts_from_rows(rows)
     assert (star.name, star.tic, star.tmag, star.mission_hint) == ("B", 5, 12.5, "Kepler")
     assert (star.teff_k, star.logg, star.mass_msun) == (5000.0, 4.5, 0.8)
+    assert star.credits == [ARCHIVE_CREDIT]
+    target = star.to_target()
+    assert target.credits == [ARCHIVE_CREDIT] and target.credits is not star.credits
+
+
+def test_field_stars_credit_the_tic(client):
+    stars = field_stars(285.6794, 50.2413, 0.1, client=client)
+    assert all(s.credits == ([TIC_CREDIT] if s.teff_k or s.radius_rsun else []) for s in stars)
+    assert any(s.credits for s in stars)
 
 
 def test_field_stars_brightest_first(client):
@@ -121,6 +132,7 @@ def test_offline_targets_are_the_validation_set():
         assert star.tic and -90 <= star.dec <= 90 and 0 <= star.ra < 360
         assert star.mission_hint in ("Kepler", "TESS")
         assert star.teff_k and star.logg and star.mass_msun
+        assert star.credits == [TIC_CREDIT, ARCHIVE_CREDIT]
     null = stars[-1]
     assert null.kind == "null" and null.planets == [] and null.kic == 8006161
     assert all(s.kind == "host" and s.planets for s in stars[:-1])

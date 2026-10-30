@@ -42,7 +42,7 @@ def analyze_star(
     progress("fetching light curve", 0.0)
     try:
         result.raw = source.fetch(target, progress_cb=lambda m, f: progress(m, 0.3 * f))
-        result.credits = list(source.credits(result.raw))
+        result.credits = list(dict.fromkeys([*source.credits(result.raw), *target.credits]))
     except AnalysisCancelled:
         raise
     except Exception as exc:

@@ -466,7 +466,7 @@ def report_markdown(run: ValidationRun, figures: dict[tuple[str, int], str]) -> 
             if line not in credits:
                 credits.append(line)
     if _uses_archive(run):
-        credits += [ARCHIVE_CREDIT, *ARCHIVE_REFERENCES]
+        credits += [line for line in (ARCHIVE_CREDIT, *ARCHIVE_REFERENCES) if line not in credits]
     out += ["## Data credits", ""] + [f"- {line}" for line in credits] + [""]
     return "\n".join(out)
 

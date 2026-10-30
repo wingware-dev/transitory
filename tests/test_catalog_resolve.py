@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from transitory.catalog.client import CatalogClient, CatalogError, RecordedTransport, ResponseCache
+from transitory.catalog.tic import TIC_CREDIT, TicStar
 from transitory.catalog.resolve import (ResolveError, parse_name, resolve, resolve_many,
                                         split_names)
 
@@ -96,6 +97,12 @@ def test_resolved_values_come_from_the_tic(client):
     assert target.tmag == pytest.approx(5.105, abs=1e-3)
     assert target.radius_rsun == pytest.approx(1.149, abs=1e-3)
     assert target.label == "pi Men (TIC 261136679)"
+    assert target.credits == [TIC_CREDIT]
+
+
+def test_tic_credit_only_with_stellar_parameters():
+    assert TicStar(tic=1, ra=0.0, dec=0.0, tmag=9.0).credits == []
+    assert TicStar(tic=1, ra=0.0, dec=0.0, teff_k=5000.0).credits == [TIC_CREDIT]
 
 
 @pytest.mark.parametrize("typed, message", [

@@ -18,7 +18,7 @@ from typing import Literal
 
 from ..models import KnownPlanet, MissionHint, StarTarget
 from . import tic as ticdb
-from .archive import tic_number
+from .archive import ARCHIVE_CREDIT, tic_number
 from .client import CatalogClient, CatalogError, default_client
 
 log = logging.getLogger(__name__)
@@ -46,6 +46,7 @@ class SkyStar:
     kind: StarKind = "host"
     planets: list[str] = field(default_factory=list)  # planet names, for hosts
     mission_hint: MissionHint = "any"
+    credits: list[str] = field(default_factory=list)  # the catalogs these values came from
 
     @property
     def n_planets(self) -> int:
@@ -55,7 +56,7 @@ class SkyStar:
         return StarTarget(name=self.name, tic=self.tic, kic=self.kic, ra=self.ra, dec=self.dec,
                           tmag=self.tmag, mission_hint=self.mission_hint,
                           radius_rsun=self.radius_rsun, teff_k=self.teff_k, logg=self.logg,
-                          mass_msun=self.mass_msun)
+                          mass_msun=self.mass_msun, credits=list(self.credits))
 
 
 @dataclass
@@ -89,7 +90,8 @@ def hosts_from_rows(rows: list[dict]) -> list[SkyStar]:
                 tmag=row.get("sy_tmag") if row.get("sy_tmag") is not None else row.get("sy_kepmag"),
                 tic=tic_number(row.get("tic_id")), radius_rsun=row.get("st_rad"),
                 teff_k=row.get("st_teff"), logg=row.get("st_logg"), mass_msun=row.get("st_mass"),
-                mission_hint=_hint_for_facility(row.get("disc_facility")))
+                mission_hint=_hint_for_facility(row.get("disc_facility")),
+                credits=[ARCHIVE_CREDIT])
         if row["pl_name"] not in star.planets:
             star.planets.append(row["pl_name"])
     stars = list(by_host.values())
@@ -124,7 +126,7 @@ def field_stars(ra: float, dec: float, radius_deg: float, max_tmag: float | None
     stars = ticdb.tic_cone(ra, dec, radius_deg, max_tmag=max_tmag, limit=limit, client=client)
     result = [SkyStar(name=f"TIC {s.tic}", ra=s.ra, dec=s.dec, tmag=s.tmag, tic=s.tic, kic=s.kic,
                       radius_rsun=s.radius_rsun, teff_k=s.teff_k, logg=s.logg,
-                      mass_msun=s.mass_msun, kind="field")
+                      mass_msun=s.mass_msun, kind="field", credits=s.credits)
               for s in stars if s.obj_type == "STAR"]
     result.sort(key=lambda s: s.tmag if s.tmag is not None else 99.0)
     return result
@@ -142,13 +144,19 @@ def offline_targets() -> list[SkyStar]:
     """The bundled validation targets (planet hosts and null stars)."""
     stars = []
     for entry in load_offline_data()["targets"]:
+        # Identifiers and stellar parameters from the TIC; the planets (or, for
+        # null stars, the absence of any) from the Exoplanet Archive.
+        tic_values = ticdb.TicStar(tic=0, ra=0.0, dec=0.0, radius_rsun=entry.get("radius_rsun"),
+                                   teff_k=entry.get("teff_k"), logg=entry.get("logg"),
+                                   mass_msun=entry.get("mass_msun"))
         stars.append(SkyStar(
             name=entry["name"], ra=entry["ra"], dec=entry["dec"], tmag=entry.get("tmag"),
             tic=entry.get("tic"), kic=entry.get("kic"), radius_rsun=entry.get("radius_rsun"),
             teff_k=entry.get("teff_k"), logg=entry.get("logg"), mass_msun=entry.get("mass_msun"),
             kind="null" if entry.get("role") == "null" else "host",
             planets=[p["name"] for p in entry.get("planets", [])],
-            mission_hint=entry.get("mission_hint", "any")))
+            mission_hint=entry.get("mission_hint", "any"),
+            credits=[*tic_values.credits, ARCHIVE_CREDIT]))
     return stars
 
 

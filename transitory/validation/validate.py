@@ -86,6 +86,7 @@ class PublishedSet:
     retrieved: str = ""  # YYYY-MM-DD
     source: str = ""  # where the values came from
     queries: list[str] = field(default_factory=list)
+    credits: list[str] = field(default_factory=list)  # acknowledgement lines for where they came from
 
 
 PublishedProvider = Callable[[ValidationTarget], PublishedSet]
@@ -107,7 +108,8 @@ def archive_provider(client: CatalogClient | None = None, refresh: bool = False)
             result = archive.known_planets(vt.target, client=client, refresh=refresh)
             source = "NASA Exoplanet Archive pscomppars"
         return PublishedSet(planets=[Published.from_archive(p) for p in result.planets],
-                            retrieved=result.retrieved, source=source, queries=list(result.queries))
+                            retrieved=result.retrieved, source=source, queries=list(result.queries),
+                            credits=[archive.ARCHIVE_CREDIT])
     return provide
 
 
@@ -421,6 +423,10 @@ def validate_target(vt: ValidationTarget, source: LightCurveSource, provider: Pu
         log.warning("%s: published values unavailable: %s", vt.target.name, exc)
         result.errors.append(f"published values unavailable: {exc}")
     result.analysis = analyzer(vt.target, source, progress_cb=progress_cb)
+    # The star's plots and credits then acknowledge the published values too.
+    for line in result.published.credits:
+        if line not in result.analysis.credits:
+            result.analysis.credits.append(line)
     if not result.errors:
         result.comparisons, result.others = compare(vt, result.analysis, result.published)
     result.elapsed_s = time.monotonic() - start
