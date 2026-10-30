@@ -4,13 +4,16 @@ Catalog data are the recorded MAST / Exoplanet Archive responses; no network.
 """
 
 import json
+import math
 import re
 import threading
 import time
 
 import numpy as np
+import pyqtgraph as pg
 import pytest
 from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QApplication
 
 from harness import shot
@@ -106,7 +109,8 @@ def test_load_hosts_in_background_and_report_retrieval(sky, qtbot):
     assert not catalog.offline and len(sky.hosts) == 32
     assert sky.status_text == (f"32 planet hosts · NASA Exoplanet Archive, retrieved {catalog.retrieved}"
                                + ZOOM_HINT)
-    assert len(sky.host_item.data) == 32
+    near_0h = sum(1 for s in sky.hosts if not sky_view.WRAP_DEG <= s.ra < 360 - sky_view.WRAP_DEG)
+    assert len(sky.host_item.data) == 32 + near_0h  # those near 0h are drawn a turn away too
 
 
 def test_offline_catalog_says_so(qtbot, tmp_path):
@@ -176,10 +180,10 @@ def test_nearest_star_wraps_at_ra_zero(sky):
 
 
 def test_selected_targets_are_ringed_and_labelled(sky):
-    targets = [StarTarget(name="A", ra=10.0, dec=5.0), StarTarget(name="No position")]
+    targets = [StarTarget(name="A", ra=100.0, dec=5.0), StarTarget(name="No position")]
     sky.set_selected(targets)
     assert [t.name for t in sky.selected] == ["A"]
-    assert list(sky.selected_item.data["x"]) == [10.0]
+    assert list(sky.selected_item.data["x"]) == [100.0]
     assert [label.toPlainText() for label in sky._labels] == ["A"]
     sky.set_selected([])
     assert sky._labels == [] and len(sky.selected_item.data) == 0
@@ -344,7 +348,7 @@ def test_center_on_fits_the_square_in_the_shorter_side(sky):
 def test_legend_lists_every_marker_kind(sky):
     entries = dict(sky.legend.entries)
     assert list(entries) == ["Planet host", "No known planets", "TIC field star", "In list",
-                             "Last clicked", "Size = brightness (Tmag)"]
+                             "Last clicked", "Size = brightness (Tmag)", "Ecliptic", "Galactic plane"]
     # Each swatch is drawn as its markers are.
     assert entries["Planet host"].brush.color() == sky._brushes["host"].color()
     assert entries["No known planets"].brush.color() == sky._brushes["null"].color()
@@ -354,6 +358,9 @@ def test_legend_lists_every_marker_kind(sky):
     assert entries["Last clicked"].pen.color() == sky.current_item.opts["pen"].color()
     assert entries["Last clicked"].symbol == sky.current_item.opts["symbol"]
     assert len(entries["Size = brightness (Tmag)"].sizes) > 1
+    for name in ("Ecliptic", "Galactic plane"):
+        assert entries[name].symbol is sky_view.LINE_SYMBOL
+        assert entries[name].pen.color().rgb() == sky.line_pens[name].color().rgb()  # opaquer
 
 
 def _widget_rect(view: SkyView, scene_rect):
@@ -438,6 +445,146 @@ def test_outline_labels_sit_outside_their_outlines_under_the_list_labels(sky):
     for text, (ra0, dec0) in zip(sky.outline_labels[1:], ECLIPTIC_POLES):
         assert text.pos().y() == pytest.approx(dec0 + CVZ_RADIUS_DEG, abs=0.01)
         assert text.anchor.y() > 1
+
+
+# -- ecliptic, galactic plane and the 0h wrap ---------------------------------------------------
+
+def test_ecliptic_and_galactic_plane_match_astropy():
+    from astropy import units as u
+    from astropy.coordinates import Galactic, GeocentricMeanEcliptic, SkyCoord
+
+    for line, frame in ((sky_view.ecliptic, GeocentricMeanEcliptic()), (sky_view.galactic_plane, Galactic())):
+        ra, dec = line(n=73)
+        assert np.all(np.diff(ra) >= 0) and 0 <= ra[0] and ra[-1] < 360  # once round, RA rising
+        coords = SkyCoord(ra=ra * u.deg, dec=dec * u.deg, frame="icrs").transform_to(frame)
+        latitude = coords.lat if frame.name == "geocentricmeanecliptic" else coords.b
+        assert np.abs(latitude.deg).max() < 0.02, line.__name__
+
+
+def test_wrap_copies_repeat_points_near_0h_a_turn_away():
+    index, ra = sky_view.wrap_copies([1.0, 100.0, 359.0, 330.5])
+    assert list(index) == [0, 1, 2, 3, 0, 2, 3]
+    assert list(ra) == [1.0, 100.0, 359.0, 330.5, 361.0, -1.0, -29.5]
+    ra, dec = sky_view.wrap_curve(*sky_view.ecliptic())
+    assert ra.min() < -sky_view.WRAP_DEG and ra.max() > 360 + sky_view.WRAP_DEG
+    assert np.all(np.diff(ra) >= 0)  # one unbroken line
+
+
+def test_ecliptic_and_galactic_plane_are_faint_labelled_lines_under_the_stars(sky):
+    sky.set_selected([StarTarget(name="A", ra=100.0, dec=5.0)])
+    curves = [item for item in sky.line_items if isinstance(item, pg.PlotCurveItem)]
+    labels = [item for item in sky.line_items if isinstance(item, pg.TextItem)]
+    assert len(curves) == 2
+    # In open sky: over the ecliptic at 13h, under the galactic plane's southernmost point.
+    assert [(t.toPlainText(), t.pos().x()) for t in labels] == [
+        ("Ecliptic", pytest.approx(195.0, abs=0.5)), ("Galactic plane", pytest.approx(192.86, abs=0.5))]
+    assert labels[0].anchor.y() > 1 and labels[1].anchor.y() < 0
+    assert labels[1].pos().y() == pytest.approx(-62.87, abs=0.05)
+    QApplication.processEvents()
+    plot, legend = sky.view_box.sceneBoundingRect(), sky.legend.sceneBoundingRect()
+    for text in labels:  # all sky, in view and clear of the legend
+        assert plot.contains(text.sceneBoundingRect()) and not legend.intersects(text.sceneBoundingRect())
+    for curve in curves:
+        assert curve.zValue() < sky.field_item.zValue()  # never over a star
+        assert curve.opts["pen"].color().alpha() < 160  # faint
+        assert curve.opts["pen"].style() == Qt.PenStyle.SolidLine  # unlike the dashed outlines
+    for text in labels:
+        assert text.zValue() < sky._labels[0].zValue()  # under the list's name labels
+
+
+def test_right_click_menu_toggles_the_lines(sky):
+    assert sky.reference_lines_shown and all(item.isVisible() for item in sky.line_items)
+    action = sky.context_menu(181.0, -9.0).actions()[-1]
+    assert action.text() == "Show ecliptic and galactic plane" and action.isChecked()
+    action.trigger()
+    assert not sky.reference_lines_shown and not any(item.isVisible() for item in sky.line_items)
+    assert all(text.isVisible() for text in sky.outline_labels)  # the outlines stay
+    action = sky.context_menu(181.0, -9.0).actions()[-1]
+    assert not action.isChecked()
+    action.trigger()
+    assert sky.reference_lines_shown
+
+
+def test_lines_are_drawn_on_the_sky(sky):
+    sky.center_on(90.0, 23.44, 8.0)  # the ecliptic's northernmost point, at the view's centre
+    QApplication.processEvents()
+    image = sky.grab().toImage()
+    centre = sky.plot.viewport().mapTo(sky, screen_pos(sky, 90.0, 23.44))
+    color = QColor(sky_view.LINE_COLORS["Ecliptic"])
+    near = [image.pixelColor(centre.x() + dx, centre.y() + dy) for dx in (-20, 0, 20) for dy in (-1, 0, 1)]
+    assert any(c.red() > 60 and c.red() > c.blue() + 20 for c in near), [c.name() for c in near]
+    sky.set_reference_lines(False)
+    QApplication.processEvents()
+    image = sky.grab().toImage()
+    near = [image.pixelColor(centre.x() + dx, centre.y() + dy) for dx in (-20, 0, 20) for dy in (-1, 0, 1)]
+    assert not any(c.red() > 60 and c.red() > c.blue() + 20 for c in near)
+
+
+def _pan_east(view: SkyView, degrees: float, step_px: int = 20) -> None:
+    """Drag the sky so the view moves ``degrees`` east (RA rising; < 0: west), a step at a time."""
+    px, _py = view.view_box.viewPixelSize()
+    step = step_px if degrees > 0 else -step_px  # east: as a scroll to the right would
+    for _ in range(math.ceil(abs(degrees) / (step_px * px))):
+        view.trackpad.pan_pixels(step, 0)
+
+
+def test_panning_crosses_0h_and_keeps_going(sky):
+    east = SkyStar(name="East", ra=0.5, dec=0.0, tmag=9.0)
+    west = SkyStar(name="West", ra=359.5, dec=0.0, tmag=9.0)
+    sky.set_catalog(SkyCatalog(stars=[east, west]))
+    sky.set_selected([west.to_target()])
+    sky.select_star(west)
+    sky.center_on(1.0, 0.0, 4.0)
+    QApplication.processEvents()
+    _pan_east(sky, -2.0)  # westward, across 0h: the view moves a turn on
+    ra, dec, width, _height = sky.view_region()
+    assert 358.0 < ra < 360.0 and abs(dec) < 1e-6 and width < 2 * sky_view.WRAP_DEG
+    (x0, x1), _ = sky.view_box.viewRange()
+    # East is drawn at its copy on this side of 0h, and both still pick, hover and ring.
+    assert 360.5 in list(sky.host_item.data["x"]) and min(x0, x1) < 360.5 < max(x0, x1)
+    assert sky.nearest_star(360.5, 0.0) is east and sky.nearest_star(359.5, 0.0) is west
+    sky.set_hovered(east)
+    assert 360.5 in list(sky.hover_item.data["x"])
+    assert -0.5 in list(sky.selected_item.data["x"]) and -0.5 in list(sky.current_item.data["x"])
+    assert sorted(label.pos().x() for label in sky._labels) == [-0.5, 359.5]
+    _pan_east(sky, 5.0)  # and back east across 0h
+    ra, _dec, _width, _height = sky.view_region()
+    assert 2.0 < ra < 5.0
+
+
+def test_a_wide_view_pans_only_a_little_past_0h(sky):
+    sky.show_all_sky()
+    QApplication.processEvents()
+    _pan_east(sky, -150.0)
+    (x0, x1), _ = sky.view_box.viewRange()
+    assert min(x0, x1) == pytest.approx(-sky_view.WRAP_DEG, abs=0.5)  # stopped at the copies' edge
+    ra, *_ = sky.view_region()
+    assert 0 < ra < 360
+
+
+def test_the_sky_image_follows_the_view_across_0h(image_sky, qtbot):
+    with qtbot.waitSignal(image_sky.background.loaded, timeout=10000):
+        image_sky.center_on(0.1, 10.0, 1.0)
+    (ra0, ra1), dec_range = image_sky.background.shown[1:3]
+    _pan_east(image_sky, -0.2, step_px=5)  # inside the fetched margin
+    ra, *_ = image_sky.view_region()
+    assert ra > 359.0
+    qtbot.wait(100)
+    assert len(image_sky.hips.calls) == 1  # moved a turn with the view, not refetched
+    assert image_sky.background.shown[1] == (pytest.approx(ra0 + 360), pytest.approx(ra1 + 360))
+    rect = image_sky.background.item.mapRectToParent(image_sky.background.item.boundingRect())
+    assert rect.left() == pytest.approx(ra0 + 360) and rect.right() == pytest.approx(ra1 + 360)
+    assert _pixel(image_sky, 0.5, 0.05).red() > _pixel(image_sky, 0.5, 0.95).red() + 60  # still drawn
+
+
+def test_a_sky_image_loading_as_the_view_wraps_lands_a_turn_on(sky):
+    background = sky.background
+    request = ("dss2", (-0.6, 0.8), (9.0, 11.0), 100, 100)
+    background._pending = request
+    background.shift_ra(360.0)
+    background._done(request, np.zeros((100, 100, 3), np.uint8))
+    assert background.shown == ("dss2", (359.4, 360.8), (9.0, 11.0), 100, 100)
+    assert not sky_background.same_sky(request, ("dss2", (-0.6, 0.8), (9.0, 11.5), 100, 100))
 
 
 # -- sky image ------------------------------------------------------------------------------
@@ -700,6 +847,21 @@ def test_small_pan_inside_the_loaded_field_does_not_reload(cone_sky, qtbot):
     cone_sky.center_on(kepler10.ra + 0.02, kepler10.dec + 0.02, 0.8)
     qtbot.wait(100)
     assert len(cone_sky.transport.cones) == 1
+
+
+def test_panning_across_0h_keeps_the_loaded_field(cone_sky, qtbot):
+    with qtbot.waitSignal(cone_sky.fieldLoaded, timeout=10000):
+        cone_sky.center_on(0.05, 10.0, 0.8)
+    _pan_east(cone_sky, -0.1, step_px=5)
+    ra, *_ = cone_sky.view_region()
+    assert ra > 359.9
+    qtbot.wait(100)
+    (cone,) = cone_sky.transport.cones  # the view is inside the cone loaded at 0.05
+    assert cone["ra"] == pytest.approx(0.05)
+    # Further on, the next cone is asked for at an RA in [0, 360).
+    with qtbot.waitSignal(cone_sky.fieldLoaded, timeout=10000):
+        _pan_east(cone_sky, -0.5, step_px=5)
+    assert 359.0 < cone_sky.transport.cones[-1]["ra"] < 360.0
 
 
 def test_zooming_out_clears_the_field(cone_sky, qtbot):

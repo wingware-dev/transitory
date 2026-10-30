@@ -258,6 +258,9 @@ def test_remove_target_matches_by_tic_or_name(window):
     assert panel.targets() == [] and panel.list.count() == 0
 
 
+LINES_ACTION = "Show ecliptic and galactic plane"  # ends every sky menu
+
+
 def _menu_actions(menu):
     return {a.text(): a for a in menu.actions() if not a.isSeparator()}
 
@@ -270,7 +273,8 @@ def test_right_click_menu_adds_removes_centres_and_copies(window, qtbot):
     click(sky, sky_pixel(sky, toi270.ra, toi270.dec), Qt.MouseButton.RightButton)
     qtbot.waitUntil(lambda: sky.menu is not None and sky.menu.isVisible(), timeout=2000)
     actions = _menu_actions(sky.menu)
-    assert list(actions) == ["Add TOI-270 to the list", "Centre here", "Copy name", "Copy TIC ID"]
+    assert list(actions) == ["Add TOI-270 to the list", "Centre here", "Copy name", "Copy TIC ID",
+                             LINES_ACTION]
     assert panel.targets() == []  # a right-click adds nothing by itself
     sky.menu.close()
 
@@ -293,11 +297,11 @@ def test_right_click_menu_adds_removes_centres_and_copies(window, qtbot):
     assert panel.targets() == []
 
 
-def test_right_click_on_empty_sky_offers_only_centre_here(window):
+def test_right_click_on_empty_sky_offers_centre_here_and_the_lines_toggle(window):
     sky = window.sky
     sky.center_on(180.0, -10.0, 5.0)  # no recorded host here
     menu = sky.context_menu(181.0, -9.0)
-    assert list(_menu_actions(menu)) == ["Centre here"]
+    assert list(_menu_actions(menu)) == ["Centre here", LINES_ACTION]
     menu.actions()[0].trigger()
     ra, dec, _width, height = sky.view_region()
     assert (ra, dec) == (pytest.approx(181.0), pytest.approx(-9.0))

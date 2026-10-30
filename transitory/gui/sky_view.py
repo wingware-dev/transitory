@@ -12,9 +12,16 @@ Copy name / Copy TIC ID.  Zoomed in so the view's shorter side is under
 ``FIELD_ZOOM_DEG``, TIC stars in view are loaded from MAST in a worker
 thread; zoomed out, the status line says how far to zoom.  The Kepler field (approx.)
 and the TESS continuous viewing zones are outlined, and labelled outside
-the outlines, under the list's name labels.
+the outlines, under the list's name labels.  The ecliptic and the galactic
+plane are faint labelled lines under the stars; the right-click menu turns
+them off and on.
 
-A legend in the plot's top-right corner keys the markers.  Marker size
+The map wraps at 0h: stars, rings, labels and lines within ``WRAP_DEG`` of
+0h are drawn a turn away too, and a view up to ``2 * WRAP_DEG`` wide jumps
+a turn (with the sky image) when its centre crosses 0h, so it pans on round
+the sky; wider views stop ``WRAP_DEG`` past 0h.
+
+A legend in the plot's top-right corner keys the markers and lines.  Marker size
 follows brightness (Tmag), scaled down as the view widens past about 10
 degrees so the all-sky map doesn't clot; host markers are translucent, so
 the Kepler field shows its CCD modules.
@@ -46,7 +53,7 @@ import math
 import numpy as np
 import pyqtgraph as pg
 from PySide6.QtCore import QEvent, QObject, QPointF, QRectF, Qt, QTimer, Signal
-from PySide6.QtGui import QActionGroup, QColor, QKeySequence, QShortcut, QTextLayout
+from PySide6.QtGui import QActionGroup, QColor, QKeySequence, QPainterPath, QPen, QShortcut, QTextLayout
 from PySide6.QtWidgets import (QApplication, QGridLayout, QLabel, QMenu, QSizePolicy, QToolButton,
                                QVBoxLayout, QWidget)
 
@@ -76,6 +83,14 @@ KEPLER_ROLL_DEG = 61.5
 # TESS continuous viewing zones: within 12 deg of the ecliptic poles.
 ECLIPTIC_POLES = ((270.0, 66.5607), (90.0, -66.5607))
 CVZ_RADIUS_DEG = 12.0
+OBLIQUITY_DEG = 23.4393  # of the ecliptic, J2000
+GALACTIC_NORTH_POLE = (192.85948, 27.12825)  # RA, Dec (ICRS)
+GALACTIC_NCP_LON_DEG = 122.93192  # galactic longitude of the north celestial pole
+
+# Points within WRAP_DEG of 0h are drawn a turn away too, and the view may
+# pan that far past 0h; a view at most 2 * WRAP_DEG wide is moved a turn
+# when its centre crosses 0h, so it pans round the sky without end.
+WRAP_DEG = 60.0  # a third of the stars get a copy; views up to 120 deg wide wrap
 
 HOST_COLOR = QColor(255, 170, 60)
 HOST_ALPHA = 175  # translucent, so crowded fields (Kepler's CCD modules) keep their shape
@@ -87,6 +102,9 @@ HOVER_COLOR = QColor(255, 255, 255, 210)
 MARKER_EDGE = QColor(0, 0, 0, 200)  # outlines stars, so they keep their contrast over the sky image
 HOVER_RING_PX = 14  # inside the list's 18 px ring, so both show on a listed star
 OUTLINE_COLORS = {"Kepler": QColor(120, 200, 255), "TESS": QColor(150, 230, 150)}
+# Faint, so they guide the eye without hiding anything.
+LINE_COLORS = {"Ecliptic": QColor(230, 200, 110, 120), "Galactic plane": QColor(200, 150, 240, 120)}
+LINE_LABEL_ALPHA = 190
 
 # Markers are drawn at full size up to FULL_SIZE_DEG_PER_PX (true degrees per
 # pixel, about 10 deg across a 500 px view) and shrink as the view widens.
@@ -94,9 +112,11 @@ FULL_SIZE_DEG_PER_PX = 0.02
 MIN_MARKER_SCALE = 0.5
 MARKER_SCALE_STEP = 0.05  # sizes change in steps, so panning never resizes them
 
-# z order: the sky image (sky_background), field stars, hosts, outlines and their labels, list rings, the
-# hover ring, the last-clicked square, then the list's name labels, which
-# nothing covers.
+# z order: the sky image (sky_background), the ecliptic and galactic plane,
+# field stars, hosts, outlines and all their labels, list rings, the hover
+# ring, the last-clicked square, then the list's name labels, which nothing
+# covers.
+LINE_Z = 0.5
 OUTLINE_Z = 2.5
 SELECTION_LABEL_Z = 5
 
@@ -120,6 +140,55 @@ def from_tangent(ra0: float, dec0: float, xi_deg: np.ndarray, eta_deg: np.ndarra
     ra = ra0 + np.degrees(np.arctan2(xi, denom))
     dec = np.degrees(np.arctan2(np.sin(d0) + eta * np.cos(d0), np.hypot(xi, denom)))
     return ra % 360.0, dec
+
+
+def ecliptic(n: int = 721) -> tuple[np.ndarray, np.ndarray]:
+    """The ecliptic (J2000) as RA/Dec degrees, RA rising from 0 to 360."""
+    lam = np.radians(np.linspace(0.0, 360.0, n, endpoint=False))
+    eps = math.radians(OBLIQUITY_DEG)
+    ra = np.degrees(np.arctan2(np.cos(eps) * np.sin(lam), np.cos(lam))) % 360.0
+    dec = np.degrees(np.arcsin(np.sin(eps) * np.sin(lam)))
+    return _sorted_by_ra(ra, dec)
+
+
+def galactic_plane(n: int = 721) -> tuple[np.ndarray, np.ndarray]:
+    """The galactic equator (b = 0) as RA/Dec degrees, RA rising from 0 to 360."""
+    ra_p, dec_p = map(math.radians, GALACTIC_NORTH_POLE)
+    dl = np.radians(GALACTIC_NCP_LON_DEG - np.linspace(0.0, 360.0, n, endpoint=False))
+    dec = np.degrees(np.arcsin(math.cos(dec_p) * np.cos(dl)))
+    ra = (math.degrees(ra_p) + np.degrees(np.arctan2(np.sin(dl), -math.sin(dec_p) * np.cos(dl)))) % 360.0
+    return _sorted_by_ra(ra, dec)
+
+
+def _sorted_by_ra(ra: np.ndarray, dec: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    order = np.argsort(ra, kind="stable")
+    return ra[order], dec[order]
+
+
+def wrap_copies(ra) -> tuple[np.ndarray, np.ndarray]:
+    """Indices and RAs of points in [0, 360), then copies a turn away of those within ``WRAP_DEG`` of 0h.
+
+    Drawn at both, a point near 0h shows on whichever side of the edge the
+    view has panned to.
+    """
+    ra = np.asarray(ra, dtype=float)
+    index = np.arange(len(ra))
+    low, high = index[ra < WRAP_DEG], index[ra >= 360.0 - WRAP_DEG]
+    return np.concatenate([index, low, high]), np.concatenate([ra, ra[low] + 360.0, ra[high] - 360.0])
+
+
+def wrapped_positions(points) -> list[tuple[float, float]]:
+    """(ra, dec) of each point (anything with ``ra`` and ``dec``), then the copies ``wrap_copies`` adds."""
+    index, ra = wrap_copies([p.ra % 360.0 for p in points])
+    return [(float(x), points[i].dec) for i, x in zip(index, ra)]
+
+
+def wrap_curve(ra: np.ndarray, dec: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """A curve once around the sky (RA rising over [0, 360)), continued ``WRAP_DEG`` past each end."""
+    ra3 = np.concatenate([ra - 360.0, ra, ra + 360.0])
+    dec3 = np.concatenate([dec, dec, dec])
+    keep = (ra3 >= -WRAP_DEG - 1.0) & (ra3 <= 360.0 + WRAP_DEG + 1.0)
+    return ra3[keep], dec3[keep]
 
 
 def kepler_outline() -> tuple[np.ndarray, np.ndarray]:
@@ -283,15 +352,20 @@ class TrackpadNavigator(QObject):
         self.view_box.scaleBy((1 / factor, 1 / factor), center)
 
 
+LINE_SYMBOL = QPainterPath(QPointF(-0.5, 0.0))  # a legend swatch for a line: a dash one size long
+LINE_SYMBOL.lineTo(QPointF(0.5, 0.0))
+
+
 class LegendSample(pg.ItemSample):
     """A legend swatch drawn from its own symbol, pen and brush, not a plot item's.
 
     With several ``sizes``, the symbol is drawn at each, small to large, as
     a key to marker size.  Clicks do nothing (pyqtgraph's samples hide
-    their item).
+    their item).  ``symbol`` is a pyqtgraph symbol name or a path, such as
+    ``LINE_SYMBOL`` for a line's swatch.
     """
 
-    def __init__(self, symbol: str, sizes: tuple[float, ...], pen=None, brush=None):
+    def __init__(self, symbol: str | QPainterPath, sizes: tuple[float, ...], pen=None, brush=None):
         super().__init__(None)
         self.symbol = symbol
         self.sizes = sizes
@@ -376,14 +450,18 @@ class SkyView(QWidget):
         self.view_box = self.plot.getViewBox()
         self.view_box.invertX(True)
         self.view_box.setMenuEnabled(False)
-        self.view_box.setLimits(xMin=-5, xMax=365, yMin=-92, yMax=92, minXRange=0.01, minYRange=0.01)
+        self.view_box.setLimits(xMin=-WRAP_DEG, xMax=360 + WRAP_DEG, yMin=-92, yMax=92,
+                                minXRange=0.01, minYRange=0.01)
         self.plot.setLabel("bottom", "RA")
         self.plot.setLabel("left", "Dec")
         self.plot.showGrid(x=True, y=True, alpha=0.15)
         self.plot.hideButtons()
 
         self.outline_labels: list[pg.TextItem] = []
+        self.line_items: list[pg.GraphicsObject] = []  # the ecliptic, the galactic plane and their labels
+        self.line_pens: dict[str, QPen] = {}
         self._add_outlines()
+        self._add_reference_lines()
         host_color = QColor(HOST_COLOR)
         host_color.setAlpha(HOST_ALPHA)
         self._brushes = {"host": pg.mkBrush(host_color), "null": pg.mkBrush(NULL_COLOR),
@@ -404,7 +482,7 @@ class SkyView(QWidget):
             item.setZValue(z)
             self.plot.addItem(item)
         self._labels: list[pg.TextItem] = []
-        self._host_sizes = np.empty(0)
+        self._host_sizes = np.empty(0)  # a size per marker drawn, copies (wrap_copies) included
         self._field_sizes = np.empty(0)
         self.marker_scale = 1.0
         self.legend = self._make_legend()
@@ -464,6 +542,7 @@ class SkyView(QWidget):
         self._field_timer.setSingleShot(True)
         self._field_timer.setInterval(FIELD_DEBOUNCE_MS)
         self._field_timer.timeout.connect(self._maybe_load_field)
+        self.view_box.sigRangeChanged.connect(lambda *_: self._wrap_view())
         self.view_box.sigRangeChanged.connect(lambda *_: self._field_timer.start())
         self.view_box.sigRangeChanged.connect(lambda *_: self._follow_aspect())
         self.view_box.sigRangeChanged.connect(lambda *_: self._update_marker_sizes())
@@ -481,25 +560,72 @@ class SkyView(QWidget):
     def _add_outlines(self) -> None:
         # Labels go outside: under the Kepler field, whose top edge is crowded
         # with well-known targets (Kepler-10), and over the CVZs (pi Men sits
-        # just under the southern one).
+        # just under the southern one).  The outlines are drawn over the host
+        # markers, which crowd the Kepler field.
         ra, dec = kepler_outline()
-        self._add_outline(ra, dec, "Kepler field", OUTLINE_COLORS["Kepler"], above=False)
+        _curve, texts = self._add_outline(ra, dec, "Kepler field", OUTLINE_COLORS["Kepler"], above=False)
+        self.outline_labels += texts
         for ra0, dec0 in ECLIPTIC_POLES:
             ra, dec = small_circle(ra0, dec0, CVZ_RADIUS_DEG)
-            self._add_outline(ra, dec, "TESS CVZ", OUTLINE_COLORS["TESS"])
+            _curve, texts = self._add_outline(ra, dec, "TESS CVZ", OUTLINE_COLORS["TESS"])
+            self.outline_labels += texts
+
+    def _add_reference_lines(self) -> None:
+        """The ecliptic and the galactic plane: faint lines under the stars, continued past 0h.
+
+        Their labels sit in open sky in the all-sky view, clear of the legend
+        (top right) and of where the two lines cross (6h and 18h): the
+        ecliptic's over it at 13h, the galactic plane's under its southernmost
+        point (12h51m).
+        """
+        for name, (ra, dec), above, label_ra in (("Ecliptic", ecliptic(), True, 195.0),
+                                                 ("Galactic plane", galactic_plane(), False, None)):
+            color = LINE_COLORS[name]
+            pen = self.line_pens[name] = pg.mkPen(color, width=1)
+            label_color = QColor(color)
+            label_color.setAlpha(LINE_LABEL_ALPHA)
+            curve, texts = self._add_outline(*wrap_curve(ra, dec), name, label_color, above=above,
+                                             pen=pen, z=LINE_Z, label_ra=label_ra)
+            self.line_items += [curve, *texts]
+
+    @property
+    def reference_lines_shown(self) -> bool:
+        """Whether the ecliptic and galactic plane are drawn."""
+        return self.line_items[0].isVisible()
+
+    def set_reference_lines(self, shown: bool) -> None:
+        """Show or hide the ecliptic and galactic plane (the right-click menu's toggle)."""
+        for item in self.line_items:
+            item.setVisible(shown)
 
     def _add_outline(self, ra: np.ndarray, dec: np.ndarray, label: str, color: QColor,
-                     above: bool = True) -> None:
-        """Draw an outline, labelled just outside its top (``above``) or bottom point."""
-        curve = pg.PlotCurveItem(ra, dec, pen=pg.mkPen(color, width=1.5, style=Qt.PenStyle.DashLine))
-        curve.setZValue(OUTLINE_Z)  # above the host markers, which crowd the Kepler field
+                     above: bool = True, pen: QPen | None = None, z: float = OUTLINE_Z,
+                     label_ra: float | None = None) -> tuple[pg.PlotCurveItem, list[pg.TextItem]]:
+        """Draw an outline, labelled just outside its top (``above``) or bottom point.
+
+        With ``label_ra``, the label goes over (``above``) or under the point
+        nearest that RA instead.  It goes at that point within [0, 360), and at
+        its copy a turn away when it is near 0h (``wrap_copies``).  Returns the
+        curve and labels.
+        """
+        if pen is None:
+            pen = pg.mkPen(color, width=1.5, style=Qt.PenStyle.DashLine)
+        curve = pg.PlotCurveItem(ra, dec, pen=pen)
+        curve.setZValue(z)
         self.plot.addItem(curve)
-        edge = int(np.argmax(dec) if above else np.argmin(dec))
-        text = pg.TextItem(label, color=color, anchor=(0.5, 1.1 if above else -0.1))
-        text.setPos(float(ra[edge]), float(dec[edge]))
-        text.setZValue(OUTLINE_Z)  # under the list's name labels
-        self.plot.addItem(text)
-        self.outline_labels.append(text)
+        inside = np.flatnonzero((ra >= 0.0) & (ra < 360.0))
+        if label_ra is not None:
+            edge = int(inside[np.argmin(np.abs(ra[inside] - label_ra))])
+        else:
+            edge = int(inside[np.argmax(dec[inside]) if above else np.argmin(dec[inside])])
+        texts = []
+        for text_ra in wrap_copies([ra[edge]])[1]:
+            text = pg.TextItem(label, color=color, anchor=(0.5, 1.1 if above else -0.1))
+            text.setPos(float(text_ra), float(dec[edge]))
+            text.setZValue(OUTLINE_Z)  # under the list's name labels
+            self.plot.addItem(text)
+            texts.append(text)
+        return curve, texts
 
     # -- legend --------------------------------------------------------------------
 
@@ -516,6 +642,10 @@ class SkyView(QWidget):
         legend.add_entry(LegendSample("o", (14,), pen=self.selected_item.opts["pen"]), "In list")
         legend.add_entry(LegendSample("s", (15,), pen=self.current_item.opts["pen"]), "Last clicked")
         legend.add_entry(LegendSample("o", (3, 6, 10), pen=edge, brush=host_color), "Size = brightness (Tmag)")
+        for name, pen in self.line_pens.items():
+            color = QColor(pen.color())
+            color.setAlpha(LINE_LABEL_ALPHA)  # a short faint line would hardly show
+            legend.add_entry(LegendSample(LINE_SYMBOL, (16,), pen=pg.mkPen(color, width=2)), name)
         return legend
 
     def _update_marker_sizes(self) -> None:
@@ -532,6 +662,19 @@ class SkyView(QWidget):
 
     # -- catalogs ------------------------------------------------------------------
 
+    def _set_stars(self, item: pg.ScatterPlotItem, stars: list, sizes: list[float],
+                   brushes: list | None = None) -> np.ndarray:
+        """Draw ``stars`` on ``item``, with copies near 0h; returns the size of each marker drawn."""
+        index, ra = wrap_copies([s.ra for s in stars])
+        sizes = np.asarray(sizes, dtype=float)[index] if len(index) else np.empty(0)
+        spots = [{"pos": (x, stars[i].dec), "size": size * self.marker_scale}
+                 for i, x, size in zip(index, ra, sizes)]
+        if brushes is not None:
+            for spot, i in zip(spots, index):
+                spot["brush"] = brushes[i]
+        item.setData(spots)
+        return sizes
+
     def load_hosts(self, refresh: bool = False) -> None:
         """Fetch the planet-host catalog in the background, then show it."""
         self._catalog_status = "Loading planet hosts from the NASA Exoplanet Archive…"
@@ -543,10 +686,9 @@ class SkyView(QWidget):
     def set_catalog(self, catalog: SkyCatalog) -> None:
         self.catalog = catalog
         self.hosts = list(catalog.stars)
-        self._host_sizes = np.array([_marker_size(s.tmag) for s in self.hosts])
-        self.host_item.setData([{"pos": (s.ra, s.dec), "size": size * self.marker_scale,
-                                 "brush": self._brushes["null" if s.kind == "null" else "host"]}
-                                for s, size in zip(self.hosts, self._host_sizes)])
+        self._host_sizes = self._set_stars(
+            self.host_item, self.hosts, [_marker_size(s.tmag) for s in self.hosts],
+            [self._brushes["null" if s.kind == "null" else "host"] for s in self.hosts])
         what = "bundled targets" if catalog.offline else "planet hosts"
         status = f"{len(self.hosts):,} {what}"
         if catalog.offline:
@@ -603,9 +745,8 @@ class SkyView(QWidget):
         host_tics = {s.tic for s in self.hosts if s.tic is not None}
         self.field = [s for s in stars if s.tic not in host_tics]
         self.field_region = region
-        self._field_sizes = np.array([_marker_size(s.tmag, 15.0, 3.0, 9.0) for s in self.field])
-        self.field_item.setData([{"pos": (s.ra, s.dec), "size": size * self.marker_scale}
-                                 for s, size in zip(self.field, self._field_sizes)])
+        self._field_sizes = self._set_stars(
+            self.field_item, self.field, [_marker_size(s.tmag, 15.0, 3.0, 9.0) for s in self.field])
         if region is None:
             self._field_status = ""
         else:
@@ -662,6 +803,22 @@ class SkyView(QWidget):
         ra = (x0 + x1) / 2
         self._set_view(aspect, (ra - width / 2, ra + width / 2), (y0, y1))
 
+    def _wrap_view(self) -> None:
+        """Move the view a turn in RA when its centre crosses 0h, so panning goes on round the sky.
+
+        Only views at most ``2 * WRAP_DEG`` wide move: those fit the copies
+        drawn near 0h (``wrap_copies``) on the far side too.  Wider views
+        stop ``WRAP_DEG`` past 0h, at the view's limits.  The sky image
+        moves with the view; TIC fields and picking measure RA modulo 360.
+        """
+        (x0, x1), _ = self.view_box.viewRange()
+        centre = (x0 + x1) / 2
+        if 0.0 <= centre < 360.0 or abs(x1 - x0) > 2 * WRAP_DEG:
+            return
+        turn = -360.0 if centre >= 360.0 else 360.0
+        self.background.shift_ra(turn)
+        self.view_box.translateBy(x=turn)
+
     def _set_view(self, aspect: float, x_range, y_range) -> None:
         """Lock ``aspect`` and show the ranges, without re-entering ``_follow_aspect``."""
         self._setting_view = True
@@ -706,6 +863,7 @@ class SkyView(QWidget):
 
     def _maybe_load_field(self) -> None:
         ra, dec, width, height = self.view_region()
+        ra %= 360.0  # _wrap_view keeps it so, but MAST wants it so for sure
         if min(width, height) > self.field_zoom_deg:  # a wide view's shorter side
             if self.field or self._pending_field:
                 self.clear_field()
@@ -796,44 +954,54 @@ class SkyView(QWidget):
         if star is self.hovered:
             return
         self.hovered = star
-        self.hover_item.setData([] if star is None else [{"pos": (star.ra, star.dec)}])
+        self.hover_item.setData([] if star is None else [{"pos": p} for p in wrapped_positions([star])])
 
     def context_menu(self, ra: float, dec: float) -> QMenu:
-        """The right-click menu for (ra, dec): for the star there, if any, else just Centre here."""
+        """The right-click menu for (ra, dec): for the star there, if any, else just Centre here.
+
+        Both end with the toggle for the ecliptic and galactic plane.
+        """
         menu = QMenu(self)
         menu.setObjectName("skyMenu")
         star = self.nearest_star(ra, dec)
         if star is None:
             menu.addAction("Centre here", lambda: self.center_on(ra % 360.0, dec))
-            return menu
-        if self.is_listed(star):
-            menu.addAction(f"Remove {star.name} from the list", lambda: self.starToggled.emit(star))
         else:
-            menu.addAction(f"Add {star.name} to the list", lambda: self.starToggled.emit(star))
-        menu.addAction("Centre here", lambda: self.center_on(star.ra, star.dec))
+            if self.is_listed(star):
+                menu.addAction(f"Remove {star.name} from the list", lambda: self.starToggled.emit(star))
+            else:
+                menu.addAction(f"Add {star.name} to the list", lambda: self.starToggled.emit(star))
+            menu.addAction("Centre here", lambda: self.center_on(star.ra, star.dec))
+            menu.addSeparator()
+            menu.addAction("Copy name", lambda: QApplication.clipboard().setText(star.name))
+            if star.tic is not None:
+                menu.addAction("Copy TIC ID", lambda: QApplication.clipboard().setText(f"TIC {star.tic}"))
         menu.addSeparator()
-        menu.addAction("Copy name", lambda: QApplication.clipboard().setText(star.name))
-        if star.tic is not None:
-            menu.addAction("Copy TIC ID", lambda: QApplication.clipboard().setText(f"TIC {star.tic}"))
+        lines = menu.addAction("Show ecliptic and galactic plane")
+        lines.setCheckable(True)
+        lines.setChecked(self.reference_lines_shown)
+        lines.toggled.connect(self.set_reference_lines)
         return menu
 
     def select_star(self, star: SkyStar) -> None:
         self.current = star
-        self.current_item.setData([{"pos": (star.ra, star.dec)}])
+        self.current_item.setData([{"pos": p} for p in wrapped_positions([star])])
         self.coord_label.setText(self._describe(star))
         self.starClicked.emit(star)
 
     def set_selected(self, targets: list[StarTarget]) -> None:
         """Mark the stars in the selection list (those with a position)."""
         self.selected = [t for t in targets if t.ra is not None and t.dec is not None]
-        self.selected_item.setData([{"pos": (t.ra, t.dec)} for t in self.selected])
+        self.selected_item.setData([{"pos": p} for p in wrapped_positions(self.selected)])
         for label in self._labels:
             self.plot.removeItem(label)
         self._labels = []
-        for target in self.selected:
+        index, ra = wrap_copies([t.ra % 360.0 for t in self.selected])
+        for i, x in zip(index, ra):
+            target = self.selected[i]
             label = pg.TextItem(target.name, color=SELECTED_COLOR, anchor=(-0.15, 0.5),
                                 fill=pg.mkBrush(11, 16, 32, 210))
-            label.setPos(target.ra, target.dec)
+            label.setPos(float(x), target.dec)
             label.setZValue(SELECTION_LABEL_Z)
             self.plot.addItem(label)
             self._labels.append(label)

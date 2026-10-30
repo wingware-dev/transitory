@@ -63,6 +63,20 @@ def image_array(data: bytes) -> np.ndarray:
     return np.ascontiguousarray(rgb[::-1, ::-1])
 
 
+def shifted(request: tuple, turn: float) -> tuple:
+    """``request`` with its RA range moved by ``turn`` degrees."""
+    survey, (ra0, ra1), dec_range, width, height = request
+    return survey, (round(ra0 + turn, 5), round(ra1 + turn, 5)), dec_range, width, height
+
+
+def same_sky(a: tuple, b: tuple) -> bool:
+    """Whether two requests ask for the same image, their RA ranges perhaps whole turns apart."""
+    if a[0] != b[0] or a[2:] != b[2:]:
+        return False
+    turns = round((b[1][0] - a[1][0]) / 360.0)
+    return all(abs(x + 360.0 * turns - y) < 1e-4 for x, y in zip(a[1], b[1]))
+
+
 class SkyBackground(QObject):
     """Loads and shows the survey image under ``plot``'s view.
 
@@ -206,7 +220,7 @@ class SkyBackground(QObject):
         transport, cache, offline = self.transport, self.cache, self.offline
 
         def fetch():
-            if request != self._pending:
+            if not self._is_pending(request):
                 return None  # the view moved on before this job's turn
             wcs = hips.view_wcs(request[1], request[2], request[3], request[4])
             data = hips.fetch_cutout(survey, wcs, transport=transport, cache=cache, offline=offline)
@@ -215,14 +229,18 @@ class SkyBackground(QObject):
         self.runner.submit(fetch, lambda image: self._done(request, image),
                            lambda exc: self._failed(request, exc))
 
+    def _is_pending(self, request: tuple) -> bool:
+        """Whether ``request`` is the load under way, perhaps since moved a whole turn (``shift_ra``)."""
+        return self._pending is not None and same_sky(request, self._pending)
+
     def _done(self, request: tuple, image: np.ndarray | None) -> None:
-        if request != self._pending or image is None:
+        if not self._is_pending(request) or image is None:
             return  # the view moved on; a newer request is coming
-        self._pending = None
+        request, self._pending = self._pending, None
         self.show_image(request, image)
 
     def _failed(self, request: tuple, exc: Exception) -> None:
-        if request != self._pending:
+        if not self._is_pending(request):
             return
         self._pending = None
         if not isinstance(exc, CatalogError):
@@ -238,6 +256,19 @@ class SkyBackground(QObject):
         self.shown = request
         self._set_status("")
         self.loaded.emit(request)
+
+    def shift_ra(self, turn: float) -> None:
+        """Move the image shown and the load under way by ``turn`` (a whole turn, +-360) in RA.
+
+        The sky view does this as it moves its view a turn to pan across 0h,
+        so the image stays under the same stars and nothing reloads.
+        """
+        if self._pending is not None:
+            self._pending = shifted(self._pending, turn)
+        if self.shown is not None:
+            self.shown = shifted(self.shown, turn)
+            (ra0, ra1), (dec0, dec1) = self.shown[1], self.shown[2]
+            self.item.setRect(QRectF(ra0, dec0, ra1 - ra0, dec1 - dec0))
 
     def _set_status(self, text: str) -> None:
         if text != self.status:
