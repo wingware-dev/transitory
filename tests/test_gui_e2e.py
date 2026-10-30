@@ -325,6 +325,31 @@ def test_analysis_cancelled_from_progress_is_not_an_error(qtbot):
     assert cancelled == ["X"]
 
 
+class _RunCountingSource(SyntheticSource):
+    def __init__(self):
+        super().__init__()
+        self.runs = 0
+
+    def new_run(self):
+        self.runs += 1
+
+
+def test_a_run_starts_afresh_only_when_the_runner_is_idle(qtbot):
+    started = threading.Event()
+    source = _RunCountingSource()
+    runner = AnalysisRunner(source, max_workers=1, analyzer=_slow_analyzer(started))
+    runner.submit([StarTarget(name="A")])
+    assert started.wait(5)
+    runner.submit([StarTarget(name="B")])  # joins the busy run
+    assert source.runs == 1
+    with qtbot.waitSignal(runner.idle, timeout=5000):
+        runner.cancel()
+    with qtbot.waitSignal(runner.idle, timeout=10000):
+        runner.submit([StarTarget(name="C")])
+        runner.cancel()
+    assert source.runs == 2
+
+
 def test_closing_window_cancels_running_analyses(qtbot):
     started = threading.Event()
     window = MainWindow(SyntheticSource())

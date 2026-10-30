@@ -430,6 +430,70 @@ def test_timed_out_star_is_a_per_star_error_in_the_analysis(fake_lk):
         "This is not a lack of data for the star: try again later.")
 
 
+def test_after_mast_is_found_down_other_stars_fail_at_once(fake_lk):
+    fake_lk.search_errors = [_read_timeout(), _read_timeout()]
+    source = MastSource()
+    with pytest.raises(SourceError, match="MAST is down"):
+        source.fetch(StarTarget("A", tic=5, mission_hint="TESS"))
+    with pytest.raises(SourceError, match=r"^MAST is down or cannot be reached from this network: MAST "
+                                          r"was not asked for 'TIC 6', as an earlier search in this run "
+                                          r"found it unusable\. This is not a lack of data"):
+        source.fetch(StarTarget("B", tic=6, mission_hint="TESS"))
+    assert len(fake_lk.searches) == 2  # A's two tries; B never searched
+    assert CacheIndex().keys() == []
+
+
+def test_cached_stars_still_load_while_mast_is_down(fake_lk):
+    tess_setup(fake_lk)
+    source = MastSource()
+    target = StarTarget("Pi Men", tic=261136679, mission_hint="TESS")
+    source.fetch(target)
+    fake_lk.search_errors = [_read_timeout(), _read_timeout()]
+    with pytest.raises(SourceError):
+        source.fetch(StarTarget("A", tic=5, mission_hint="TESS"))
+    assert source.fetch(target).sectors_or_quarters == [14, 15, 16]
+
+
+def test_a_new_run_or_the_hold_running_out_asks_mast_again(fake_lk, monkeypatch):
+    source = MastSource()
+    fake_lk.search_errors = [_read_timeout(), _read_timeout()]
+    with pytest.raises(SourceError):
+        source.fetch(StarTarget("A", tic=5, mission_hint="TESS"))
+    source.new_run()
+    with pytest.raises(SourceError, match="No light curves"):
+        source.fetch(StarTarget("B", tic=6, mission_hint="TESS"))
+    assert len(fake_lk.searches) == 3
+
+    fake_lk.search_errors = [_read_timeout(), _read_timeout()]
+    with pytest.raises(SourceError):
+        source.fetch(StarTarget("C", tic=7, mission_hint="TESS"))
+    monkeypatch.setattr(fetch, "MAST_OUTAGE_HOLD_SECONDS", 0.0)
+    with pytest.raises(SourceError, match="No light curves"):
+        source.fetch(StarTarget("D", tic=8, mission_hint="TESS"))
+    assert len(fake_lk.searches) == 6
+
+
+@pytest.mark.parametrize("error", [ValueError("bad table"), SearchError("Could not resolve x")])
+def test_errors_about_one_star_do_not_stop_the_others(fake_lk, error):
+    fake_lk.search_errors = [error]
+    source = MastSource()
+    with pytest.raises(SourceError):
+        source.fetch(StarTarget("A", tic=5, mission_hint="TESS"))
+    with pytest.raises(SourceError, match="No light curves"):
+        source.fetch(StarTarget("B", tic=6, mission_hint="TESS"))
+    assert len(fake_lk.searches) == 2
+
+
+def test_rate_limit_also_holds_off_other_stars(fake_lk):
+    fake_lk.search_errors = [_http_error(429)]
+    source = MastSource()
+    with pytest.raises(SourceError):
+        source.fetch(StarTarget("A", tic=5, mission_hint="TESS"))
+    with pytest.raises(SourceError, match=r"^MAST is limiting requests .* was not asked for 'TIC 6'"):
+        source.fetch(StarTarget("B", tic=6, mission_hint="TESS"))
+    assert len(fake_lk.searches) == 1
+
+
 def test_server_errors_are_tried_once_more(fake_lk):
     tess_setup(fake_lk)
     reply = requests.Response()

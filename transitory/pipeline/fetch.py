@@ -22,7 +22,10 @@ with no timeout, so each one here gets ``MAST_TIMEOUT_SECONDS``, and a search
 or download that times out or cannot connect is tried once more after
 ``MAST_RETRY_BACKOFF_SECONDS`` before the star fails with a ``SourceError``.
 A search MAST keeps answering "still executing" is given up after
-``MAST_PORTAL_TIMEOUT_SECONDS`` in all, without another try.
+``MAST_PORTAL_TIMEOUT_SECONDS`` in all, without another try.  Once a search
+has found MAST down like this, stars that would need MAST fail at once with
+the same message for the rest of the run, rather than waiting minutes each;
+stars already in the cache are unaffected.
 """
 
 from __future__ import annotations
@@ -109,6 +112,9 @@ MAST_TIMEOUT_SECONDS = 120.0
 MAST_PORTAL_TIMEOUT_SECONDS = 180.0
 # A failed search or download is tried once more after this pause.
 MAST_RETRY_BACKOFF_SECONDS = 10.0
+# After a search finds MAST down, other stars fail at once without asking it,
+# until the next run starts (``MastSource.new_run``) or this many seconds pass.
+MAST_OUTAGE_HOLD_SECONDS = 600.0
 
 
 def _lightkurve():
@@ -237,19 +243,29 @@ def _with_retry(what: str, call, on_retry=None):
 _NOT_MISSING_DATA = "This is not a lack of data for the star: try again later."
 
 
-def _failure(what: str, exc: Exception) -> SourceError:
+def _outage(exc: Exception) -> str | None:
+    """What ``exc`` says about MAST as a whole, when it says MAST is unusable for now."""
     status = _http_status(exc)
     if status == 429:
-        return SourceError(f"MAST is limiting requests from this machine (HTTP 429): {what} was "
-                           f"refused. {_NOT_MISSING_DATA} ({exc})")
+        return "MAST is limiting requests from this machine (HTTP 429)"
     if _is_transient(exc):
-        problem = f"MAST is having problems (HTTP {status})" if status else \
+        return f"MAST is having problems (HTTP {status})" if status else \
             "MAST is down or cannot be reached from this network"
-        return SourceError(f"{problem}: {what} timed out or could not connect (tried twice). "
-                           f"{_NOT_MISSING_DATA} ({exc})")
     if isinstance(exc, TimeoutError):
-        return SourceError(f"MAST is overloaded or down: {what} timed out. "
-                           f"{_NOT_MISSING_DATA} ({exc})")
+        return "MAST is overloaded or down"
+    return None
+
+
+def _failure(what: str, exc: Exception) -> SourceError:
+    problem = _outage(exc)
+    if problem is not None:
+        if _http_status(exc) == 429:
+            happened = "was refused"
+        elif _is_transient(exc):
+            happened = "timed out or could not connect (tried twice)"
+        else:
+            happened = "timed out"
+        return SourceError(f"{problem}: {what} {happened}. {_NOT_MISSING_DATA} ({exc})")
     if type(exc).__name__ == "RemoteServiceError":
         # astroquery's: MAST answered that the search failed on its side.
         return SourceError(f"MAST reported an error on its side: {what} failed. "
@@ -397,6 +413,24 @@ class MastSource:
     def __init__(self, index: CacheIndex | None = None, max_products: int | None = None):
         self._index = index
         self.max_products = max_products
+        # (time.monotonic(), message) of the search that found MAST down this run.
+        self._outage: tuple[float, str] | None = None
+
+    def new_run(self) -> None:
+        """A new batch of stars starts: ask MAST again even if it was down."""
+        self._outage = None
+
+    def _check_outage(self, query: str) -> None:
+        """Fail at once, without asking MAST, if a search this run found it down."""
+        outage = self._outage
+        if outage is None:
+            return
+        when, message = outage
+        if time.monotonic() - when > MAST_OUTAGE_HOLD_SECONDS:
+            self._outage = None
+            return
+        raise SourceError(f"{message}: MAST was not asked for {query!r}, as an earlier search "
+                          f"in this run found it unusable. {_NOT_MISSING_DATA}")
 
     @property
     def index(self) -> CacheIndex:
@@ -460,6 +494,9 @@ class MastSource:
         lk = _lightkurve()
         download_dir = str(cache_dir())
         with _network_lock:
+            # Checked once the lock is ours: stars queued behind the search that
+            # found MAST down fail as soon as it does.
+            self._check_outage(query)
             _ensure_user_agent()
             _ensure_timeouts()
             progress(f"Searching MAST for {mission} light curves of {query}", 0.0)
@@ -481,6 +518,9 @@ class MastSource:
                     log.info("MAST could not resolve %r: %s", query, exc)
                     return []
                 log.exception("MAST search for %r (%s) failed", query, mission)
+                problem = _outage(exc)
+                if problem is not None:
+                    self._outage = (time.monotonic(), problem)
                 raise _failure(f"MAST search for {query!r}", exc) from exc
 
             rows = select_products(sr.table, mission)

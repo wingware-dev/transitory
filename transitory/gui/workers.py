@@ -122,6 +122,9 @@ class AnalysisRunner(QObject):
         """Queue ``targets``; stars already queued or running are skipped.  Returns those queued."""
         if self.source is None:
             raise RuntimeError("no data source: start with --demo, or install the MAST dependencies")
+        new_run = getattr(self.source, "new_run", None)
+        if not self.busy and new_run is not None:
+            new_run()  # stars added to a busy run join it; an idle runner starts afresh
         pending = set(self.pending_names())
         queued = []
         for target in targets:
