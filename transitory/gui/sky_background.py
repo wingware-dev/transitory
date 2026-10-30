@@ -3,6 +3,7 @@
 Zoomed in so the view's shorter side is under ``BACKGROUND_ZOOM_DEG``, a
 cutout of the chosen survey (DSS2, 2MASS or PanSTARRS colour) is fetched
 from CDS hips2fits in a worker thread and drawn under everything else.
+Closing the view never waits for a fetch under way (``stop``).
 The sky view plots plain RA/Dec, and :func:`~transitory.catalog.hips.view_wcs`
 asks for a CAR image that is linear in RA and Dec, so the image only needs
 placing over its RA/Dec rectangle.
@@ -25,7 +26,7 @@ from PySide6.QtGui import QImage
 
 from ..catalog import hips
 from ..catalog.client import CatalogError
-from .catalog_jobs import JobRunner
+from .catalog_jobs import DetachedJobRunner
 
 log = logging.getLogger(__name__)
 
@@ -88,7 +89,7 @@ class SkyBackground(QObject):
         self.shown: tuple | None = None  # the request whose image is on screen
         self._pending: tuple | None = None
         self.status = ""
-        self.runner = JobRunner(self)
+        self.runner = DetachedJobRunner(self, name="sky-image")  # closing never waits for it
 
         self.item = pg.ImageItem(axisOrder="row-major")
         self.item.setZValue(BACKGROUND_Z)
@@ -244,7 +245,11 @@ class SkyBackground(QObject):
             self.statusChanged.emit(text)
 
     def stop(self) -> None:
-        """Stop loading, for the view's close: waits for a job under way."""
+        """Stop loading, for the view's close, without waiting for a fetch under way.
+
+        A stalled hips2fits request may take two 60 s timeouts; it runs on,
+        detached, and its reply is dropped (``_pending`` no longer matches).
+        """
         self.timer.stop()
         self._pending = None
-        self.runner.wait()
+        self.runner.discard()

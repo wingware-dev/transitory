@@ -5,6 +5,8 @@ Catalog data are the recorded MAST / Exoplanet Archive responses; no network.
 
 import json
 import re
+import threading
+import time
 
 import numpy as np
 import pytest
@@ -546,6 +548,64 @@ def test_sky_image_failure_is_shown(image_sky, qtbot):
     qtbot.waitUntil(lambda: "sky image unavailable" in image_sky.status_text, timeout=10000)
     assert "hips2fits is down" in image_sky.status_text
     assert not image_sky.background.item.isVisible()
+
+
+class StalledHipsTransport(RecordedHipsTransport):
+    """Answers with the recorded cutout, but only once ``release`` is set; ``started`` and
+    ``returned`` say how far the request has got."""
+
+    def __init__(self):
+        super().__init__()
+        self.started = threading.Event()
+        self.release = threading.Event()
+        self.returned = threading.Event()
+
+    def __call__(self, url, params):
+        self.started.set()
+        self.release.wait(30)
+        try:
+            return super().__call__(url, params)
+        finally:
+            self.returned.set()
+
+
+def test_closing_never_waits_for_a_stalled_sky_image(image_sky, qtbot):
+    stalled = StalledHipsTransport()
+    image_sky.background.transport = stalled
+    try:
+        image_sky.center_on(285.68, 50.24, 1.0)
+        qtbot.waitUntil(stalled.started.is_set, timeout=10000)
+        start = time.monotonic()
+        image_sky.close()
+        assert time.monotonic() - start < 1.0
+        stalled.release.set()  # the late reply is dropped: the view was closed
+        assert stalled.returned.wait(10)
+        qtbot.waitUntil(lambda: not image_sky.background.runner.busy, timeout=10000)
+        assert not image_sky.background.item.isVisible()
+    finally:
+        stalled.release.set()
+
+
+def test_a_sky_image_arriving_after_the_view_is_deleted_is_dropped(qtbot, tmp_path, caplog):
+    stalled = StalledHipsTransport()
+    view = SkyView(client=recorded_client(tmp_path / "catalog"), field_zoom_deg=0.0,
+                   hips_transport=stalled, hips_cache=CutoutCache(tmp_path / "hips"))
+    view.resize(600, 400)
+    view.show()
+    runner = view.background.runner
+    try:
+        view.center_on(285.68, 50.24, 1.0)
+        qtbot.waitUntil(stalled.started.is_set, timeout=10000)
+        view.close()
+        view.deleteLater()
+        QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        caplog.set_level("DEBUG", logger="transitory.gui.catalog_jobs")
+        stalled.release.set()
+        assert stalled.returned.wait(10) and runner.wait(10000)
+    finally:
+        stalled.release.set()
+    QApplication.processEvents()
+    assert "result dropped, its runner is gone" in caplog.text
 
 
 def test_stale_sky_images_are_dropped(sky):
