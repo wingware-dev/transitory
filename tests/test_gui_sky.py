@@ -288,6 +288,107 @@ def test_center_on_fits_the_square_in_the_shorter_side(sky):
         assert (width > height) == (size[0] > size[1])
 
 
+# -- legend, marker sizes and labels ------------------------------------------------------
+
+def test_legend_lists_every_marker_kind(sky):
+    entries = dict(sky.legend.entries)
+    assert list(entries) == ["Planet host", "No known planets", "TIC field star", "In list",
+                             "Last clicked", "Size = brightness (Tmag)"]
+    # Each swatch is drawn as its markers are.
+    assert entries["Planet host"].brush.color() == sky._brushes["host"].color()
+    assert entries["No known planets"].brush.color() == sky._brushes["null"].color()
+    assert entries["TIC field star"].brush.color() == sky._brushes["field"].color()
+    assert entries["In list"].pen.color() == sky.selected_item.opts["pen"].color()
+    assert entries["In list"].symbol == sky.selected_item.opts["symbol"]
+    assert entries["Last clicked"].pen.color() == sky.current_item.opts["pen"].color()
+    assert entries["Last clicked"].symbol == sky.current_item.opts["symbol"]
+    assert len(entries["Size = brightness (Tmag)"].sizes) > 1
+
+
+def _widget_rect(view: SkyView, scene_rect):
+    """A scene rectangle in ``view``'s own pixel coordinates."""
+    rect = view.plot.mapFromScene(scene_rect).boundingRect()
+    return rect.translated(view.plot.viewport().mapTo(view, rect.topLeft()) - rect.topLeft())
+
+
+def _has_color(image, rect, color, tolerance=40) -> bool:
+    for x in range(rect.left(), rect.right()):
+        for y in range(rect.top(), rect.bottom()):
+            c = image.pixelColor(x, y)
+            if (abs(c.red() - color.red()) + abs(c.green() - color.green())
+                    + abs(c.blue() - color.blue())) <= tolerance:
+                return True
+    return False
+
+
+@pytest.mark.parametrize("size", [(900, 600), (420, 800)])
+def test_legend_is_drawn_inside_the_plot_clear_of_axes_and_reset(sky, hosts, size):
+    sky.resize(*size)
+    sky.set_catalog(hosts)
+    QApplication.processEvents()
+    legend = sky.legend.sceneBoundingRect()
+    assert sky.view_box.sceneBoundingRect().contains(legend)  # so off the axes
+    rect = _widget_rect(sky, legend)
+    assert not rect.intersects(sky.reset_button.geometry())
+    image = sky.grab().toImage()
+    for color in (sky_view.SELECTED_COLOR, sky_view.CURRENT_COLOR, sky_view.NULL_COLOR):
+        assert _has_color(image, rect, color), color.name()
+
+
+def test_click_on_the_legend_selects_nothing(sky, qtbot):
+    sky.center_on(0.0, 0.0, 1.0)
+    QApplication.processEvents()
+    legend = sky.legend.sceneBoundingRect()
+    point = sky.view_box.mapSceneToView(legend.center())
+    sky.set_catalog(SkyCatalog(stars=[SkyStar(name="Under", ra=point.x(), dec=point.y())]))
+    with qtbot.assertNotEmitted(sky.starClicked):
+        qtbot.mouseClick(sky.plot.viewport(), Qt.MouseButton.LeftButton,
+                         pos=sky.plot.mapFromScene(legend.center()))
+    assert sky.current is None
+
+
+@pytest.mark.parametrize("deg_per_px, scale", [
+    (0.001, 1.0), (0.02, 1.0), (0.05, 0.7), (0.25, 0.5), (5.0, 0.5), (0.0, 1.0)])
+def test_marker_scale(deg_per_px, scale):
+    assert sky_view.marker_scale(deg_per_px) == pytest.approx(scale)
+
+
+def test_markers_shrink_as_the_view_widens(sky, hosts):
+    sky.set_catalog(hosts)
+    sky.show_all_sky()
+    QApplication.processEvents()
+    assert sky.marker_scale == sky_view.MIN_MARKER_SCALE
+    all_sky = np.array(sky.host_item.data["size"])
+    np.testing.assert_allclose(all_sky, sky._host_sizes * sky_view.MIN_MARKER_SCALE)
+    kepler10 = star_named(sky, "Kepler-10")
+    sky.center_on(kepler10.ra, kepler10.dec, 5.0)
+    QApplication.processEvents()
+    assert sky.marker_scale == 1.0
+    np.testing.assert_allclose(sky.host_item.data["size"], sky._host_sizes)
+    # Field stars loaded while zoomed in take the scale too.
+    sky.set_field([SkyStar(name="F", ra=kepler10.ra, dec=kepler10.dec + 0.1, tmag=10.0)])
+    np.testing.assert_allclose(sky.field_item.data["size"], sky._field_sizes)
+
+
+def test_host_markers_are_translucent(sky):
+    assert 0 < sky._brushes["host"].color().alpha() < 255
+    assert sky._brushes["null"].color().alpha() == 255
+
+
+def test_outline_labels_sit_outside_their_outlines_under_the_list_labels(sky):
+    sky.set_selected([StarTarget(name="Kepler-10", ra=285.679, dec=50.241)])
+    assert [t.toPlainText() for t in sky.outline_labels] == ["Kepler field", "TESS CVZ", "TESS CVZ"]
+    for text in sky.outline_labels:
+        assert text.zValue() < sky._labels[0].zValue()
+    kepler = sky.outline_labels[0]
+    _, dec = sky_view.kepler_outline()
+    assert kepler.pos().y() == pytest.approx(dec.min())  # under the field, away from Kepler-10
+    assert kepler.anchor.y() < 0  # hung below that point
+    for text, (ra0, dec0) in zip(sky.outline_labels[1:], ECLIPTIC_POLES):
+        assert text.pos().y() == pytest.approx(dec0 + CVZ_RADIUS_DEG, abs=0.01)
+        assert text.anchor.y() > 1
+
+
 # -- deep zoom ----------------------------------------------------------------------------
 
 def _cone_body() -> str:

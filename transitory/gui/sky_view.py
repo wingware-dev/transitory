@@ -7,7 +7,13 @@ home view: all sky, or what ``set_home`` chose.  A
 click selects the nearest star (within a few pixels), highlights it and
 emits ``starClicked``.  Zoomed in below ``FIELD_ZOOM_DEG``, TIC stars in
 view are loaded from MAST in a worker thread.  The Kepler field (approx.)
-and the TESS continuous viewing zones are outlined.
+and the TESS continuous viewing zones are outlined, and labelled outside
+the outlines, under the list's name labels.
+
+A legend in the plot's top-right corner keys the markers.  Marker size
+follows brightness (Tmag), scaled down as the view widens past about 10
+degrees so the all-sky map doesn't clot; host markers are translucent, so
+the Kepler field shows its CCD modules.
 
 Positions are plotted as plain RA/Dec degrees, with the aspect locked so a
 degree of RA is cos(Dec) as wide as a degree of Dec at the view's centre:
@@ -28,7 +34,7 @@ import math
 
 import numpy as np
 import pyqtgraph as pg
-from PySide6.QtCore import QEvent, QObject, QPointF, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QObject, QPointF, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QKeySequence, QShortcut, QTextLayout
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QToolButton, QVBoxLayout, QWidget
 
@@ -58,11 +64,23 @@ ECLIPTIC_POLES = ((270.0, 66.5607), (90.0, -66.5607))
 CVZ_RADIUS_DEG = 12.0
 
 HOST_COLOR = QColor(255, 170, 60)
+HOST_ALPHA = 175  # translucent, so crowded fields (Kepler's CCD modules) keep their shape
 NULL_COLOR = QColor(110, 170, 255)
 FIELD_COLOR = QColor(170, 170, 170)
 SELECTED_COLOR = QColor(255, 70, 70)
 CURRENT_COLOR = QColor(255, 255, 90)
 OUTLINE_COLORS = {"Kepler": QColor(120, 200, 255), "TESS": QColor(150, 230, 150)}
+
+# Markers are drawn at full size up to FULL_SIZE_DEG_PER_PX (true degrees per
+# pixel, about 10 deg across a 500 px view) and shrink as the view widens.
+FULL_SIZE_DEG_PER_PX = 0.02
+MIN_MARKER_SCALE = 0.5
+MARKER_SCALE_STEP = 0.05  # sizes change in steps, so panning never resizes them
+
+# z order: field stars, hosts, outlines and their labels, list rings, the
+# last-clicked square, then the list's name labels, which nothing covers.
+OUTLINE_Z = 2.5
+SELECTION_LABEL_Z = 5
 
 
 # -- sky geometry ----------------------------------------------------------------
@@ -119,6 +137,19 @@ def separation_deg(ra1, dec1, ra2, dec2):
 
 def _marker_size(tmag: float | None, brightest: float = 17.0, low: float = 4.0, high: float = 13.0) -> float:
     return 6.0 if tmag is None else float(np.clip(brightest - tmag, low, high))
+
+
+def marker_scale(deg_per_px: float) -> float:
+    """How much to shrink star markers at ``deg_per_px`` (true degrees per screen pixel).
+
+    1 when zoomed in, falling to ``MIN_MARKER_SCALE`` all-sky, in steps of
+    ``MARKER_SCALE_STEP``.
+    """
+    if not deg_per_px > 0:
+        return 1.0
+    scale = min(1.0, (FULL_SIZE_DEG_PER_PX / deg_per_px) ** 0.4)
+    scale = round(scale / MARKER_SCALE_STEP) * MARKER_SCALE_STEP
+    return max(MIN_MARKER_SCALE, scale)
 
 
 # -- the widget --------------------------------------------------------------------
@@ -234,6 +265,65 @@ class TrackpadNavigator(QObject):
         self.view_box.scaleBy((1 / factor, 1 / factor), center)
 
 
+class LegendSample(pg.ItemSample):
+    """A legend swatch drawn from its own symbol, pen and brush, not a plot item's.
+
+    With several ``sizes``, the symbol is drawn at each, small to large, as
+    a key to marker size.  Clicks do nothing (pyqtgraph's samples hide
+    their item).
+    """
+
+    def __init__(self, symbol: str, sizes: tuple[float, ...], pen=None, brush=None):
+        super().__init__(None)
+        self.symbol = symbol
+        self.sizes = sizes
+        self.pen = pg.mkPen(pen) if pen is not None else pg.mkPen(None)
+        self.brush = pg.mkBrush(brush) if brush is not None else pg.mkBrush(None)
+        self._width = 20 if len(sizes) == 1 else 34
+        self.setFixedWidth(self._width)
+
+    def boundingRect(self):
+        return QRectF(0, 0, self._width, 20)
+
+    def paint(self, p, *args):
+        p.setRenderHint(p.RenderHint.Antialiasing)
+        step = self._width / len(self.sizes)
+        for i, size in enumerate(self.sizes):
+            p.save()
+            p.translate(step * (i + 0.5), 10)
+            pg.graphicsItems.ScatterPlotItem.drawSymbol(p, self.symbol, size, self.pen, self.brush)
+            p.restore()
+
+    def mouseClickEvent(self, event):
+        event.ignore()
+
+
+class SkyLegend(pg.LegendItem):
+    """The key to the sky's markers, fixed in a corner of the plot.
+
+    Unlike pyqtgraph's legend it can't be dragged: drags on it pan the sky.
+    """
+
+    def __init__(self):
+        super().__init__(offset=(-8, 8), brush=pg.mkBrush(11, 16, 32, 215),
+                         pen=pg.mkPen(255, 255, 255, 60), labelTextColor=(220, 225, 235),
+                         labelTextSize="8pt", verSpacing=-6)
+        self.entries: list[tuple[str, LegendSample]] = []
+
+    def add_entry(self, sample: LegendSample, text: str) -> None:
+        self.addItem(sample, text)
+        self.entries.append((text, sample))
+
+    def hoverEvent(self, ev):
+        pass
+
+    def mouseDragEvent(self, ev):
+        ev.ignore()
+
+    def mouseDoubleClickEvent(self, ev):
+        ev.ignore()
+
+
 class SkyView(QWidget):
     starClicked = Signal(object)  # SkyStar
     catalogLoaded = Signal(object)  # SkyCatalog
@@ -271,9 +361,14 @@ class SkyView(QWidget):
         self.plot.showGrid(x=True, y=True, alpha=0.15)
         self.plot.hideButtons()
 
+        self.outline_labels: list[pg.TextItem] = []
         self._add_outlines()
-        self.host_item = pg.ScatterPlotItem(pen=None, brush=pg.mkBrush(HOST_COLOR), size=6)
-        self.field_item = pg.ScatterPlotItem(pen=None, brush=pg.mkBrush(FIELD_COLOR), size=4)
+        host_color = QColor(HOST_COLOR)
+        host_color.setAlpha(HOST_ALPHA)
+        self._brushes = {"host": pg.mkBrush(host_color), "null": pg.mkBrush(NULL_COLOR),
+                         "field": pg.mkBrush(FIELD_COLOR)}
+        self.host_item = pg.ScatterPlotItem(pen=None, brush=self._brushes["host"], size=6)
+        self.field_item = pg.ScatterPlotItem(pen=None, brush=self._brushes["field"], size=4)
         self.selected_item = pg.ScatterPlotItem(pen=pg.mkPen(SELECTED_COLOR, width=2), brush=None,
                                                 size=18, symbol="o")
         self.current_item = pg.ScatterPlotItem(pen=pg.mkPen(CURRENT_COLOR, width=2), brush=None,
@@ -283,6 +378,10 @@ class SkyView(QWidget):
             item.setZValue(z)
             self.plot.addItem(item)
         self._labels: list[pg.TextItem] = []
+        self._host_sizes = np.empty(0)
+        self._field_sizes = np.empty(0)
+        self.marker_scale = 1.0
+        self.legend = self._make_legend()
 
         self.view_box.setMouseEnabled(x=True, y=True)
         self.trackpad = TrackpadNavigator(self.plot)
@@ -314,6 +413,8 @@ class SkyView(QWidget):
         self._field_timer.timeout.connect(self._maybe_load_field)
         self.view_box.sigRangeChanged.connect(lambda *_: self._field_timer.start())
         self.view_box.sigRangeChanged.connect(lambda *_: self._follow_aspect())
+        self.view_box.sigRangeChanged.connect(lambda *_: self._update_marker_sizes())
+        self.view_box.sigResized.connect(lambda *_: self._update_marker_sizes())
         self.plot.scene().sigMouseClicked.connect(self._on_mouse_clicked)
         self.plot.scene().sigMouseMoved.connect(self._on_mouse_moved)
 
@@ -323,21 +424,55 @@ class SkyView(QWidget):
     # -- outlines ----------------------------------------------------------------
 
     def _add_outlines(self) -> None:
+        # Labels go outside: under the Kepler field, whose top edge is crowded
+        # with well-known targets (Kepler-10), and over the CVZs (pi Men sits
+        # just under the southern one).
         ra, dec = kepler_outline()
-        self._add_outline(ra, dec, "Kepler field", OUTLINE_COLORS["Kepler"])
+        self._add_outline(ra, dec, "Kepler field", OUTLINE_COLORS["Kepler"], above=False)
         for ra0, dec0 in ECLIPTIC_POLES:
             ra, dec = small_circle(ra0, dec0, CVZ_RADIUS_DEG)
             self._add_outline(ra, dec, "TESS CVZ", OUTLINE_COLORS["TESS"])
 
-    def _add_outline(self, ra: np.ndarray, dec: np.ndarray, label: str, color: QColor) -> None:
+    def _add_outline(self, ra: np.ndarray, dec: np.ndarray, label: str, color: QColor,
+                     above: bool = True) -> None:
+        """Draw an outline, labelled just outside its top (``above``) or bottom point."""
         curve = pg.PlotCurveItem(ra, dec, pen=pg.mkPen(color, width=1.5, style=Qt.PenStyle.DashLine))
-        curve.setZValue(2.5)  # above the host markers, which crowd the Kepler field
+        curve.setZValue(OUTLINE_Z)  # above the host markers, which crowd the Kepler field
         self.plot.addItem(curve)
-        top = int(np.argmax(dec))
-        text = pg.TextItem(label, color=color, anchor=(0.5, 1.2))
-        text.setPos(float(ra[top]), float(dec[top]))
-        text.setZValue(2.5)
+        edge = int(np.argmax(dec) if above else np.argmin(dec))
+        text = pg.TextItem(label, color=color, anchor=(0.5, 1.1 if above else -0.1))
+        text.setPos(float(ra[edge]), float(dec[edge]))
+        text.setZValue(OUTLINE_Z)  # under the list's name labels
         self.plot.addItem(text)
+        self.outline_labels.append(text)
+
+    # -- legend --------------------------------------------------------------------
+
+    def _make_legend(self) -> SkyLegend:
+        """The key to every kind of marker, in the plot's top-right corner (inside the axes)."""
+        legend = SkyLegend()
+        legend.setParentItem(self.view_box)
+        legend.setZValue(10)
+        host_color = self._brushes["host"].color()
+        legend.add_entry(LegendSample("o", (8,), brush=host_color), "Planet host")
+        legend.add_entry(LegendSample("o", (8,), brush=NULL_COLOR), "No known planets")
+        legend.add_entry(LegendSample("o", (6,), brush=FIELD_COLOR), "TIC field star")
+        legend.add_entry(LegendSample("o", (14,), pen=self.selected_item.opts["pen"]), "In list")
+        legend.add_entry(LegendSample("s", (15,), pen=self.current_item.opts["pen"]), "Last clicked")
+        legend.add_entry(LegendSample("o", (3, 6, 10), brush=host_color), "Size = brightness (Tmag)")
+        return legend
+
+    def _update_marker_sizes(self) -> None:
+        """Size the star markers for the view's true degrees per pixel."""
+        _px, py = self.view_box.viewPixelSize()  # Dec degrees are true degrees
+        scale = marker_scale(py)
+        if scale == self.marker_scale:
+            return
+        self.marker_scale = scale
+        if len(self._host_sizes):
+            self.host_item.setSize(self._host_sizes * scale)
+        if len(self._field_sizes):
+            self.field_item.setSize(self._field_sizes * scale)
 
     # -- catalogs ------------------------------------------------------------------
 
@@ -352,10 +487,10 @@ class SkyView(QWidget):
     def set_catalog(self, catalog: SkyCatalog) -> None:
         self.catalog = catalog
         self.hosts = list(catalog.stars)
-        spots = [{"pos": (s.ra, s.dec), "size": _marker_size(s.tmag),
-                  "brush": pg.mkBrush(NULL_COLOR if s.kind == "null" else HOST_COLOR)}
-                 for s in self.hosts]
-        self.host_item.setData(spots)
+        self._host_sizes = np.array([_marker_size(s.tmag) for s in self.hosts])
+        self.host_item.setData([{"pos": (s.ra, s.dec), "size": size * self.marker_scale,
+                                 "brush": self._brushes["null" if s.kind == "null" else "host"]}
+                                for s, size in zip(self.hosts, self._host_sizes)])
         what = "bundled targets" if catalog.offline else "planet hosts"
         status = f"{len(self.hosts):,} {what}"
         if catalog.offline:
@@ -411,8 +546,9 @@ class SkyView(QWidget):
         host_tics = {s.tic for s in self.hosts if s.tic is not None}
         self.field = [s for s in stars if s.tic not in host_tics]
         self.field_region = region
-        self.field_item.setData([{"pos": (s.ra, s.dec), "size": _marker_size(s.tmag, 15.0, 3.0, 9.0)}
-                                 for s in self.field])
+        self._field_sizes = np.array([_marker_size(s.tmag, 15.0, 3.0, 9.0) for s in self.field])
+        self.field_item.setData([{"pos": (s.ra, s.dec), "size": size * self.marker_scale}
+                                 for s, size in zip(self.field, self._field_sizes)])
         if region is None:
             self._field_status = ""
         else:
@@ -559,7 +695,7 @@ class SkyView(QWidget):
             label = pg.TextItem(target.name, color=SELECTED_COLOR, anchor=(-0.15, 0.5),
                                 fill=pg.mkBrush(11, 16, 32, 210))
             label.setPos(target.ra, target.dec)
-            label.setZValue(5)
+            label.setZValue(SELECTION_LABEL_Z)
             self.plot.addItem(label)
             self._labels.append(label)
 
@@ -567,7 +703,8 @@ class SkyView(QWidget):
         if event.button() != Qt.MouseButton.LeftButton or event.double():
             return
         pos = event.scenePos()
-        if not self.view_box.sceneBoundingRect().contains(pos):
+        if (not self.view_box.sceneBoundingRect().contains(pos)
+                or self.legend.sceneBoundingRect().contains(pos)):
             return
         point = self.view_box.mapSceneToView(pos)
         self.click_at(point.x(), point.y())
