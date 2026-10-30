@@ -21,6 +21,20 @@ def _isolated_dirs(tmp_path, monkeypatch):
     monkeypatch.setenv("TRANSITORY_REPORTS_DIR", str(tmp_path / "reports"))
 
 
+@pytest.fixture(autouse=True)
+def _no_hips_network(request, monkeypatch):
+    """Sky images come from the recorded cutout, not CDS, unless a test is marked network.
+
+    test_hips.py tests the real transport itself, against a fake ``requests``.
+    """
+    if "network" in request.keywords or request.path.name == "test_hips.py":
+        return
+    from sky_selection_host import RecordedHipsTransport
+    from transitory.catalog import hips
+
+    monkeypatch.setattr(hips, "requests_bytes_transport", RecordedHipsTransport())
+
+
 def pytest_collection_modifyitems(config, items):
     """Skip network tests unless they were selected explicitly with ``-m network``."""
     if "network" in (config.getoption("-m") or "") and "not network" not in config.getoption("-m"):

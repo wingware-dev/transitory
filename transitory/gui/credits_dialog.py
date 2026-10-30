@@ -1,7 +1,8 @@
 """Help ▸ Data Credits: the acknowledgements for the data and software used.
 
 The general section lists what the dashboard can use (TESS and Kepler data
-from MAST, the NASA Exoplanet Archive, Lightkurve / Astropy / Astroquery);
+from MAST, the NASA Exoplanet Archive, the CDS hips2fits sky images and
+their surveys, Lightkurve / Astropy / Astroquery);
 the session section collects the credit lines of each star analysed so far,
 mission data DOIs included, so they can be copied into a paper or talk.
 """
@@ -21,6 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..catalog.archive import ARCHIVE_CREDIT, ARCHIVE_REFERENCES
+from ..catalog.hips import HIPS2FITS_CREDIT, SURVEY_CREDITS
 from ..catalog.tic import TIC_CREDIT
 from ..models import StarAnalysis
 from ..pipeline.fetch import DOI_TITLES, LIGHTKURVE_CREDIT, MAST_CREDITS, doi_line
@@ -45,6 +47,10 @@ def general_credits() -> list[tuple[str, list[str]]]:
         ("Mission data DOIs", [doi_line(doi) for doi in DOI_TITLES]),
         ("TESS Input Catalog (MAST)", [TIC_CREDIT]),
         ("NASA Exoplanet Archive", [ARCHIVE_CREDIT, *ARCHIVE_REFERENCES]),
+        ("Sky images (CDS hips2fits)", [HIPS2FITS_CREDIT]),
+        ("Digitized Sky Survey (DSS2)", [SURVEY_CREDITS["dss2"]]),
+        ("Two Micron All Sky Survey (2MASS)", [SURVEY_CREDITS["2mass"]]),
+        ("Pan-STARRS1", [SURVEY_CREDITS["panstarrs"]]),
         ("Software", SOFTWARE_CREDITS),
     ]
 

@@ -1,7 +1,7 @@
 # Data and software credits
 
-Transitory uses public data from MAST and the NASA Exoplanet Archive, and
-open-source packages.  Work that uses its results should carry the
+Transitory uses public data from MAST, the NASA Exoplanet Archive and CDS
+(survey images), and open-source packages.  Work that uses its results should carry the
 acknowledgements below.  **Help ▸ Data Credits…** in the dashboard shows the
 same text, plus the lines for the stars analysed in the session (*Copy as
 text* puts them on the clipboard), and every plot carries its star's credit
@@ -86,6 +86,54 @@ The archive also asks that the literature reference of any individual planet
 parameter used be cited directly; the validation report names, for each
 planet, the archive table and retrieval date of the values it compares with.
 The archive is queried over its TAP service with plain HTTP.
+
+## Sky images (CDS hips2fits; DSS2, 2MASS, Pan-STARRS1)
+
+Zoomed in, the sky view draws a survey image behind the stars, cut out by
+the CDS hips2fits service from the chosen HiPS survey.  Wording checked on
+2026-10-30.
+In code: `transitory.catalog.hips.HIPS2FITS_CREDIT`, `SURVEY_CREDITS`.
+
+hips2fits, as the [astroquery hips2fits docs](https://docs.astropy.org/projects/astroquery/en/latest/hips2fits/hips2fits.html)
+ask (CDS's own site could not be reached to confirm it):
+
+> This research has made use of the hips2fits, a tool developed at CDS,
+> Strasbourg, France aiming at extracting FITS images from HiPS sky maps with
+> respect to a WCS.
+
+DSS2, from [Acknowledging the DSS](https://archive.stsci.edu/dss/acknowledging.html):
+
+> The Digitized Sky Surveys were produced at the Space Telescope Science
+> Institute under U.S. Government grant NAG W-2166. The images of these
+> surveys are based on photographic data obtained using the Oschin Schmidt
+> Telescope on Palomar Mountain and the UK Schmidt Telescope. The plates were
+> processed into the present compressed digital form with the permission of
+> these institutions.
+
+2MASS, from [2MASS publications](https://irsa.ipac.caltech.edu/data/2MASS/docs/publications/):
+
+> This publication makes use of data products from the Two Micron All Sky
+> Survey, which is a joint project of the University of Massachusetts and the
+> Infrared Processing and Analysis Center/California Institute of Technology,
+> funded by the National Aeronautics and Space Administration and the
+> National Science Foundation.
+
+Pan-STARRS1, from [Credit where it is due](https://outerspace.stsci.edu/display/PANSTARRS/):
+
+> The Pan-STARRS1 Surveys (PS1) and the PS1 public science archive have been
+> made possible through contributions by the Institute for Astronomy, the
+> University of Hawaii, the Pan-STARRS Project Office, the Max-Planck Society
+> and its participating institutes, the Max Planck Institute for Astronomy,
+> Heidelberg and the Max Planck Institute for Extraterrestrial Physics,
+> Garching, The Johns Hopkins University, Durham University, the University of
+> Edinburgh, the Queen's University Belfast, the Harvard-Smithsonian Center for
+> Astrophysics, the Las Cumbres Observatory Global Telescope Network
+> Incorporated, the National Central University of Taiwan, the Space Telescope
+> Science Institute, the National Aeronautics and Space Administration under
+> Grant No. NNX08AR22G issued through the Planetary Science Division of the
+> NASA Science Mission Directorate, the National Science Foundation Grant No.
+> AST-1238877, the University of Maryland, Eotvos Lorand University (ELTE), the
+> Los Alamos National Laboratory, and the Gordon and Betty Moore Foundation.
 
 ## Software
 

@@ -19,6 +19,13 @@ follows brightness (Tmag), scaled down as the view widens past about 10
 degrees so the all-sky map doesn't clot; host markers are translucent, so
 the Kepler field shows its CCD modules.
 
+Zoomed in below ``BACKGROUND_ZOOM_DEG``, a survey image (DSS2 by default;
+the footer's Background chooser picks 2MASS, PanSTARRS or none) is drawn
+behind everything (``sky_background``); star markers have dark outlines so
+they keep their contrast over it.  The chooser, a button showing the
+survey's short name ("DSS2"), sits under Reset view, beside the position
+line.
+
 Positions are plotted as plain RA/Dec degrees, with the aspect locked so a
 degree of RA is cos(Dec) as wide as a degree of Dec at the view's centre:
 shapes there are true at any widget size, and the lock follows the view as
@@ -39,17 +46,18 @@ import math
 import numpy as np
 import pyqtgraph as pg
 from PySide6.QtCore import QEvent, QObject, QPointF, QRectF, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QKeySequence, QShortcut, QTextLayout
-from PySide6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QMenu, QSizePolicy, QToolButton,
+from PySide6.QtGui import QActionGroup, QColor, QKeySequence, QShortcut, QTextLayout
+from PySide6.QtWidgets import (QApplication, QGridLayout, QLabel, QMenu, QSizePolicy, QToolButton,
                                QVBoxLayout, QWidget)
 
-from ..catalog import skycatalog
+from ..catalog import hips, skycatalog
 from ..catalog.client import CatalogClient, CatalogError
 from ..catalog.skycatalog import SkyCatalog, SkyStar
 from ..catalog.tic import MAX_CONE_RADIUS_DEG
 from ..models import StarTarget
 from .catalog_jobs import JobRunner
 from .selection_panel import target_key
+from .sky_background import BACKGROUND_ZOOM_DEG, CHOICES, DEFAULT_SURVEY, SkyBackground
 from .sky_axes import DecAxis, RaAxis, format_dec, format_ra
 
 log = logging.getLogger(__name__)
@@ -76,6 +84,7 @@ FIELD_COLOR = QColor(170, 170, 170)
 SELECTED_COLOR = QColor(255, 70, 70)
 CURRENT_COLOR = QColor(255, 255, 90)
 HOVER_COLOR = QColor(255, 255, 255, 210)
+MARKER_EDGE = QColor(0, 0, 0, 200)  # outlines stars, so they keep their contrast over the sky image
 HOVER_RING_PX = 14  # inside the list's 18 px ring, so both show on a listed star
 OUTLINE_COLORS = {"Kepler": QColor(120, 200, 255), "TESS": QColor(150, 230, 150)}
 
@@ -85,7 +94,7 @@ FULL_SIZE_DEG_PER_PX = 0.02
 MIN_MARKER_SCALE = 0.5
 MARKER_SCALE_STEP = 0.05  # sizes change in steps, so panning never resizes them
 
-# z order: field stars, hosts, outlines and their labels, list rings, the
+# z order: the sky image (sky_background), field stars, hosts, outlines and their labels, list rings, the
 # hover ring, the last-clicked square, then the list's name labels, which
 # nothing covers.
 OUTLINE_Z = 2.5
@@ -340,7 +349,8 @@ class SkyView(QWidget):
     fieldLoaded = Signal(list)  # list[SkyStar]
 
     def __init__(self, client: CatalogClient | None = None, parent: QWidget | None = None,
-                 field_zoom_deg: float = FIELD_ZOOM_DEG):
+                 field_zoom_deg: float = FIELD_ZOOM_DEG, hips_transport: hips.BytesTransport | None = None,
+                 hips_cache: hips.CutoutCache | None = None):
         super().__init__(parent)
         self.client = client
         self._field_zoom_deg = field_zoom_deg
@@ -354,6 +364,7 @@ class SkyView(QWidget):
         self._setting_view = False
         self._catalog_status = "No catalog loaded"
         self._field_status = ""
+        self._background_status = ""
         self._stars: list[SkyStar] = []
         self._ra = np.empty(0)
         self._dec = np.empty(0)
@@ -377,8 +388,9 @@ class SkyView(QWidget):
         host_color.setAlpha(HOST_ALPHA)
         self._brushes = {"host": pg.mkBrush(host_color), "null": pg.mkBrush(NULL_COLOR),
                          "field": pg.mkBrush(FIELD_COLOR)}
-        self.host_item = pg.ScatterPlotItem(pen=None, brush=self._brushes["host"], size=6)
-        self.field_item = pg.ScatterPlotItem(pen=None, brush=self._brushes["field"], size=4)
+        self._marker_pen = pg.mkPen(MARKER_EDGE, width=1)
+        self.host_item = pg.ScatterPlotItem(pen=self._marker_pen, brush=self._brushes["host"], size=6)
+        self.field_item = pg.ScatterPlotItem(pen=self._marker_pen, brush=self._brushes["field"], size=4)
         self.selected_item = pg.ScatterPlotItem(pen=pg.mkPen(SELECTED_COLOR, width=2), brush=None,
                                                 size=18, symbol="o")
         self.current_item = pg.ScatterPlotItem(pen=pg.mkPen(CURRENT_COLOR, width=2), brush=None,
@@ -396,6 +408,9 @@ class SkyView(QWidget):
         self._field_sizes = np.empty(0)
         self.marker_scale = 1.0
         self.legend = self._make_legend()
+        self.background = SkyBackground(self.plot, transport=hips_transport, cache=hips_cache,
+                                        offline=bool(client is not None and client.offline))
+        self.background.statusChanged.connect(self._set_background_status)
 
         self.view_box.setMouseEnabled(x=True, y=True)
         self.trackpad = TrackpadNavigator(self.plot)
@@ -412,14 +427,38 @@ class SkyView(QWidget):
         self.reset_button.clicked.connect(self.reset_view)
         self.reset_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Home), self, self.reset_view,
                                         context=Qt.ShortcutContext.WidgetWithChildrenShortcut)
-        status_row = QHBoxLayout()
-        status_row.addWidget(self.status_label, 1)
-        status_row.addWidget(self.reset_button, 0, Qt.AlignmentFlag.AlignTop)
+        # The Background chooser: a button showing the survey's short name, with a menu.
+        self.background_button = QToolButton()
+        self.background_button.setObjectName("skyBackground")
+        self.background_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.background_button.setToolTip(f"Background: the survey image behind the stars, zoomed "
+                                          f"in below {BACKGROUND_ZOOM_DEG:g}° (from CDS hips2fits)")
+        self.background_menu = QMenu("Background", self.background_button)
+        self.background_actions = QActionGroup(self)
+        for key, text, _short in CHOICES:
+            action = self.background_menu.addAction(text)
+            action.setCheckable(True)
+            action.setData(key)
+            action.triggered.connect(lambda _checked, key=key: self.set_background(key))
+            self.background_actions.addAction(action)
+        self.background_button.setMenu(self.background_menu)
+        # The buttons stack beside the two-line status and position labels,
+        # so the footer is as tall as before (those four lines).
+        width = max(self.reset_button.sizeHint().width(),
+                    *(self._background_text(short) for _key, _text, short in CHOICES))
+        for button in (self.reset_button, self.background_button):
+            button.setFixedWidth(width)
+        self.set_background(DEFAULT_SURVEY)
+        footer = QGridLayout()
+        footer.addWidget(self.status_label, 0, 0)
+        footer.addWidget(self.coord_label, 1, 0)
+        footer.addWidget(self.reset_button, 0, 1, Qt.AlignmentFlag.AlignTop)
+        footer.addWidget(self.background_button, 1, 1, Qt.AlignmentFlag.AlignTop)
+        footer.setColumnStretch(0, 1)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.plot, 1)
-        layout.addLayout(status_row)
-        layout.addWidget(self.coord_label)
+        layout.addLayout(footer)
 
         self._field_timer = QTimer(self)
         self._field_timer.setSingleShot(True)
@@ -470,12 +509,13 @@ class SkyView(QWidget):
         legend.setParentItem(self.view_box)
         legend.setZValue(10)
         host_color = self._brushes["host"].color()
-        legend.add_entry(LegendSample("o", (8,), brush=host_color), "Planet host")
-        legend.add_entry(LegendSample("o", (8,), brush=NULL_COLOR), "No known planets")
-        legend.add_entry(LegendSample("o", (6,), brush=FIELD_COLOR), "TIC field star")
+        edge = self._marker_pen
+        legend.add_entry(LegendSample("o", (8,), pen=edge, brush=host_color), "Planet host")
+        legend.add_entry(LegendSample("o", (8,), pen=edge, brush=NULL_COLOR), "No known planets")
+        legend.add_entry(LegendSample("o", (6,), pen=edge, brush=FIELD_COLOR), "TIC field star")
         legend.add_entry(LegendSample("o", (14,), pen=self.selected_item.opts["pen"]), "In list")
         legend.add_entry(LegendSample("s", (15,), pen=self.current_item.opts["pen"]), "Last clicked")
-        legend.add_entry(LegendSample("o", (3, 6, 10), brush=host_color), "Size = brightness (Tmag)")
+        legend.add_entry(LegendSample("o", (3, 6, 10), pen=edge, brush=host_color), "Size = brightness (Tmag)")
         return legend
 
     def _update_marker_sizes(self) -> None:
@@ -689,6 +729,33 @@ class SkyView(QWidget):
             self._field_status = hint
             self._update_status()
 
+    # -- background ----------------------------------------------------------------------
+
+    def set_background(self, survey: str | None) -> None:
+        """Show ``survey`` (a key of ``hips.SURVEYS``) behind the stars when zoomed in; None: none."""
+        choice = next((c for c in CHOICES if c[0] == survey), None)
+        if choice is None:
+            raise ValueError(f"unknown sky background {survey!r}")
+        for action in self.background_actions.actions():
+            action.setChecked(action.data() == survey)
+        self.background_button.setText(choice[2])
+        self.background.survey = survey
+
+    def _background_text(self, text: str) -> int:
+        """Width the chooser button needs to show ``text`` and its menu arrow."""
+        self.background_button.setText(text)
+        return self.background_button.sizeHint().width()
+
+    def disable_background(self, reason: str) -> None:
+        """Turn the sky image off for good (demo mode: it would come from CDS)."""
+        self.set_background(None)
+        self.background_button.setEnabled(False)
+        self.background_button.setToolTip(reason)
+
+    def _set_background_status(self, text: str) -> None:
+        self._background_status = text
+        self._update_status()
+
     # -- picking ---------------------------------------------------------------------
 
     def _rebuild_index(self) -> None:
@@ -832,9 +899,12 @@ class SkyView(QWidget):
         parts = [self._catalog_status]
         if self._field_status:
             parts.append(self._field_status)
+        if self._background_status:
+            parts.append(self._background_status)
         self.status_label.setText("  ·  ".join(parts))
 
     def closeEvent(self, event) -> None:
         self._field_timer.stop()
+        self.background.stop()
         self.runner.wait()
         super().closeEvent(event)

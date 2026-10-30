@@ -112,6 +112,7 @@ class MainWindow(QMainWindow):
         self.panel = SelectionPanel(client=client, resolver=resolver)
         if self.demo:
             self.sky.field_zoom_deg = 0.0  # no TIC field stars: they would come from MAST
+            self.sky.disable_background("No sky images in demo mode: they would come from CDS")
             self.sky.set_catalog(demo_catalog(source))
             # Most demo stars sit in the Kepler field; all-sky, their labels overlap.
             self.sky.set_home(*DEMO_SKY_CENTER, DEMO_SKY_SIZE_DEG)

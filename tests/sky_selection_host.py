@@ -22,7 +22,20 @@ from transitory.gui.selection_panel import SelectionPanel
 from transitory.gui.sky_view import SkyView
 
 RECORDED = Path(__file__).resolve().parent / "data" / "catalog" / "recorded.json"
+HIPS_CUTOUT = Path(__file__).resolve().parent / "data" / "catalog" / "hips_cutout.jpg"
 SHOT_NAME = "02-sky-selection.png"
+
+
+class RecordedHipsTransport:
+    """Answers every hips2fits request with the recorded cutout; keeps the requests."""
+
+    def __init__(self):
+        self.data = HIPS_CUTOUT.read_bytes()
+        self.calls: list[tuple[str, dict[str, str]]] = []
+
+    def __call__(self, url: str, params: dict[str, str]) -> bytes:
+        self.calls.append((url, params))
+        return self.data
 
 
 def recorded_client(cache_dir: Path | str | None = None) -> CatalogClient:
@@ -37,7 +50,7 @@ class SkySelectionWindow(QSplitter):
         super().__init__(Qt.Orientation.Horizontal)
         self.setWindowTitle("Sky and selection")
         self.client = client
-        self.sky = SkyView(client=client)
+        self.sky = SkyView(client=client, hips_transport=RecordedHipsTransport())
         self.panel = SelectionPanel(client=client)
         self.addWidget(self.sky)
         self.addWidget(self.panel)

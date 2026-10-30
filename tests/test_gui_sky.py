@@ -12,11 +12,13 @@ from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
 from PySide6.QtWidgets import QApplication
 
 from harness import shot
-from sky_selection_host import RECORDED, SHOT_NAME, recorded_client, shot_sky_selection
-from transitory.catalog import skycatalog
+from sky_selection_host import (RECORDED, SHOT_NAME, RecordedHipsTransport, recorded_client,
+                                shot_sky_selection)
+from transitory.catalog import hips, skycatalog
 from transitory.catalog.client import CatalogClient, CatalogError, ResponseCache
+from transitory.catalog.hips import CutoutCache
 from transitory.catalog.skycatalog import SkyCatalog, SkyStar
-from transitory.gui import sky_view
+from transitory.gui import credits_dialog, sky_background, sky_view
 from transitory.gui.sky_axes import (DEC_STEPS, RA_STEPS, dec_precision, format_dec, format_ra,
                                      ra_precision, tick_steps)
 from transitory.gui.sky_view import (CVZ_RADIUS_DEG, ECLIPTIC_POLES, SkyView, in_kepler_field,
@@ -434,6 +436,136 @@ def test_outline_labels_sit_outside_their_outlines_under_the_list_labels(sky):
     for text, (ra0, dec0) in zip(sky.outline_labels[1:], ECLIPTIC_POLES):
         assert text.pos().y() == pytest.approx(dec0 + CVZ_RADIUS_DEG, abs=0.01)
         assert text.anchor.y() > 1
+
+
+# -- sky image ------------------------------------------------------------------------------
+
+@pytest.fixture
+def image_sky(qtbot, tmp_path, monkeypatch):
+    """A sky view whose survey images are the recorded cutout; ``.hips`` counts the requests."""
+    monkeypatch.setattr(sky_background, "BACKGROUND_DEBOUNCE_MS", 10)
+    transport = RecordedHipsTransport()
+    view = SkyView(client=recorded_client(tmp_path / "catalog"), field_zoom_deg=0.0,
+                   hips_transport=transport, hips_cache=CutoutCache(tmp_path / "hips"))
+    qtbot.addWidget(view)
+    view.resize(900, 600)
+    view.show()
+    qtbot.waitExposed(view)
+    view.hips = transport
+    yield view
+    view.close()
+
+
+def _pixel(view: SkyView, x_frac: float, y_frac: float):
+    """The colour drawn at a fraction of the way across and down the plot area."""
+    rect = view.view_box.sceneBoundingRect()
+    scene = QPointF(rect.left() + x_frac * rect.width(), rect.top() + y_frac * rect.height())
+    point = view.plot.viewport().mapTo(view, view.plot.mapFromScene(scene))
+    return view.grab().toImage().pixelColor(point)
+
+
+def _choose(view: SkyView, text: str) -> None:
+    next(a for a in view.background_menu.actions() if a.text() == text).trigger()
+
+
+def test_background_chooser_is_in_the_footer_and_on_with_dss2(sky):
+    menu = [(a.text(), a.isChecked()) for a in sky.background_menu.actions()]
+    assert menu == [("Off", False), ("DSS2", True), ("2MASS", False), ("PanSTARRS", False)]
+    button = sky.background_button
+    assert button.text() == "DSS2" and sky.background.survey == "dss2"
+    # Under Reset view, beside the position line: the footer stays four label lines tall.
+    assert button.geometry().top() >= sky.reset_button.geometry().bottom()
+    assert button.geometry().bottom() <= sky.coord_label.geometry().bottom()
+    assert sky.height() - sky.plot.height() == (sky.status_label.height() + sky.coord_label.height()
+                                                + 2 * sky.layout().spacing())
+    _choose(sky, "PanSTARRS")
+    assert button.text() == "PS1" and sky.background.survey == "panstarrs"
+    assert button.width() == sky.reset_button.width() == sky.reset_button.sizeHint().width()
+
+
+def test_no_sky_image_zoomed_out(image_sky, qtbot):
+    image_sky.center_on(290.0, 44.0, 12.0)  # shorter side over BACKGROUND_ZOOM_DEG
+    qtbot.wait(100)
+    assert image_sky.hips.calls == [] and not image_sky.background.item.isVisible()
+
+
+def test_zoomed_in_the_survey_image_shows_north_up_east_left(image_sky, qtbot):
+    with qtbot.waitSignal(image_sky.background.loaded, timeout=10000) as blocker:
+        image_sky.center_on(285.68, 50.24, 0.25)
+    survey, (ra0, ra1), (dec0, dec1), _w, _h = blocker.args[0]
+    assert survey == "dss2"
+    (url, params), = image_sky.hips.calls
+    assert params["hips"] == "CDS/P/DSS2/color"
+    (x0, x1), (y0, y1) = image_sky.view_box.viewRange()
+    assert ra0 < min(x0, x1) and max(x0, x1) < ra1 and dec0 < y0 and y1 < dec1  # view and margin
+    item = image_sky.background.item
+    assert item.isVisible() and item.zValue() < image_sky.field_item.zValue()
+    # The recorded stand-in is red at its top row (north) and green at its left (high RA).
+    top, bottom = _pixel(image_sky, 0.5, 0.05), _pixel(image_sky, 0.5, 0.95)
+    left, right = _pixel(image_sky, 0.05, 0.5), _pixel(image_sky, 0.95, 0.5)
+    assert top.red() > bottom.red() + 60
+    assert left.green() > right.green() + 60
+
+
+def test_small_pans_keep_the_image_and_zooming_out_drops_it(image_sky, qtbot):
+    with qtbot.waitSignal(image_sky.background.loaded, timeout=10000):
+        image_sky.center_on(285.68, 50.24, 1.0)
+    image_sky.center_on(285.7, 50.26, 1.0)  # inside the fetched margin
+    qtbot.wait(100)
+    assert len(image_sky.hips.calls) == 1
+    with qtbot.waitSignal(image_sky.background.loaded, timeout=10000):
+        image_sky.center_on(285.68, 50.24, 0.3)  # zoomed in: the image is too coarse
+    assert len(image_sky.hips.calls) == 2
+    image_sky.center_on(285.68, 50.24, 30.0)
+    qtbot.waitUntil(lambda: not image_sky.background.item.isVisible(), timeout=10000)
+
+
+def test_choosing_off_or_another_survey(image_sky, qtbot):
+    with qtbot.waitSignal(image_sky.background.loaded, timeout=10000):
+        image_sky.center_on(285.68, 50.24, 1.0)
+    _choose(image_sky, "Off")
+    assert image_sky.background.survey is None and not image_sky.background.item.isVisible()
+    with qtbot.waitSignal(image_sky.background.loaded, timeout=10000):
+        _choose(image_sky, "2MASS")
+    assert image_sky.hips.calls[-1][1]["hips"] == "CDS/P/2MASS/color"
+
+
+def test_panstarrs_south_of_its_coverage_says_so(image_sky, qtbot):
+    image_sky.set_background("panstarrs")
+    image_sky.center_on(90.0, -66.0, 1.0)
+    qtbot.waitUntil(lambda: "no images south of Dec -30°" in image_sky.status_text, timeout=10000)
+    assert image_sky.hips.calls == []
+
+
+def test_sky_image_failure_is_shown(image_sky, qtbot):
+    def down(url, params):
+        raise CatalogError("hips2fits is down")
+
+    image_sky.background.transport = down
+    image_sky.center_on(285.68, 50.24, 1.0)
+    qtbot.waitUntil(lambda: "sky image unavailable" in image_sky.status_text, timeout=10000)
+    assert "hips2fits is down" in image_sky.status_text
+    assert not image_sky.background.item.isVisible()
+
+
+def test_stale_sky_images_are_dropped(sky):
+    background = sky.background
+    background._pending = ("dss2", (1.0, 2.0), (3.0, 4.0), 10, 10)
+    background._done(("dss2", (9.0, 9.5), (9.0, 9.5), 10, 10), np.zeros((10, 10, 3), np.uint8))
+    assert background.shown is None and not background.item.isVisible()
+    assert background._pending == ("dss2", (1.0, 2.0), (3.0, 4.0), 10, 10)
+
+
+def test_star_markers_are_outlined_for_contrast_over_the_image(sky):
+    for item in (sky.host_item, sky.field_item):
+        pen = item.opts["pen"]
+        assert pen.style() != Qt.PenStyle.NoPen and pen.color().lightness() < 40
+
+
+def test_credits_name_the_sky_image_services():
+    lines = [line for _, general in credits_dialog.general_credits() for line in general]
+    assert hips.HIPS2FITS_CREDIT in lines
+    assert all(hips.SURVEY_CREDITS[key] in lines for key in hips.SURVEYS)
 
 
 # -- deep zoom ----------------------------------------------------------------------------

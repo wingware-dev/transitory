@@ -41,6 +41,40 @@ BytesTransport = Callable[[str, dict[str, str]], bytes]
 
 _JPEG_MAGIC = b"\xff\xd8\xff"
 
+# Acknowledgements, as each service asks (checked 2026-10-30).  hips2fits:
+# the astroquery hips2fits docs (by its CDS author); CDS's own site was
+# unreachable to check.  DSS: archive.stsci.edu/dss/acknowledging.html;
+# 2MASS: irsa.ipac.caltech.edu/data/2MASS/docs/publications/; PanSTARRS:
+# outerspace.stsci.edu/display/PANSTARRS/ ("Credit where it is due").
+HIPS2FITS_CREDIT = (
+    "This research has made use of the hips2fits, a tool developed at CDS, Strasbourg, France "
+    "aiming at extracting FITS images from HiPS sky maps with respect to a WCS.")
+SURVEY_CREDITS = {
+    "dss2": "The Digitized Sky Surveys were produced at the Space Telescope Science Institute "
+            "under U.S. Government grant NAG W-2166. The images of these surveys are based on "
+            "photographic data obtained using the Oschin Schmidt Telescope on Palomar Mountain "
+            "and the UK Schmidt Telescope. The plates were processed into the present compressed "
+            "digital form with the permission of these institutions.",
+    "2mass": "This publication makes use of data products from the Two Micron All Sky Survey, "
+             "which is a joint project of the University of Massachusetts and the Infrared "
+             "Processing and Analysis Center/California Institute of Technology, funded by the "
+             "National Aeronautics and Space Administration and the National Science Foundation.",
+    "panstarrs": "The Pan-STARRS1 Surveys (PS1) and the PS1 public science archive have been made "
+                 "possible through contributions by the Institute for Astronomy, the University of "
+                 "Hawaii, the Pan-STARRS Project Office, the Max-Planck Society and its "
+                 "participating institutes, the Max Planck Institute for Astronomy, Heidelberg and "
+                 "the Max Planck Institute for Extraterrestrial Physics, Garching, The Johns Hopkins "
+                 "University, Durham University, the University of Edinburgh, the Queen's University "
+                 "Belfast, the Harvard-Smithsonian Center for Astrophysics, the Las Cumbres "
+                 "Observatory Global Telescope Network Incorporated, the National Central University "
+                 "of Taiwan, the Space Telescope Science Institute, the National Aeronautics and "
+                 "Space Administration under Grant No. NNX08AR22G issued through the Planetary "
+                 "Science Division of the NASA Science Mission Directorate, the National Science "
+                 "Foundation Grant No. AST-1238877, the University of Maryland, Eotvos Lorand "
+                 "University (ELTE), the Los Alamos National Laboratory, and the Gordon and Betty "
+                 "Moore Foundation.",
+}
+
 
 @dataclass(frozen=True)
 class Survey:
