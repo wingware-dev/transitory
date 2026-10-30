@@ -6,11 +6,12 @@ import time
 import pytest
 from PySide6.QtCore import QPointF, Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QLabel
 
 from dashboard_host import click_star, hover_star, select_and_submit, type_stars, wait_for_results, wait_until
 from harness import shot
 from sky_selection_host import recorded_client
+from transitory.catalog.client import CatalogError
 from transitory.gui.credits_dialog import credits_text
 from transitory.gui.main_window import (
     DEFAULT_MAX_PRODUCTS,
@@ -108,6 +109,19 @@ def test_hovering_stars_never_moves_the_sky_plot(main_window):
         hover_star(sky, star)
         assert star.name in sky.coord_label.text()
         assert geometry() == before, star.name
+
+    # The status wraps onto its two lines, whole when it fits, elided when not.
+    shown = QLabel.text(sky.status_label)  # what is drawn, not the full text
+    assert shown.count("\n") == 1 and "…" not in shown
+    assert shown.replace("\n", " ") == sky.status_text
+    for change in (lambda: sky.set_field([], (290.0, 44.0, 1.0)),
+                   lambda: sky._catalog_failed(CatalogError("the archive is down " * 20)),
+                   sky.clear_field):
+        change()
+        QApplication.processEvents()
+        assert geometry() == before, sky.status_text
+    shown = QLabel.text(sky.status_label)
+    assert shown.count("\n") == 1 and shown.endswith("…")
 
 
 def test_stage_errors_show_in_progress_and_gallery(qtbot):

@@ -114,7 +114,7 @@ class MainWindow(QMainWindow):
             self.sky.field_zoom_deg = 0.0  # no TIC field stars: they would come from MAST
             self.sky.set_catalog(demo_catalog(source))
             # Most demo stars sit in the Kepler field; all-sky, their labels overlap.
-            self.sky.center_on(*DEMO_SKY_CENTER, DEMO_SKY_SIZE_DEG)
+            self.sky.set_home(*DEMO_SKY_CENTER, DEMO_SKY_SIZE_DEG)
         self.sky.starClicked.connect(self.panel.add_star)
         self.panel.targetsChanged.connect(self.sky.set_selected)
         self.panel.targetActivated.connect(self._target_activated)

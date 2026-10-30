@@ -10,8 +10,10 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QSplitter
+from PySide6.QtCore import QEventLoop, QPoint, QPointF, Qt, QTimer
+from PySide6.QtGui import QNativeGestureEvent, QPointingDevice, QWheelEvent
+from PySide6.QtTest import QTest
+from PySide6.QtWidgets import QApplication, QSplitter
 
 from transitory.catalog import skycatalog
 from transitory.catalog.client import CatalogClient, RecordedTransport, ResponseCache
@@ -57,6 +59,81 @@ def make_sky_selection_window(client: CatalogClient | None = None) -> SkySelecti
     window.setSizes([1020, 380])
     window.show()
     return window
+
+
+# -- mouse and trackpad input on the sky ------------------------------------------------
+#
+# Real Qt events sent to the plot's viewport, so they go through the same
+# paths (pyqtgraph's scene, the trackpad filter) as the user's.  pyqtgraph
+# drops mouse moves that come faster than its event rate, so moves pause.
+
+def _pause(ms: int = 40) -> None:
+    loop = QEventLoop()
+    QTimer.singleShot(ms, loop.quit)
+    loop.exec()
+
+
+def sky_pixel(sky: SkyView, ra: float, dec: float) -> QPoint:
+    """Viewport pixel position of (ra, dec)."""
+    return sky.plot.mapFromScene(sky.view_box.mapViewToScene(QPointF(ra, dec)))
+
+
+def sky_center(sky: SkyView) -> QPoint:
+    return sky.plot.mapFromScene(sky.view_box.sceneBoundingRect().center())
+
+
+def wheel(sky: SkyView, pos: QPoint, angle: int = 0, pixels: QPoint | None = None,
+          phase=Qt.ScrollPhase.NoScrollPhase, modifiers=Qt.KeyboardModifier.NoModifier) -> None:
+    """A wheel event at ``pos``: a mouse wheel (``angle``, 120 a notch) or, with
+    ``pixels`` and a scroll ``phase``, a trackpad."""
+    viewport = sky.plot.viewport()
+    pixels = pixels or QPoint()
+    if not angle:
+        angle = pixels.y()
+    event = QWheelEvent(QPointF(pos), QPointF(viewport.mapToGlobal(pos)), pixels, QPoint(0, angle),
+                        Qt.MouseButton.NoButton, modifiers, phase, False)
+    QApplication.sendEvent(viewport, event)
+    QApplication.processEvents()
+
+
+def trackpad_scroll(sky: SkyView, pos: QPoint, dx: int, dy: int,
+                    modifiers=Qt.KeyboardModifier.NoModifier) -> None:
+    """A two-finger trackpad scroll by (dx, dy) pixels, begin to end."""
+    for phase, delta in ((Qt.ScrollPhase.ScrollBegin, QPoint()),
+                         (Qt.ScrollPhase.ScrollUpdate, QPoint(dx, dy)),
+                         (Qt.ScrollPhase.ScrollEnd, QPoint())):
+        if phase == Qt.ScrollPhase.ScrollUpdate or not delta.isNull():
+            wheel(sky, pos, pixels=delta, phase=phase, modifiers=modifiers)
+
+
+def pinch(sky: SkyView, pos: QPoint, value: float) -> None:
+    """A trackpad pinch at ``pos``: ``value`` > 0 spreads the fingers (zoom in)."""
+    viewport = sky.plot.viewport()
+    event = QNativeGestureEvent(Qt.NativeGestureType.ZoomNativeGesture,
+                                QPointingDevice.primaryPointingDevice(), 2, QPointF(pos), QPointF(pos),
+                                QPointF(viewport.mapToGlobal(pos)), value, QPointF())
+    QApplication.sendEvent(viewport, event)
+    QApplication.processEvents()
+
+
+def drag(sky: SkyView, start: QPoint, end: QPoint, steps: int = 8) -> None:
+    """Press the left button at ``start``, move to ``end`` in steps, release."""
+    viewport = sky.plot.viewport()
+    QTest.mouseMove(viewport, start)
+    _pause()
+    QTest.mousePress(viewport, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, start)
+    for i in range(1, steps + 1):
+        _pause()
+        QTest.mouseMove(viewport, start + (end - start) * (i / steps))
+    QTest.mouseRelease(viewport, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, end)
+    QApplication.processEvents()
+
+
+def click(sky: SkyView, pos: QPoint) -> None:
+    """A left click at ``pos``, after a pause so it isn't taken for a double click."""
+    _pause(QApplication.doubleClickInterval() + 50)
+    QTest.mouseClick(sky.plot.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, pos)
+    QApplication.processEvents()
 
 
 def shot_sky_selection(app, client: CatalogClient | None = None):

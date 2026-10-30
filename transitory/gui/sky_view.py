@@ -1,6 +1,9 @@
 """Sky view: an RA/Dec map of planet hosts and, zoomed in, TIC field stars.
 
-RA increases to the left, as on the sky.  Drag pans, the wheel zooms.  A
+RA increases to the left, as on the sky.  Drag pans; the mouse wheel zooms
+about the pointer.  On a trackpad, two-finger scrolling pans and pinching
+zooms (Ctrl/Cmd + scroll zooms too).  Reset view (or Home) returns to the
+home view: all sky, or what ``set_home`` chose.  A
 click selects the nearest star (within a few pixels), highlights it and
 emits ``starClicked``.  Zoomed in below ``FIELD_ZOOM_DEG``, TIC stars in
 view are loaded from MAST in a worker thread.  The Kepler field (approx.)
@@ -10,9 +13,9 @@ Positions are plotted as plain RA/Dec degrees, which stretches RA near
 the poles; the nearest-star search measures in screen pixels, so clicks
 still pick what the user sees.
 
-Under the plot, one line each shows the catalog status and the hovered
-position and star, elided to the view's width so changing text never
-resizes the footer or moves the plot under the mouse.
+Under the plot, the catalog status (two word-wrapped lines) and the
+hovered position and star (one line) are elided to the view's width, so
+changing text never resizes the footer or moves the plot under the mouse.
 """
 
 from __future__ import annotations
@@ -22,9 +25,9 @@ import math
 
 import numpy as np
 import pyqtgraph as pg
-from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
+from PySide6.QtCore import QEvent, QObject, QPointF, Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QKeySequence, QShortcut, QTextLayout
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QToolButton, QVBoxLayout, QWidget
 
 from ..catalog import skycatalog
 from ..catalog.client import CatalogClient, CatalogError
@@ -116,17 +119,22 @@ def _marker_size(tmag: float | None, brightest: float = 17.0, low: float = 4.0, 
 # -- the widget --------------------------------------------------------------------
 
 class ElidedLabel(QLabel):
-    """A one-line label whose size never follows its text: long text is elided.
+    """A label of ``lines`` lines whose size never follows its text.
 
-    ``text()`` returns the full text, which is also the tooltip.
+    Text is word-wrapped onto the lines, and what doesn't fit is elided on
+    the last.  ``text()`` returns the full text, which is also the tooltip.
     """
 
-    def __init__(self, parent: QWidget | None = None):
+    def __init__(self, parent: QWidget | None = None, lines: int = 1):
         super().__init__(parent)
         self._full_text = ""
+        self._lines = lines
+        self.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
         margins = self.contentsMargins()
-        self.setFixedHeight(self.fontMetrics().height() + margins.top() + margins.bottom())
+        metrics = self.fontMetrics()
+        self.setFixedHeight(metrics.height() + (lines - 1) * metrics.lineSpacing()
+                            + margins.top() + margins.bottom())
 
     def setText(self, text: str) -> None:
         self._full_text = text
@@ -142,7 +150,75 @@ class ElidedLabel(QLabel):
 
     def _elide(self) -> None:
         width = self.contentsRect().width()
-        super().setText(self.fontMetrics().elidedText(self._full_text, Qt.TextElideMode.ElideRight, width))
+        text = self._full_text
+        shown = []
+        if self._lines > 1 and width > 0:
+            # Word-wrap all but the last line; the last takes the rest, elided.
+            layout = QTextLayout(text, self.font())
+            layout.beginLayout()
+            start = 0
+            while len(shown) < self._lines - 1:
+                line = layout.createLine()
+                if not line.isValid():
+                    break
+                line.setLineWidth(width)
+                end = line.textStart() + line.textLength()
+                if end >= len(text):
+                    break  # the rest fits on this line
+                shown.append(text[line.textStart():end].rstrip())
+                start = end
+            layout.endLayout()
+            text = text[start:]
+        shown.append(self.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, width))
+        super().setText("\n".join(shown))
+
+
+class TrackpadNavigator(QObject):
+    """Trackpad gestures on a plot's viewport: two-finger scroll pans, pinch zooms.
+
+    pyqtgraph zooms on every wheel event and ignores native gestures, so a
+    trackpad's scroll zooms and its pinch does nothing.  Wheel events from a
+    trackpad (those with a scroll phase and a pixel delta) pan the view by
+    the pixels scrolled, unless Ctrl/Cmd is held; mouse-wheel events go on
+    to pyqtgraph, which zooms.
+    """
+
+    def __init__(self, plot: pg.PlotWidget):
+        super().__init__(plot)
+        self.plot = plot
+        self.view_box = plot.getViewBox()
+        plot.viewport().installEventFilter(self)
+
+    def eventFilter(self, obj, event) -> bool:
+        if event.type() == QEvent.Type.Wheel and self.is_trackpad_scroll(event):
+            self.pan_pixels(event.pixelDelta().x(), event.pixelDelta().y())
+            event.accept()
+            return True
+        if (event.type() == QEvent.Type.NativeGesture
+                and event.gestureType() == Qt.NativeGestureType.ZoomNativeGesture):
+            self.zoom_at(event.position(), 1.0 + event.value())
+            event.accept()
+            return True
+        return super().eventFilter(obj, event)
+
+    @staticmethod
+    def is_trackpad_scroll(event) -> bool:
+        return (event.phase() != Qt.ScrollPhase.NoScrollPhase and not event.pixelDelta().isNull()
+                and not event.modifiers() & Qt.KeyboardModifier.ControlModifier)
+
+    def pan_pixels(self, dx: float, dy: float) -> None:
+        """Move the sky by (dx, dy) screen pixels, as if dragged."""
+        origin = self.plot.mapToScene(0, 0)
+        shifted = self.plot.mapToScene(round(dx), round(dy))
+        delta = self.view_box.mapSceneToView(origin) - self.view_box.mapSceneToView(shifted)
+        self.view_box.translateBy(x=delta.x(), y=delta.y())
+
+    def zoom_at(self, viewport_pos: QPointF, factor: float) -> None:
+        """Magnify by ``factor`` (> 1 zooms in) about a viewport position."""
+        if factor <= 0:
+            return
+        center = self.view_box.mapSceneToView(self.plot.mapToScene(viewport_pos.toPoint()))
+        self.view_box.scaleBy((1 / factor, 1 / factor), center)
 
 
 class SkyView(QWidget):
@@ -193,14 +269,28 @@ class SkyView(QWidget):
             self.plot.addItem(item)
         self._labels: list[pg.TextItem] = []
 
-        self.status_label = ElidedLabel()
+        self.view_box.setMouseEnabled(x=True, y=True)
+        self.trackpad = TrackpadNavigator(self.plot)
+        self.home: tuple[float, float, float] | None = None  # (ra, dec, size) or all sky
+
+        self.status_label = ElidedLabel(lines=2)
         self.status_label.setObjectName("skyStatus")
         self.coord_label = ElidedLabel()
         self.coord_label.setObjectName("skyCoords")
+        self.reset_button = QToolButton()
+        self.reset_button.setObjectName("skyReset")
+        self.reset_button.setText("Reset view")
+        self.reset_button.setToolTip("Back to the starting view (Home)")
+        self.reset_button.clicked.connect(self.reset_view)
+        self.reset_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Home), self, self.reset_view,
+                                        context=Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        status_row = QHBoxLayout()
+        status_row.addWidget(self.status_label, 1)
+        status_row.addWidget(self.reset_button, 0, Qt.AlignmentFlag.AlignTop)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.plot, 1)
-        layout.addWidget(self.status_label)
+        layout.addLayout(status_row)
         layout.addWidget(self.coord_label)
 
         self._field_timer = QTimer(self)
@@ -324,6 +414,17 @@ class SkyView(QWidget):
 
     def show_all_sky(self) -> None:
         self.view_box.setRange(xRange=(0, 360), yRange=(-90, 90), padding=0.01)
+
+    def set_home(self, ra: float, dec: float, size_deg: float) -> None:
+        """Make (ra, dec), ``size_deg`` high, the view Reset view returns to, and show it."""
+        self.home = (ra, dec, size_deg)
+        self.reset_view()
+
+    def reset_view(self) -> None:
+        if self.home is None:
+            self.show_all_sky()
+        else:
+            self.center_on(*self.home)
 
     def center_on(self, ra: float, dec: float, size_deg: float | None = None) -> None:
         """Centre the view on (ra, dec); ``size_deg`` sets the visible height in degrees."""

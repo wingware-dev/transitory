@@ -6,9 +6,11 @@ Names resolve against the recorded MAST / Exoplanet Archive responses; no networ
 import threading
 
 import pytest
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QPoint, Qt
+from PySide6.QtWidgets import QApplication
 
-from sky_selection_host import make_sky_selection_window, recorded_client
+from sky_selection_host import (click, drag, make_sky_selection_window, pinch, recorded_client,
+                                sky_center, sky_pixel, trackpad_scroll, wheel)
 from transitory.catalog import skycatalog
 from transitory.catalog.client import CatalogClient, CatalogError, ResponseCache
 from transitory.gui.selection_panel import SelectionPanel
@@ -222,3 +224,67 @@ def test_double_clicking_a_listed_star_centres_the_sky(window, qtbot):
     ra, dec, width, height = sky.view_region()
     assert (ra, dec) == (pytest.approx(120.0), pytest.approx(-30.0))
     assert height == pytest.approx(3.0)
+
+
+# -- zooming and panning the sky ------------------------------------------------------------
+
+def _centred_on_toi270(sky, size_deg=20.0):
+    toi270 = next(s for s in sky.hosts if s.name == "TOI-270")
+    sky.center_on(toi270.ra, toi270.dec, size_deg)
+    QApplication.processEvents()  # pyqtgraph maps the pointer through the range last painted
+    return toi270
+
+
+def test_mouse_wheel_zooms_about_the_pointer(window):
+    sky = window.sky
+    toi270 = _centred_on_toi270(sky)
+    wheel(sky, sky_center(sky), angle=3 * 120)
+    ra, dec, width, height = sky.view_region()
+    assert height < 15.0
+    assert (ra, dec) == (pytest.approx(toi270.ra, abs=0.5), pytest.approx(toi270.dec, abs=0.5))
+    wheel(sky, sky_center(sky), angle=-3 * 120)
+    assert sky.view_region()[3] == pytest.approx(20.0, rel=0.02)
+
+
+def test_dragging_pans_and_a_click_still_selects(window):
+    sky, panel = window.sky, window.panel
+    toi270 = _centred_on_toi270(sky)
+    start = sky_center(sky)
+    drag(sky, start, start + QPoint(120, 80))
+    ra, dec, width, height = sky.view_region()
+    # The sky follows the mouse: right is higher RA, down shows higher Dec.
+    assert ra > toi270.ra + 1 and dec > toi270.dec + 1
+    assert height == pytest.approx(20.0)
+    assert panel.targets() == []  # a drag selects nothing
+    click(sky, sky_pixel(sky, toi270.ra, toi270.dec))
+    assert [t.name for t in panel.targets()] == ["TOI-270"]
+
+
+def test_trackpad_scroll_pans_and_pinch_or_ctrl_scroll_zooms(window):
+    sky = window.sky
+    toi270 = _centred_on_toi270(sky)
+    trackpad_scroll(sky, sky_center(sky), 120, 80)
+    ra, dec, width, height = sky.view_region()
+    assert ra > toi270.ra + 1 and dec > toi270.dec + 1  # as the same drag would
+    assert height == pytest.approx(20.0)
+    pinch(sky, sky_center(sky), 0.25)
+    assert sky.view_region()[3] == pytest.approx(16.0)
+    pinch(sky, sky_center(sky), -0.2)
+    assert sky.view_region()[3] == pytest.approx(20.0)
+    trackpad_scroll(sky, sky_center(sky), 0, 120, modifiers=Qt.KeyboardModifier.ControlModifier)
+    assert sky.view_region()[3] < 19.0
+
+
+def test_reset_view_button_and_home_key(window, qtbot):
+    sky = window.sky
+    _centred_on_toi270(sky)
+    qtbot.mouseClick(sky.reset_button, Qt.MouseButton.LeftButton)
+    (x0, x1), (y0, y1) = sky.view_box.viewRange()
+    assert x1 - x0 > 360 and y1 - y0 > 180  # all sky
+    sky.set_home(290.0, 44.0, 10.0)
+    _centred_on_toi270(sky)
+    window.activateWindow()
+    sky.plot.setFocus()
+    qtbot.keyClick(sky.plot, Qt.Key.Key_Home)
+    ra, dec, width, height = sky.view_region()
+    assert (ra, dec, height) == (pytest.approx(290.0), pytest.approx(44.0), pytest.approx(10.0))
