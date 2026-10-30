@@ -531,12 +531,15 @@ def test_timeout_requests_ends_a_get_sent_without_timeout(slow_server):
 def test_credits():
     lc = LightCurve(np.zeros(1), np.ones(1), np.ones(1), "TESS", dois=[DOIS["SPOC"]])
     lines = MastSource().credits(lc)
-    assert "TESS mission" in lines[0] and "NAS 5-26555" in lines[0]
-    assert any("doi:10.17909/t9-nmc8-f686" in line for line in lines)
+    assert "TESS mission" in lines[0] and "NAS5-26555" in lines[0]
+    assert "TESS Light Curves - All Sectors: https://doi.org/10.17909/t9-nmc8-f686" in lines
     assert any("Lightkurve" in line for line in lines)
     kepler = mission_credits(LightCurve(np.zeros(1), np.ones(1), np.ones(1), "Kepler",
                                         dois=[DOIS["Kepler"]]))
     assert "Kepler mission" in kepler[0]
+    tess = mission_credits(LightCurve(np.zeros(1), np.ones(1), np.ones(1), "TESS", dois=[DOIS["SPOC"]],
+                                      sectors_or_quarters=[27, 1, 2, 3, 13, 28]))
+    assert tess[1].endswith("https://doi.org/10.17909/t9-nmc8-f686 (sectors 1-3, 13, 27-28)")
     assert mission_credits(LightCurve(np.zeros(1), np.ones(1), np.ones(1), "Synthetic")) == []
 
 

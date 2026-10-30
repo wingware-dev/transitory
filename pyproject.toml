@@ -6,6 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "transitory"
 version = "0.1.0"
 description = "Dashboard for finding transiting planets in public TESS and Kepler light curves"
+readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 dependencies = [

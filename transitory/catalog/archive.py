@@ -26,6 +26,13 @@ from .client import CatalogClient, Response, adql_string, default_client
 ARCHIVE_CREDIT = ("This research has made use of the NASA Exoplanet Archive, which is operated by "
                   "the California Institute of Technology, under contract with the National "
                   "Aeronautics and Space Administration under the Exoplanet Exploration Program.")
+# The archive's paper and the DOIs of the tables queried here (archive
+# "Acknowledging" and "DOIs" pages, checked 2026-10-29; the TOI table has no DOI).
+ARCHIVE_REFERENCES = [
+    "Christiansen et al. 2025, The NASA Exoplanet Archive, PSJ: https://doi.org/10.3847/PSJ/ade3c2",
+    "Planetary Systems Composite Parameters Table: https://doi.org/10.26133/NEA13",
+    "Kepler Objects of Interest (KOI) Cumulative Table: https://doi.org/10.26133/NEA4",
+]
 
 # R_earth / R_sun, to turn published radii into Rp/Rs when no ratio is given.
 EARTH_PER_SUN_RADIUS = 6371.0 / 695700.0

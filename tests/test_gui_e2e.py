@@ -119,7 +119,8 @@ def test_credits_dialog_lists_session_and_general_credits(main_window, qtbot, tm
     dialog = main_window.show_credits()
     text = dialog.browser.toPlainText()
     assert SYNTHETIC_CREDIT in text and "Demo Quiet Star" in text
-    for phrase in ("TESS mission", "Kepler mission", "NASA Exoplanet Archive", "doi:10.17909/T9488N",
+    for phrase in ("TESS mission", "Kepler mission", "NASA Exoplanet Archive", "https://doi.org/10.17909/T9488N",
+                   "https://doi.org/10.26133/NEA13", "TESS Input Catalog",
                    "Lightkurve", "Astropy", "astroquery"):
         assert phrase in text
     dialog.copy()

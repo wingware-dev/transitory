@@ -43,6 +43,14 @@ def shot_validation(app):
     return dialog
 
 
+def shot_final(app):
+    """Every demo star analysed, on the summary table: the README's picture."""
+    from dashboard_host import analysed_window
+    from transitory.sources import SyntheticSource
+
+    return analysed_window([s.target.name for s in SyntheticSource().stars], tab="Table")
+
+
 # name -> (file name, function(app) -> widget)
 SHOTS = {
     "skeleton": ("01-skeleton.png", shot_skeleton),
@@ -52,6 +60,7 @@ SHOTS = {
     "table": ("05-table.png", shot_table),
     "credits": ("06-credits.png", shot_credits),
     "validation": ("07-validation.png", shot_validation),
+    "final": ("08-final.png", shot_final),
 }
 
 

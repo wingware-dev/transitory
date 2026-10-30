@@ -20,28 +20,34 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..catalog.archive import ARCHIVE_CREDIT
+from ..catalog.archive import ARCHIVE_CREDIT, ARCHIVE_REFERENCES
 from ..models import StarAnalysis
-from ..pipeline.fetch import _MAST_CREDIT, DOI_TITLES
+from ..pipeline.fetch import DOI_TITLES, LIGHTKURVE_CREDIT, MAST_CREDITS, doi_line
 
+# Stellar parameters and cross-identifications come from the TIC, through the MAST API.
+TIC_CREDIT = ("Stellar parameters from the TESS Input Catalog (Stassun et al. 2019, AJ 158, 138), "
+              "via the MAST API.")
+
+# As each package's citation page asks (checked 2026-10-29).  Astroquery is
+# used for the MAST light-curve searches; the catalog queries are plain HTTP.
 SOFTWARE_CREDITS = [
-    "Lightkurve Collaboration et al. 2018, Lightkurve: Kepler and TESS time series analysis in "
-    "Python, Astrophysics Source Code Library, ascl:1812.013.",
-    "Astropy Collaboration et al. 2013, 2018, 2022, The Astropy Project, A&A 558, A33; AJ 156, 123; "
-    "ApJ 935, 167.",
-    "Ginsburg, Sipőcz, Brasseur et al. 2019, astroquery: An Astronomical Web-querying Package in "
-    "Python, AJ 157, 98.",
+    LIGHTKURVE_CREDIT + " Lightkurve Collaboration et al. 2018, Lightkurve: Kepler and TESS time "
+    "series analysis in Python, Astrophysics Source Code Library, ascl:1812.013.",
+    "This work made use of Astropy (https://www.astropy.org), a community-developed core Python "
+    "package and an ecosystem of tools and resources for astronomy (Astropy Collaboration 2013, "
+    "A&A 558, A33; 2018, AJ 156, 123; 2022, ApJ 935, 167).",
+    "This work made use of astroquery (Ginsburg, Sipőcz, Brasseur et al. 2019, AJ 157, 98).",
 ]
 
 
 def general_credits() -> list[tuple[str, list[str]]]:
     """(heading, lines) for every data service and package the dashboard can use."""
-    dois = [f"{title}: doi:{doi}" for doi, title in DOI_TITLES.items()]
     return [
-        ("TESS data (MAST)", [_MAST_CREDIT.format(mission="TESS")]),
-        ("Kepler data (MAST)", [_MAST_CREDIT.format(mission="Kepler")]),
-        ("Mission data DOIs", dois),
-        ("NASA Exoplanet Archive", [ARCHIVE_CREDIT]),
+        ("TESS data (MAST)", [MAST_CREDITS["TESS"]]),
+        ("Kepler data (MAST)", [MAST_CREDITS["Kepler"]]),
+        ("Mission data DOIs", [doi_line(doi) for doi in DOI_TITLES]),
+        ("TESS Input Catalog (MAST)", [TIC_CREDIT]),
+        ("NASA Exoplanet Archive", [ARCHIVE_CREDIT, *ARCHIVE_REFERENCES]),
         ("Software", SOFTWARE_CREDITS),
     ]
 

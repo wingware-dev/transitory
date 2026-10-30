@@ -48,26 +48,43 @@ TESS_AUTHORS = ("SPOC", "TESS-SPOC")
 KEPLER_AUTHOR = "Kepler"
 KEPLER_LONG_CADENCE_S = 1800.0
 
-# Mission data DOIs at MAST, by pipeline (checked at doi.org, 2026-10).
+# Mission data DOIs at MAST, by pipeline, with their landing-page titles
+# (checked at doi.org, 2026-10-29).  MAST asks for each as a doi.org URL.
 DOIS = {
-    "SPOC": "10.17909/t9-nmc8-f686",  # TESS Light Curves - All Sectors
-    "TESS-SPOC": "10.17909/t9-wpz1-8s54",  # TESS Light Curves From Full Frame Images ("TESS-SPOC")
-    "Kepler": "10.17909/T9488N",  # Kepler LC, Q0-Q17
+    "SPOC": "10.17909/t9-nmc8-f686",
+    "TESS-SPOC": "10.17909/t9-wpz1-8s54",
+    "Kepler": "10.17909/T9488N",
 }
 DOI_TITLES = {
-    "10.17909/t9-nmc8-f686": "TESS SPOC light curves",
-    "10.17909/t9-wpz1-8s54": "TESS-SPOC full-frame-image light curves",
-    "10.17909/T9488N": "Kepler long-cadence light curves, Q0-Q17",
+    "10.17909/t9-nmc8-f686": "TESS Light Curves - All Sectors",
+    "10.17909/t9-wpz1-8s54": 'TESS Light Curves From Full Frame Images ("TESS-SPOC")',
+    "10.17909/T9488N": "Kepler LC, Q0-Q17",
 }
 
-_MAST_CREDIT = (
-    "This work includes data collected by the {mission} mission, obtained from the MAST data "
-    "archive at the Space Telescope Science Institute (STScI). Funding for the {mission} mission "
-    "is provided by the NASA Science Mission Directorate. STScI is operated by the Association "
-    "of Universities for Research in Astronomy, Inc., under NASA contract NAS 5-26555."
-)
-LIGHTKURVE_CREDIT = ("Light curves retrieved with Lightkurve (Lightkurve Collaboration 2018, "
-                     "ascl:1812.013), which uses Astropy and Astroquery.")
+# MAST's acknowledgement for each mission, as given at
+# https://archive.stsci.edu/publishing/mission-acknowledgements (checked
+# 2026-10-29; the page writes the contract number with an en dash).
+MAST_CREDITS = {
+    "TESS": ("This paper includes data collected with the TESS mission, obtained from the MAST data "
+             "archive at the Space Telescope Science Institute (STScI). Funding for US Institutions "
+             "for the TESS mission is provided by the NASA Explorer Program. STScI is operated by "
+             "the Association of Universities for Research in Astronomy, Inc., under NASA contract "
+             "NAS5-26555."),
+    "Kepler": ("This paper includes data collected by the Kepler mission and obtained from the MAST "
+               "data archive at the Space Telescope Science Institute (STScI). Funding to US "
+               "Institutions for the Kepler mission was provided by the NASA Science Mission "
+               "Directorate. STScI is operated by the Association of Universities for Research in "
+               "Astronomy, Inc., under NASA contract NAS5-26555."),
+}
+# Lightkurve's own recommended acknowledgement ("Citing Lightkurve").
+LIGHTKURVE_CREDIT = ("This research made use of Lightkurve, a Python package for Kepler and TESS "
+                     "data analysis (Lightkurve Collaboration, 2018).")
+
+
+def doi_line(doi: str, mission: str = "") -> str:
+    """``title: https://doi.org/...`` for a mission data DOI."""
+    title = DOI_TITLES.get(doi, f"{mission} data".strip())
+    return f"{title}: https://doi.org/{doi}"
 
 # A search that found nothing is believed for this long before MAST is asked again.
 NEGATIVE_CACHE_DAYS = 7.0
@@ -206,13 +223,31 @@ def _failure(what: str, exc: Exception) -> SourceError:
     return SourceError(f"{what} failed: {exc}")
 
 
+def number_ranges(numbers: Iterable[int]) -> str:
+    """``[1, 2, 3, 5, 7, 8]`` -> ``"1-3, 5, 7-8"``."""
+    ranges: list[list[int]] = []
+    for n in sorted(set(numbers)):
+        if ranges and n == ranges[-1][1] + 1:
+            ranges[-1][1] = n
+        else:
+            ranges.append([n, n])
+    return ", ".join(str(a) if a == b else f"{a}-{b}" for a, b in ranges)
+
+
 def mission_credits(lc: LightCurve) -> list[str]:
-    """Acknowledgement lines for the mission data in ``lc``."""
+    """Acknowledgement lines for the mission data in ``lc``.
+
+    MAST asks for the sectors used next to a TESS DOI; quarters are given
+    for Kepler in the same way.
+    """
     if lc.mission not in ("TESS", "Kepler"):
         return []
-    lines = [_MAST_CREDIT.format(mission=lc.mission)]
-    for doi in lc.dois:
-        lines.append(f"{DOI_TITLES.get(doi, lc.mission + ' data')}: doi:{doi}")
+    lines = [MAST_CREDITS[lc.mission]]
+    used = ""
+    if lc.sectors_or_quarters:
+        unit = "sectors" if lc.mission == "TESS" else "quarters"
+        used = f" ({unit} {number_ranges(lc.sectors_or_quarters)})"
+    lines += [doi_line(doi, lc.mission) + used for doi in lc.dois]
     lines.append(LIGHTKURVE_CREDIT)
     return lines
 
