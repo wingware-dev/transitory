@@ -87,15 +87,11 @@ field star (grey), in the selection list (red ring), and last clicked
 The two lines under the map show the catalog status, the hovered position
 and the star under the pointer.  Zoomed out, the status says *Zoom in below
 2° to see TIC stars (Tmag ≤ 13)*.  Below 2°, the TESS Input Catalog stars in
-view are loaded from MAST.  Below 10°, a survey image is drawn behind the
-stars.  Choose it with the **Background** button under Reset view: DSS2
-(the default), 2MASS, PanSTARRS (PS1), or *Sky off*.  Images come from CDS
-hips2fits and are cached.
+view are loaded from MAST.
 
 ![Zoomed in on Kepler-10, with its TIC field](docs/shots/09-sky-zoomed.png)
 
-In demo mode the map shows only the demo stars: no TIC stars are loaded,
-and the Background button is disabled.
+In demo mode the map shows only the demo stars: no TIC stars are loaded.
 
 ### Sectors / quarters per star
 
@@ -178,8 +174,7 @@ Downloaded data are kept so nothing is fetched twice:
 - light-curve FITS files (via lightkurve) under `cache/mastDownload/`, with
   `cache/index.json` recording which files answer which query;
 - MAST and Exoplanet Archive query results under `cache/catalog/` (archive
-  results are refreshed after 30 days);
-- sky-map background images from CDS hips2fits under `cache/hips/`.
+  results are refreshed after 30 days).
 
 `cache/` is in the checkout by default and is not committed (`.gitignore`).
 Set `TRANSITORY_CACHE_DIR` to put it elsewhere, and `TRANSITORY_REPORTS_DIR`
@@ -196,9 +191,8 @@ pytest -n auto         # in parallel (pytest-xdist)
 
 The GUI tests run headless (pytest-qt).  The screenshots in `docs/shots/` are
 made with `python tools/take_shots.py`.  The sky shots use the live services
-(Exoplanet Archive, MAST, CDS).  When a service doesn't answer, the TIC-field
-shot keeps its old file and the zoomed shot is taken without the sky
-image.
+(Exoplanet Archive, MAST).  When a service doesn't answer, the TIC-field
+shot keeps its old file.
 
 ## Platform notes
 

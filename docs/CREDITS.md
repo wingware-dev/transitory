@@ -1,7 +1,7 @@
 # Data and software credits
 
-Transitory uses public data from MAST, the NASA Exoplanet Archive and CDS
-(survey images), and open-source packages.  Work that uses its results should carry the
+Transitory uses public data from MAST and the NASA Exoplanet Archive, and
+open-source packages.  Work that uses its results should carry the
 acknowledgements below.  **Help ▸ Data Credits…** in the dashboard shows the
 same text, plus the lines for the stars analysed in the session (*Copy as
 text* puts them on the clipboard), and every plot carries its star's credit
@@ -87,6 +87,10 @@ parameter used be cited directly; the validation report names, for each
 planet, the archive table and retrieval date of the values it compares with.
 The archive is queried over its TAP service with plain HTTP.
 
+<!-- The sky view shows no survey images while CDS hips2fits doesn't answer
+(transitory.gui.sky_background.SKY_IMAGES is off), so their credits are left
+out.  Restore this section when the switch is turned back on.
+
 ## Sky images (CDS hips2fits; DSS2, 2MASS, Pan-STARRS1)
 
 Zoomed in, the sky view draws a survey image behind the stars, cut out by
@@ -134,6 +138,7 @@ Pan-STARRS1, from [Credit where it is due](https://outerspace.stsci.edu/display/
 > NASA Science Mission Directorate, the National Science Foundation Grant No.
 > AST-1238877, the University of Maryland, Eotvos Lorand University (ELTE), the
 > Los Alamos National Laboratory, and the Gordon and Betty Moore Foundation.
+-->
 
 ## Software
 

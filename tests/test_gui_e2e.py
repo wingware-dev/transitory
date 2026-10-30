@@ -98,9 +98,7 @@ def test_demo_sky_shows_demo_stars_and_never_loads_fields(main_window):
     sky._maybe_load_field()  # zoomed in on the star; a field load would go to MAST
     assert sky.field == [] and not sky.runner.busy
     assert "TIC stars" not in sky.status_text  # nor a hint to zoom for them
-    sky.background.update()  # nor a sky image from CDS
-    assert sky.background.survey is None and not sky.background_button.isEnabled()
-    assert not sky.background.runner.busy and not sky.background.item.isVisible()
+    assert sky.background is None and sky.background_button is None  # nor a sky image from CDS
 
 
 def test_hovering_stars_never_moves_the_sky_plot(main_window):
@@ -118,7 +116,7 @@ def test_hovering_stars_never_moves_the_sky_plot(main_window):
         hover_star(sky, star)
         assert star.name in sky.coord_label.text()
         assert geometry() == before, star.name
-        # The position line fits beside the Background chooser.
+        # The position line fits beside the footer's buttons.
         assert "…" not in QLabel.text(sky.coord_label).split("\n")[0]
 
     # The status wraps onto its two lines, whole when it fits, elided when not.

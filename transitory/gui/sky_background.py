@@ -30,6 +30,13 @@ from .catalog_jobs import DetachedJobRunner
 
 log = logging.getLogger(__name__)
 
+# Off while CDS hips2fits (alasky.cds.unistra.fr), the only source of the
+# images, doesn't answer: the sky view then has no background or chooser,
+# makes no CDS requests, and the Data Credits leave out the sky images.
+# Turn on again (and restore the "Sky images" section of docs/CREDITS.md,
+# kept there in a comment) once CDS works.
+SKY_IMAGES = False
+
 BACKGROUND_ZOOM_DEG = 10.0  # shorter view side (true degrees) at or below which the image loads
 BACKGROUND_DEBOUNCE_MS = 400
 BACKGROUND_Z = -1  # under the outlines, markers and labels

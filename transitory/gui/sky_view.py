@@ -31,7 +31,8 @@ the footer's Background chooser picks 2MASS, PanSTARRS or none) is drawn
 behind everything (``sky_background``); star markers have dark outlines so
 they keep their contrast over it.  The chooser, a button showing the
 survey's short name ("DSS2"), sits under Reset view, beside the position
-line.
+line.  All of this only with ``sky_background.SKY_IMAGES`` on; while it is
+off (CDS is down), ``background`` and ``background_button`` are None.
 
 Positions are plotted as plain RA/Dec degrees, with the aspect locked so a
 degree of RA is cos(Dec) as wide as a degree of Dec at the view's centre:
@@ -64,6 +65,7 @@ from ..catalog.tic import MAX_CONE_RADIUS_DEG
 from ..models import StarTarget
 from .catalog_jobs import DetachedJobRunner
 from .selection_panel import target_key
+from . import sky_background
 from .sky_background import BACKGROUND_ZOOM_DEG, CHOICES, DEFAULT_SURVEY, SkyBackground
 from .sky_axes import DecAxis, RaAxis, format_dec, format_ra
 
@@ -486,9 +488,11 @@ class SkyView(QWidget):
         self._field_sizes = np.empty(0)
         self.marker_scale = 1.0
         self.legend = self._make_legend()
-        self.background = SkyBackground(self.plot, transport=hips_transport, cache=hips_cache,
-                                        offline=bool(client is not None and client.offline))
-        self.background.statusChanged.connect(self._set_background_status)
+        self.background: SkyBackground | None = None
+        if sky_background.SKY_IMAGES:
+            self.background = SkyBackground(self.plot, transport=hips_transport, cache=hips_cache,
+                                            offline=bool(client is not None and client.offline))
+            self.background.statusChanged.connect(self._set_background_status)
 
         self.view_box.setMouseEnabled(x=True, y=True)
         self.trackpad = TrackpadNavigator(self.plot)
@@ -505,33 +509,17 @@ class SkyView(QWidget):
         self.reset_button.clicked.connect(self.reset_view)
         self.reset_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Home), self, self.reset_view,
                                         context=Qt.ShortcutContext.WidgetWithChildrenShortcut)
-        # The Background chooser: a button showing the survey's short name, with a menu.
-        self.background_button = QToolButton()
-        self.background_button.setObjectName("skyBackground")
-        self.background_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        self.background_button.setToolTip(f"Background: the survey image behind the stars, zoomed "
-                                          f"in below {BACKGROUND_ZOOM_DEG:g}° (from CDS hips2fits)")
-        self.background_menu = QMenu("Background", self.background_button)
-        self.background_actions = QActionGroup(self)
-        for key, text, _short in CHOICES:
-            action = self.background_menu.addAction(text)
-            action.setCheckable(True)
-            action.setData(key)
-            action.triggered.connect(lambda _checked, key=key: self.set_background(key))
-            self.background_actions.addAction(action)
-        self.background_button.setMenu(self.background_menu)
+        self.background_button: QToolButton | None = None
+        if self.background is not None:
+            self._add_background_chooser()
         # The buttons stack beside the two-line status and position labels,
         # so the footer is as tall as before (those four lines).
-        width = max(self.reset_button.sizeHint().width(),
-                    *(self._background_text(short) for _key, _text, short in CHOICES))
-        for button in (self.reset_button, self.background_button):
-            button.setFixedWidth(width)
-        self.set_background(DEFAULT_SURVEY)
         footer = QGridLayout()
         footer.addWidget(self.status_label, 0, 0)
         footer.addWidget(self.coord_label, 1, 0)
         footer.addWidget(self.reset_button, 0, 1, Qt.AlignmentFlag.AlignTop)
-        footer.addWidget(self.background_button, 1, 1, Qt.AlignmentFlag.AlignTop)
+        if self.background_button is not None:
+            footer.addWidget(self.background_button, 1, 1, Qt.AlignmentFlag.AlignTop)
         footer.setColumnStretch(0, 1)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -816,7 +804,8 @@ class SkyView(QWidget):
         if 0.0 <= centre < 360.0 or abs(x1 - x0) > 2 * WRAP_DEG:
             return
         turn = -360.0 if centre >= 360.0 else 360.0
-        self.background.shift_ra(turn)
+        if self.background is not None:
+            self.background.shift_ra(turn)
         self.view_box.translateBy(x=turn)
 
     def _set_view(self, aspect: float, x_range, y_range) -> None:
@@ -889,8 +878,32 @@ class SkyView(QWidget):
 
     # -- background ----------------------------------------------------------------------
 
+    def _add_background_chooser(self) -> None:
+        """The Background chooser: a button showing the survey's short name, with a menu."""
+        self.background_button = QToolButton()
+        self.background_button.setObjectName("skyBackground")
+        self.background_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.background_button.setToolTip(f"Background: the survey image behind the stars, zoomed "
+                                          f"in below {BACKGROUND_ZOOM_DEG:g}° (from CDS hips2fits)")
+        self.background_menu = QMenu("Background", self.background_button)
+        self.background_actions = QActionGroup(self)
+        for key, text, _short in CHOICES:
+            action = self.background_menu.addAction(text)
+            action.setCheckable(True)
+            action.setData(key)
+            action.triggered.connect(lambda _checked, key=key: self.set_background(key))
+            self.background_actions.addAction(action)
+        self.background_button.setMenu(self.background_menu)
+        width = max(self.reset_button.sizeHint().width(),
+                    *(self._background_text(short) for _key, _text, short in CHOICES))
+        for button in (self.reset_button, self.background_button):
+            button.setFixedWidth(width)
+        self.set_background(DEFAULT_SURVEY)
+
     def set_background(self, survey: str | None) -> None:
         """Show ``survey`` (a key of ``hips.SURVEYS``) behind the stars when zoomed in; None: none."""
+        if self.background is None:  # sky images are off (sky_background.SKY_IMAGES)
+            return
         choice = next((c for c in CHOICES if c[0] == survey), None)
         if choice is None:
             raise ValueError(f"unknown sky background {survey!r}")
@@ -906,6 +919,8 @@ class SkyView(QWidget):
 
     def disable_background(self, reason: str) -> None:
         """Turn the sky image off for good (demo mode: it would come from CDS)."""
+        if self.background is None:
+            return
         self.set_background(None)
         self.background_button.setEnabled(False)
         self.background_button.setToolTip(reason)
@@ -1074,7 +1089,8 @@ class SkyView(QWidget):
     def closeEvent(self, event) -> None:
         # Never wait for a MAST request under way: it may be stalled on a timeout.
         self._field_timer.stop()
-        self.background.stop()
+        if self.background is not None:
+            self.background.stop()
         self._pending_field = None
         self.runner.discard()
         super().closeEvent(event)

@@ -14,7 +14,7 @@ import pyqtgraph as pg
 import pytest
 from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QToolButton
 
 from harness import shot
 from sky_selection_host import (RECORDED, SHOT_NAME, RecordedHipsTransport, recorded_client,
@@ -577,8 +577,8 @@ def test_the_sky_image_follows_the_view_across_0h(image_sky, qtbot):
     assert _pixel(image_sky, 0.5, 0.05).red() > _pixel(image_sky, 0.5, 0.95).red() + 60  # still drawn
 
 
-def test_a_sky_image_loading_as_the_view_wraps_lands_a_turn_on(sky):
-    background = sky.background
+def test_a_sky_image_loading_as_the_view_wraps_lands_a_turn_on(image_sky):
+    background = image_sky.background
     request = ("dss2", (-0.6, 0.8), (9.0, 11.0), 100, 100)
     background._pending = request
     background.shift_ra(360.0)
@@ -588,9 +588,40 @@ def test_a_sky_image_loading_as_the_view_wraps_lands_a_turn_on(sky):
 
 
 # -- sky image ------------------------------------------------------------------------------
+# Sky images are off while CDS hips2fits doesn't answer (sky_background.SKY_IMAGES);
+# the tests after the first few turn them on, so they still work when CDS is back.
+
+def test_with_sky_images_off_there_is_no_background_or_chooser(sky, qtbot, monkeypatch):
+    assert not sky_background.SKY_IMAGES
+    requests = RecordedHipsTransport()
+    monkeypatch.setattr(hips, "requests_bytes_transport", requests)
+    assert sky.background is None and sky.background_button is None
+    assert sky.findChild(QToolButton, "skyBackground") is None
+    sky.set_background("2mass")  # nothing to set
+    sky.disable_background("demo")
+    sky.center_on(285.68, 50.24, 1.0)
+    sky.center_on(0.1, 10.0, 1.0)
+    _pan_east(sky, -0.2, step_px=5)  # wraps across 0h with no image to move
+    qtbot.wait(100)
+    assert requests.calls == [] and "sky image" not in sky.status_text
+    # Reset view alone beside the labels: the footer is still four label lines tall.
+    assert sky.height() - sky.plot.height() == (sky.status_label.height() + sky.coord_label.height()
+                                                + 2 * sky.layout().spacing())
+
+
+def test_with_sky_images_off_the_credits_leave_them_out():
+    lines = [line for _, general in credits_dialog.general_credits() for line in general]
+    assert hips.HIPS2FITS_CREDIT not in lines
+    assert not any(hips.SURVEY_CREDITS[key] in lines for key in hips.SURVEYS)
+
 
 @pytest.fixture
-def image_sky(qtbot, tmp_path, monkeypatch):
+def sky_images_on(monkeypatch):
+    monkeypatch.setattr(sky_background, "SKY_IMAGES", True)
+
+
+@pytest.fixture
+def image_sky(qtbot, tmp_path, monkeypatch, sky_images_on):
     """A sky view whose survey images are the recorded cutout; ``.hips`` counts the requests."""
     monkeypatch.setattr(sky_background, "BACKGROUND_DEBOUNCE_MS", 10)
     transport = RecordedHipsTransport()
@@ -617,7 +648,8 @@ def _choose(view: SkyView, text: str) -> None:
     next(a for a in view.background_menu.actions() if a.text() == text).trigger()
 
 
-def test_background_chooser_is_in_the_footer_and_on_with_dss2(sky):
+def test_background_chooser_is_in_the_footer_and_on_with_dss2(image_sky):
+    sky = image_sky
     menu = [(a.text(), a.isChecked()) for a in sky.background_menu.actions()]
     assert menu == [("Off", False), ("DSS2", True), ("2MASS", False), ("PanSTARRS", False)]
     button = sky.background_button
@@ -630,6 +662,14 @@ def test_background_chooser_is_in_the_footer_and_on_with_dss2(sky):
     _choose(sky, "PanSTARRS")
     assert button.text() == "PS1" and sky.background.survey == "panstarrs"
     assert button.width() == sky.reset_button.width() == sky.reset_button.sizeHint().width()
+
+
+def test_disabling_the_background_turns_it_off_for_good(image_sky, qtbot):
+    image_sky.disable_background("No sky images in demo mode")
+    image_sky.center_on(285.68, 50.24, 1.0)
+    qtbot.wait(100)
+    assert image_sky.background.survey is None and not image_sky.background_button.isEnabled()
+    assert image_sky.hips.calls == [] and not image_sky.background.item.isVisible()
 
 
 def test_no_sky_image_zoomed_out(image_sky, qtbot):
@@ -733,7 +773,7 @@ def test_closing_never_waits_for_a_stalled_sky_image(image_sky, qtbot):
         stalled.release.set()
 
 
-def test_a_sky_image_arriving_after_the_view_is_deleted_is_dropped(qtbot, tmp_path, caplog):
+def test_a_sky_image_arriving_after_the_view_is_deleted_is_dropped(qtbot, tmp_path, caplog, sky_images_on):
     stalled = StalledHipsTransport()
     view = SkyView(client=recorded_client(tmp_path / "catalog"), field_zoom_deg=0.0,
                    hips_transport=stalled, hips_cache=CutoutCache(tmp_path / "hips"))
@@ -755,8 +795,8 @@ def test_a_sky_image_arriving_after_the_view_is_deleted_is_dropped(qtbot, tmp_pa
     assert "result dropped, its runner is gone" in caplog.text
 
 
-def test_stale_sky_images_are_dropped(sky):
-    background = sky.background
+def test_stale_sky_images_are_dropped(image_sky):
+    background = image_sky.background
     background._pending = ("dss2", (1.0, 2.0), (3.0, 4.0), 10, 10)
     background._done(("dss2", (9.0, 9.5), (9.0, 9.5), 10, 10), np.zeros((10, 10, 3), np.uint8))
     assert background.shown is None and not background.item.isVisible()
@@ -769,7 +809,7 @@ def test_star_markers_are_outlined_for_contrast_over_the_image(sky):
         assert pen.style() != Qt.PenStyle.NoPen and pen.color().lightness() < 40
 
 
-def test_credits_name_the_sky_image_services():
+def test_credits_name_the_sky_image_services(sky_images_on):
     lines = [line for _, general in credits_dialog.general_credits() for line in general]
     assert hips.HIPS2FITS_CREDIT in lines
     assert all(hips.SURVEY_CREDITS[key] in lines for key in hips.SURVEYS)
@@ -964,7 +1004,15 @@ def test_sky_selection_shot(qtbot, tmp_path, client):
     window.close()
 
 
-def test_sky_zoomed_shot_keeps_the_stand_in_out_of_the_cache(qtbot, client):
+def test_sky_zoomed_shot_with_sky_images_off(qtbot, client, capsys):
+    window = shot_sky_zoomed(QApplication.instance(), client=client)
+    qtbot.addWidget(window)
+    assert window.sky.field and window.sky.background is None
+    assert "sky image" not in capsys.readouterr().err  # no retries or warning
+    window.close()
+
+
+def test_sky_zoomed_shot_keeps_the_stand_in_out_of_the_cache(qtbot, client, sky_images_on):
     """The zoomed shot shows Kepler-10's field and image; the stand-in cutout never reaches the user's cache."""
     window = shot_sky_zoomed(QApplication.instance(), client=client)
     qtbot.addWidget(window)

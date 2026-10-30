@@ -208,7 +208,7 @@ def shot_sky_zoomed(app, client: CatalogClient | None = None, attempts: int = 3)
     """Screenshot state: Kepler-10 shown on the sky from the list, with its TIC field and sky image.
 
     With no ``client`` the field comes from live MAST and the image from
-    live CDS hips2fits.  A field that won't load raises ``ShotUnavailable``;
+    live CDS hips2fits (no image while ``sky_background.SKY_IMAGES`` is off).  A field that won't load raises ``ShotUnavailable``;
     an image that won't load after ``attempts`` tries leaves the background
     off (the status line says so), with a warning.
     """
@@ -223,15 +223,22 @@ def shot_sky_zoomed(app, client: CatalogClient | None = None, attempts: int = 3)
         status = sky.status_label.text()
         window.close()
         raise ShotUnavailable(f"no TIC field for Kepler-10: {status}")
+    if background is not None:  # None: sky images are off (sky_background.SKY_IMAGES)
+        wait_for_sky_image(sky, attempts)
+    app.processEvents()
+    return window
+
+
+def wait_for_sky_image(sky: SkyView, attempts: int) -> None:
+    """Wait for the sky image, retrying; after ``attempts`` tries, turn the background off."""
+    background = sky.background
     for attempt in range(attempts):
         if wait_until(lambda: background.shown is not None or "unavailable" in background.status, SHOT_WAIT_S) \
                 and background.shown is not None:
-            break
+            return
         print(f"sky image, try {attempt + 1} of {attempts}: {background.status or 'no reply'}", file=sys.stderr)
         background.clear()
         background.update()
-    else:
-        print("warning: no sky image; the zoomed shot has the background off", file=sys.stderr)
-        sky.set_background(None)
-    app.processEvents()
+    print("warning: no sky image; the zoomed shot has the background off", file=sys.stderr)
+    sky.set_background(None)
     return window
