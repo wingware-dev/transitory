@@ -44,6 +44,7 @@ class SkyStar:
     logg: float | None = None
     mass_msun: float | None = None
     kind: StarKind = "host"
+    epic: int | None = None  # K2's Ecliptic Plane Input Catalog number, where known
     planets: list[str] = field(default_factory=list)  # planet names, for hosts
     mission_hint: MissionHint = "any"
     credits: list[str] = field(default_factory=list)  # the catalogs these values came from
@@ -53,8 +54,8 @@ class SkyStar:
         return len(self.planets)
 
     def to_target(self) -> StarTarget:
-        return StarTarget(name=self.name, tic=self.tic, kic=self.kic, ra=self.ra, dec=self.dec,
-                          tmag=self.tmag, mission_hint=self.mission_hint,
+        return StarTarget(name=self.name, tic=self.tic, kic=self.kic, epic=self.epic,
+                          ra=self.ra, dec=self.dec, tmag=self.tmag, mission_hint=self.mission_hint,
                           radius_rsun=self.radius_rsun, teff_k=self.teff_k, logg=self.logg,
                           mass_msun=self.mass_msun, credits=list(self.credits))
 
@@ -153,7 +154,8 @@ def offline_targets() -> list[SkyStar]:
                                    mass_msun=entry.get("mass_msun"))
         stars.append(SkyStar(
             name=entry["name"], ra=entry["ra"], dec=entry["dec"], tmag=entry.get("tmag"),
-            tic=entry.get("tic"), kic=entry.get("kic"), radius_rsun=entry.get("radius_rsun"),
+            tic=entry.get("tic"), kic=entry.get("kic"), epic=entry.get("epic"),
+            radius_rsun=entry.get("radius_rsun"),
             teff_k=entry.get("teff_k"), logg=entry.get("logg"), mass_msun=entry.get("mass_msun"),
             kind="null" if entry.get("role") == "null" else "host",
             planets=[p["name"] for p in entry.get("planets", [])],

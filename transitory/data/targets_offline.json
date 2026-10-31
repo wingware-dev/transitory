@@ -1,6 +1,6 @@
 {
  "description": "Validation targets bundled for offline use: identifiers and positions from the TESS Input Catalog (MAST), published planets from the NASA Exoplanet Archive pscomppars table. Regenerate with python -m transitory.catalog.build_offline.",
- "retrieved": "2026-10-29",
+ "retrieved": "2026-10-31",
  "credit": "This research has made use of the NASA Exoplanet Archive, which is operated by the California Institute of Technology, under contract with the National Aeronautics and Space Administration under the Exoplanet Exploration Program.",
  "targets": [
   {
@@ -8,6 +8,7 @@
    "role": "planet-host",
    "tic": 377780790,
    "kic": 11904151,
+   "epic": null,
    "ra": 285.679422,
    "dec": 50.241306,
    "tmag": 10.477,
@@ -40,6 +41,7 @@
    "role": "planet-host",
    "tic": 121660904,
    "kic": 5780885,
+   "epic": null,
    "ra": 288.58151,
    "dec": 41.089824,
    "tmag": 12.453,
@@ -64,6 +66,7 @@
    "role": "planet-host",
    "tic": 424865156,
    "kic": 10666592,
+   "epic": null,
    "ra": 292.247308,
    "dec": 47.969505,
    "tmag": 10.027,
@@ -88,6 +91,7 @@
    "role": "planet-host",
    "tic": 158984573,
    "kic": 10593626,
+   "epic": null,
    "ra": 289.21746,
    "dec": 47.88443,
    "tmag": 11.189,
@@ -112,6 +116,7 @@
    "role": "planet-host",
    "tic": 261136679,
    "kic": null,
+   "epic": null,
    "ra": 84.291188,
    "dec": -80.46912,
    "tmag": 5.105,
@@ -136,6 +141,7 @@
    "role": "planet-host",
    "tic": 410153553,
    "kic": null,
+   "epic": null,
    "ra": 340.492156,
    "dec": -69.168978,
    "tmag": 11.924,
@@ -160,6 +166,7 @@
    "role": "planet-host",
    "tic": 100100827,
    "kic": null,
+   "epic": null,
    "ra": 24.354306,
    "dec": -45.677882,
    "tmag": 8.829,
@@ -184,6 +191,7 @@
    "role": "planet-host",
    "tic": 259377017,
    "kic": null,
+   "epic": null,
    "ra": 68.415501,
    "dec": -51.956232,
    "tmag": 10.498,
@@ -220,10 +228,61 @@
    ]
   },
   {
+   "name": "K2-18",
+   "role": "planet-host",
+   "tic": 388804061,
+   "kic": null,
+   "epic": 201912552,
+   "ra": 172.56049,
+   "dec": 7.588405,
+   "tmag": 11.237,
+   "radius_rsun": 0.4445,
+   "teff_k": 3464.0,
+   "logg": 4.786,
+   "mass_msun": 0.441,
+   "mission_hint": "K2",
+   "planets": [
+    {
+     "name": "K2-18 b",
+     "period": 32.939623,
+     "duration_h": 2.682,
+     "depth": 0.003098,
+     "rp_rs": 0.05375,
+     "ref": "Sarkis et al. 2018 (https://ui.adsabs.harvard.edu/abs/2018AJ....155..257S/abstract)"
+    }
+   ]
+  },
+  {
+   "name": "K2-334",
+   "role": "planet-host",
+   "tic": 330687113,
+   "kic": null,
+   "epic": 211730024,
+   "ra": 136.489467,
+   "dec": 16.325556,
+   "tmag": 10.999,
+   "radius_rsun": 1.5088,
+   "teff_k": 6316.0,
+   "logg": 4.174,
+   "mass_msun": 1.24,
+   "mission_hint": "K2",
+   "planets": [
+    {
+     "name": "K2-334 b",
+     "period": 5.113981,
+     "duration_h": 2.46,
+     "depth": 0.001290375,
+     "rp_rs": 0.0343,
+     "ref": "de Leon et al. 2021 (https://ui.adsabs.harvard.edu/abs/2021MNRAS.508..195D/abstract)"
+    }
+   ]
+  },
+  {
    "name": "KIC 8006161",
    "role": "null",
    "tic": 123234496,
    "kic": 8006161,
+   "epic": null,
    "ra": 281.14633,
    "dec": 43.833275,
    "tmag": 6.804,

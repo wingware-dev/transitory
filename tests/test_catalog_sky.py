@@ -127,10 +127,13 @@ def test_offline_targets_are_the_validation_set():
     stars = offline_targets()
     names = [s.name for s in stars]
     assert names == ["Kepler-10", "Kepler-7", "Kepler-2", "Kepler-22", "pi Men", "LHS 3844",
-                     "WASP-18", "TOI-270", "KIC 8006161"]
+                     "WASP-18", "TOI-270", "K2-18", "K2-334", "KIC 8006161"]
     for star in stars:
         assert star.tic and -90 <= star.dec <= 90 and 0 <= star.ra < 360
-        assert star.mission_hint in ("Kepler", "TESS")
+        assert star.mission_hint in ("Kepler", "TESS", "K2")
+        # A K2 star is found by its EPIC number, the others never need one.
+        assert (star.epic is not None) == (star.mission_hint == "K2")
+        assert star.to_target().epic == star.epic
         assert star.teff_k and star.logg and star.mass_msun
         assert star.credits == [TIC_CREDIT, ARCHIVE_CREDIT]
     null = stars[-1]

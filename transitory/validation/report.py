@@ -198,7 +198,11 @@ def _data_line(result: TargetResult) -> str:
     what = {"TESS": "sector", "Kepler": "quarter", "K2": "campaign"}.get(raw.mission, "segment")
     parts = [raw.mission]
     if raw.author and raw.mission in ("TESS", "Kepler", "K2") and raw.author != raw.mission:
-        parts.append(raw.author)
+        # A mission's own pipeline, with a note ("K2 (SFF roll-corrected)"), is said once.
+        if raw.author.startswith(f"{raw.mission} ("):
+            parts[0] = raw.author
+        else:
+            parts.append(raw.author)
     if n:
         parts.append(_count(n, what))
     return f"{' '.join(parts)}, {len(raw):,} points, {raw.baseline_days:,.0f} d baseline"

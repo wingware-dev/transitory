@@ -31,8 +31,13 @@ VALIDATION_TARGETS: list[tuple[str, str]] = [
     ("LHS 3844", "planet-host"),
     ("WASP-18", "planet-host"),
     ("TOI-270", "planet-host"),
+    ("K2-18", "planet-host"),
+    ("K2-334", "planet-host"),
     ("KIC 8006161", "null"),
 ]
+# Stars validated on another mission than the KIC rule below picks: the K2 hosts,
+# which also have TESS data, are here to check K2 light curves.
+MISSIONS = {"K2-18": "K2", "K2-334": "K2"}
 
 DEFAULT_OUTPUT = Path(__file__).resolve().parent.parent / "data" / "targets_offline.json"
 
@@ -57,11 +62,13 @@ def build(client: CatalogClient | None = None) -> dict:
             if not planets:
                 raise SystemExit(f"{name}: no confirmed transiting planets found in pscomppars")
         # Kepler stars have Kepler's long, precise baseline; the rest only TESS.
-        mission = target.mission_hint
+        mission = MISSIONS.get(name, target.mission_hint)
         if mission == "any":
             mission = "Kepler" if target.kic is not None else "TESS"
+        if mission == "K2" and target.epic is None:
+            raise SystemExit(f"{name}: no EPIC number in the archive's k2pandc table")
         targets.append({
-            "name": name, "role": role, "tic": target.tic, "kic": target.kic,
+            "name": name, "role": role, "tic": target.tic, "kic": target.kic, "epic": target.epic,
             "ra": _round(target.ra, 6), "dec": _round(target.dec, 6),
             "tmag": _round(target.tmag, 3), "radius_rsun": _round(target.radius_rsun, 4),
             "teff_k": _round(target.teff_k, 0), "logg": _round(target.logg, 3),

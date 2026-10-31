@@ -1,6 +1,7 @@
 """The known-planet validation set.
 
-Confirmed transiting planets over a range of sizes and periods, and three
+Confirmed transiting planets over a range of sizes and periods, on each
+mission (K2-18 and K2-334 are validated on their K2 campaigns), and three
 bright, quiet "null" stars with good coverage and no published signal of
 any kind (confirmed planet, KOI or TOI; checked live with
 ``catalog.archive.all_signals`` on every run, and recorded in the report).
@@ -41,6 +42,9 @@ EXPECTATIONS = {
                 "stops after 3 passes, so every pass must find a real planet."),
     "LHS 3844": "Ultra-short period (11 h) around an M dwarf, with short (~31 min) transits.",
     "pi Men": "Shallow (~300 ppm) 2 R_earth planet on a very bright star.",
+    "K2-18": ("Checks K2 light curves: a 32.9 d planet gives only 2 transits in Campaign 1's 80 days, "
+              "so it is reported as a duo-transit, and only once K2's roll systematics are corrected."),
+    "K2-334": "Checks K2 light curves: a 5.1 d Neptune-sized planet (~1.3 ppt) in Campaign 16.",
 }
 
 # Null stars beyond the bundled KIC 8006161 (identifiers and stellar parameters from the TESS

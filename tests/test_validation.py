@@ -45,13 +45,20 @@ def test_validation_set_has_hosts_and_three_null_stars():
     targets = validation_targets()
     names = {t.target.name for t in targets}
     assert {"Kepler-10", "Kepler-7", "Kepler-2", "Kepler-22", "pi Men", "LHS 3844", "WASP-18",
-            "TOI-270"} <= names
+            "TOI-270", "K2-18", "K2-334"} <= names
     nulls = [t for t in targets if t.role == "null"]
     assert [t.target.name for t in nulls] == ["KIC 8006161", "KIC 6106415", "TIC 31410749"]
     assert all(t.target.tic is not None and t.expectation for t in nulls)
     planets = [p for t in targets for p in t.planets]
-    assert len(planets) == 11 and "Kepler-22 b" in planets and "HAT-P-7 b" in planets
+    assert len(planets) == 13 and "Kepler-22 b" in planets and "HAT-P-7 b" in planets
     assert "hard case" in next(t for t in targets if t.target.name == "Kepler-22").expectation
+
+
+def test_k2_hosts_are_validated_on_k2_by_epic():
+    k2 = {t.target.name: t for t in validation_targets() if t.target.mission_hint == "K2"}
+    assert {name: t.target.epic for name, t in k2.items()} == {"K2-18": 201912552, "K2-334": 211730024}
+    assert k2["K2-18"].planets == ["K2-18 b"] and k2["K2-334"].planets == ["K2-334 b"]
+    assert all(t.expectation for t in k2.values())
 
 
 def test_select_by_star_or_planet_name():
@@ -121,6 +128,25 @@ def test_planet_found_twice_is_a_duplicate_not_a_false_positive():
     assert comps[0].found_index == 0  # the earlier pass gets the match
     assert [(o.index, o.kind) for o in others] == [(1, "duplicate")]
     assert "Star b found again" in others[0].explanation and "secondary eclipse" in others[0].explanation
+
+
+@pytest.mark.parametrize("mission, author, expected", [
+    ("K2", "K2 (SFF roll-corrected)", "K2 (SFF roll-corrected) 1 campaign"),
+    ("TESS", "SPOC+TESS-SPOC", "TESS SPOC+TESS-SPOC 1 sector"),
+    ("Kepler", "Kepler", "Kepler 1 quarter"),
+])
+def test_report_data_line_names_the_mission_once(mission, author, expected):
+    import numpy as np
+
+    from transitory.models import LightCurve
+    from transitory.validation.validate import TargetResult
+
+    vt = ValidationTarget(target=StarTarget(name="Star"), role="planet-host")
+    analysis = StarAnalysis(target=vt.target)
+    analysis.raw = LightCurve(time=np.arange(0.0, 80.0, 0.5), flux=np.ones(160), flux_err=np.ones(160),
+                              mission=mission, sectors_or_quarters=[1], author=author)
+    line = report._data_line(TargetResult(vt=vt, analysis=analysis, published=PublishedSet()))
+    assert line == f"{expected}, 160 points, 80 d baseline"
 
 
 def test_findings_summarise_patterns(tmp_path):
