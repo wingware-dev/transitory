@@ -43,8 +43,9 @@ TESS with the sector range used.  The products Transitory downloads:
 | Kepler (long cadence) | Kepler LC, Q0-Q17 | [10.17909/T9488N](https://doi.org/10.17909/T9488N) |
 
 A star's credits list only the DOIs of the products actually used for it,
-each followed by the sectors or quarters used, e.g.
-`TESS Light Curves - All Sectors: https://doi.org/10.17909/t9-nmc8-f686 (sectors 1-13, 27-39)`.
+each followed by the sectors, quarters or campaigns used, e.g.
+`TESS Light Curves - All Sectors: https://doi.org/10.17909/t9-nmc8-f686 (sectors 1-13, 27-39)`,
+or `K2 Light Curves (all): https://doi.org/10.17909/T9WS3R (campaign 16)` for just one.
 For a paper covering several stars, combine their sector ranges, as the
 validation report's credits do (each star's ranges listed under the combined
 line).

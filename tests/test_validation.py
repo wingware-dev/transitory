@@ -425,8 +425,8 @@ def test_report_credits_group_each_data_product_with_its_stars():
         "  - pi Men: sectors 1, 4, 27",
         "  - TIC 31410749: sectors 2, 9",
         '- TESS Light Curves From Full Frame Images ("TESS-SPOC"): https://doi.org/10.17909/t9-wpz1-8s54 '
-        "(sectors 6)",
-        "  - TIC 31410749: sectors 6",
+        "(sector 6)",
+        "  - TIC 31410749: sector 6",
         "- Kepler LC, Q0-Q17: https://doi.org/10.17909/T9488N (quarters 0-3, 5)",
         "  - Kepler-10: quarters 0-2",
         "  - Kepler-22: quarters 2-3, 5",
@@ -444,8 +444,8 @@ def test_report_credits_give_the_shared_kepler_k2_acknowledgement_once():
              (_mission_star("Kepler-10", "Kepler", [1, 2]), _mission_star("K2-18", "K2", [1]))]
     lines = report.credits_markdown(stars, uses_archive=False)
     assert lines.count(f"- {MAST_CREDITS['Kepler']}") == 1
-    assert "- K2 Light Curves (all): https://doi.org/10.17909/T9WS3R (campaigns 1)" in lines
-    assert "  - K2-18: campaigns 1" in lines
+    assert "- K2 Light Curves (all): https://doi.org/10.17909/T9WS3R (campaign 1)" in lines
+    assert "  - K2-18: campaign 1" in lines
 
 
 def test_report_credits_keep_lines_from_other_sources():

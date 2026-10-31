@@ -703,7 +703,13 @@ def test_credits():
     both = mission_credits(LightCurve(np.zeros(1), np.ones(1), np.ones(1), "TESS",
                                       dois=[DOIS["SPOC"], DOIS["TESS-SPOC"]], sectors_or_quarters=[2, 6, 9],
                                       doi_sectors={DOIS["SPOC"]: [2, 9], DOIS["TESS-SPOC"]: [6]}))
-    assert both[1].endswith("t9-nmc8-f686 (sectors 2, 9)") and both[2].endswith("t9-wpz1-8s54 (sectors 6)")
+    assert both[1].endswith("t9-nmc8-f686 (sectors 2, 9)") and both[2].endswith("t9-wpz1-8s54 (sector 6)")
+    one = mission_credits(LightCurve(np.zeros(1), np.ones(1), np.ones(1), "K2", dois=[DOIS["K2"]],
+                                     sectors_or_quarters=[16]))
+    assert one[1].endswith("T9WS3R (campaign 16)")
+    quarter = mission_credits(LightCurve(np.zeros(1), np.ones(1), np.ones(1), "Kepler", dois=[DOIS["Kepler"]],
+                                         sectors_or_quarters=[3]))
+    assert quarter[1].endswith("T9488N (quarter 3)")
     assert mission_credits(LightCurve(np.zeros(1), np.ones(1), np.ones(1), "Synthetic")) == []
 
 

@@ -435,7 +435,7 @@ def mission_credits(lc: LightCurve) -> list[str]:
     lines = [MAST_CREDITS[lc.mission]]
     for doi in lc.dois:
         sectors = lc.sectors_for(doi)
-        used = f" ({sector_unit(lc.mission)} {number_ranges(sectors)})" if sectors else ""
+        used = f" ({periods_used(lc.mission, sectors)})" if sectors else ""
         lines.append(doi_line(doi, lc.mission) + used)
     lines += retrieval_credits(lc)
     lines.append(LIGHTKURVE_CREDIT)
@@ -481,9 +481,13 @@ def aws_citation(dataset: str, date: str) -> str:
     return f"{name} was accessed on {date} from https://registry.opendata.aws/{slug}."
 
 
-def sector_unit(mission: str) -> str:
-    """What a mission's observing periods are called: TESS sectors, Kepler quarters, K2 campaigns."""
-    return {"TESS": "sectors", "K2": "campaigns"}.get(mission, "quarters")
+def periods_used(mission: str, numbers: Iterable[int]) -> str:
+    """The observing periods used, named as the mission names them: TESS sectors, Kepler quarters,
+    K2 campaigns.  ``"sectors 1-3, 13"``, or ``"campaign 16"`` for just one.
+    """
+    numbers = set(numbers)
+    unit = {"TESS": "sector", "K2": "campaign"}.get(mission, "quarter")
+    return f"{unit}{'' if len(numbers) == 1 else 's'} {number_ranges(numbers)}"
 
 
 def _mission_order(target: StarTarget) -> list[Mission]:

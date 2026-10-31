@@ -23,7 +23,7 @@ from .. import plots
 from ..catalog.archive import ARCHIVE_CREDIT, ARCHIVE_REFERENCES
 from ..config import MAX_PLANETS_PER_STAR, MIN_PERIOD_DAYS, PROJECT_ROOT, reports_dir
 from ..models import DUO_TRANSIT, LightCurve
-from ..pipeline.fetch import MAST_CREDITS, doi_line, number_ranges, sector_unit
+from ..pipeline.fetch import MAST_CREDITS, doi_line, periods_used
 from ..pipeline.search import MIN_TRANSITS, SDE_THRESHOLD, SDE_TWO_TRANSITS, SNR_THRESHOLD
 from .validate import PlanetComparison, TargetResult, ValidationRun, found_period
 
@@ -511,13 +511,12 @@ def credits_markdown(stars: list[StarCredits], uses_archive: bool) -> list[str]:
     # Kepler and K2 share one acknowledgement: given once.
     out = [CREDITS_HEADING, ""] + [f"- {text}" for text in dict.fromkeys(MAST_CREDITS[m] for m in missions)]
     for m in missions:
-        unit = sector_unit(m)
         for doi, users in used.items():
             if users[0].mission != m:
                 continue
             union = sorted({n for s in users for n in s.sectors[doi]})
-            out.append(f"- {doi_line(doi, m)}" + (f" ({unit} {number_ranges(union)})" if union else ""))
-            out += [f"  - {s.name}: {unit} {number_ranges(s.sectors[doi])}" for s in users if s.sectors[doi]]
+            out.append(f"- {doi_line(doi, m)}" + (f" ({periods_used(m, union)})" if union else ""))
+            out += [f"  - {s.name}: {periods_used(m, s.sectors[doi])}" for s in users if s.sectors[doi]]
 
     # Each star's own mission lines are replaced by the ones above.
     mission_lines = set(MAST_CREDITS.values()) | {doi_line(doi, s.mission) for s in stars for doi in s.sectors}
