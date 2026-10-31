@@ -1,8 +1,8 @@
 # Run trail
 
-Generated 2026-10-30 22:08 from Wing's task store, the Tasks Manager's log, the agents' transcripts and the repository.  Times are local (-04:00).
+Generated 2026-10-30 22:25 from Wing's task store, the Tasks Manager's log, the agents' transcripts and the repository.  Times are local (-04:00).
 
-This was a large run with real-world interruptions: the laptop was closed for hours at a time, and part of it ran on a train with a connection that came and went.  It had three parts: the original prompt (T1 python-tool-gives-dashboard), the user's request to improve the sky view (T52 mouse-stars-details-section, then T55 sky-view-improvements), and fixing the data sources after MAST's observation search and the CDS sky-image service stopped answering, which kept the app from working at all for a while (T75 nothing-seems-work-anymore, then T81 resilient-data-path).
+This run was a test of the autonomous development features in Wing Pro 12.1: AI agents wrote all of Transitory, as tasks queued and run by Wing's Tasks Manager.  It was a large run with real-world interruptions: the laptop was closed for hours at a time, and part of it ran on a train with a connection that came and went.  It had three parts: the original prompt (T1 python-tool-gives-dashboard), the user's request to improve the sky view (T52 mouse-stars-details-section, then T55 sky-view-improvements), and fixing the data sources after MAST's observation search and the CDS sky-image service stopped answering, which kept the app from working at all for a while (T75 nothing-seems-work-anymore, then T81 resilient-data-path).
 
 Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for the tests were replaced with made-up star fields and removed from the history, since DSS2 images are copyrighted by the survey plates' owners.  The commits linked below therefore have the made-up images.
 

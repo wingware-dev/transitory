@@ -11,6 +11,10 @@ results as a gallery of plots per star and a summary table.
 
 It runs on macOS, Linux and Windows (Python 3.11 or later).
 
+Transitory was written entirely by AI agents, as a test of the autonomous
+development features in Wing Pro 12.1.  See [How it was built](#how-it-was-built)
+for the prompts, what went wrong, and the full trail of the run.
+
 ## Install
 
 ```bash
@@ -244,8 +248,9 @@ light curves were retrieved, and every plot carries its star's credit lines.  Th
 
 ## How it was built
 
-AI agents (Claude Code) wrote all of Transitory, working inside Wing Pro
-12.1, a Python IDE from [Wingware](https://wingware.com/).  Wing's Tasks
+Transitory is a test of the autonomous development features in Wing Pro
+12.1, a Python IDE from [Wingware](https://wingware.com/): AI agents
+(Claude Code) wrote all of it, working inside Wing.  Wing's Tasks
 Manager is itself an AI agent: it turns a request into a queue of tasks,
 gives each to a separate coding agent, answers their questions, checks and
 commits their work, and starts the next.  The agents planned, built and
@@ -253,10 +258,11 @@ tested the app, made their own judgement calls, filed the problems they
 found as new tasks, took the screenshots in `docs/shots/` with the test
 harness they built, and each finished piece of work became a commit here.
 
-This was a large run, and not a smooth one.  It was done as a real-world
-test, on a laptop that was closed for hours at a time and later used on a
-train with a connection that came and went, from 7:55 am on October 29,
-2026 to about 10 pm on October 30.  It made 80 tasks and 63 commits, with
+This was a large run, and not a smooth one: a real-world test of how
+Wing's agents cope with interruptions and failing services, on a laptop
+that was closed for hours at a time and later used on a train with a
+connection that came and went, from 7:55 am on October 29, 2026 to about
+10 pm on October 30.  It made 80 tasks and 63 commits, with
 18 hours of agent work.  It had three parts.
 
 **The original prompt** built the dashboard, the transit search and fit,
