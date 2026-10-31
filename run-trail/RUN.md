@@ -1,6 +1,6 @@
 # Run trail
 
-Generated 2026-10-30 22:26 from Wing's task store, the Tasks Manager's log, the agents' transcripts and the repository.  Times are local (-04:00).
+Generated 2026-10-31 12:27 from Wing's task store, the Tasks Manager's log, the agents' transcripts and the repository.  Times are local (-04:00).
 
 This run was a test of the autonomous development features in Wing Pro 12.1: AI agents wrote all of Transitory from one prompt and two follow-up requests, with Wing's Tasks Manager queueing and running the work.  It was a large run with real-world interruptions: the laptop was closed for hours at a time, and part of it ran on a train with a connection that came and went.  It had three parts: the original prompt (T1 python-tool-gives-dashboard), the user's request to improve the sky view (T52 mouse-stars-details-section, then T55 sky-view-improvements), and fixing the data sources after MAST's observation search and the CDS sky-image service stopped answering, which kept the app from working at all for a while (T75 nothing-seems-work-anymore, then T81 resilient-data-path).
 
@@ -21,6 +21,87 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - Findings filed: 20
 - Commits: 63
 - Tasks Manager decisions: 274
+
+## Use of Wing's MCP tools
+
+Wing gives the agents its IDE's features as tools on its MCP servers.  These are the calls the agents' transcripts record, their subagents' included; an error is a call its tool answered with one, refusals included.
+
+| | Tool calls | To Wing's MCP tools | Errors |
+|---|---|---|---|
+| Workers (the 72 of 80 tasks with a transcript) | 3,005 | 547 (18%) | 9 |
+| Tasks Manager | 1,037 | 963 (93%) | 37 |
+| **Total** | 4,042 | 1,510 (37%) | 46 |
+
+### By server
+
+| Server | What it gives the agents | Calls by workers | Tasks using it | Calls by the Tasks Manager |
+|---|---|---|---|---|
+| wing-review | tasks, review, version control and project files | 375 | 72 | 963 |
+| wing-analysis | Python code navigation and editing by scope | 34 | 12 | 0 |
+| wing-testing | running tests and reading their results | 137 | 65 | 0 |
+| wing-debug | the debugger: breakpoints, stack and values | 1 | 1 | 0 |
+
+### Wing's tools
+
+| Tool | Server | Calls by workers | Tasks using it | Calls by the Tasks Manager | Errors |
+|---|---|---|---|---|---|
+| tasks_events | wing-review | 0 | 0 | 183 | 0 |
+| task_detail | wing-review | 0 | 0 | 148 | 0 |
+| test_run | wing-testing | 129 | 65 | 0 | 0 |
+| wing_guide | wing-review | 107 | 49 | 3 | 0 |
+| status_note | wing-review | 0 | 0 | 103 | 0 |
+| task_note | wing-review | 0 | 0 | 90 | 0 |
+| create_tracked_file | wing-review | 85 | 17 | 0 | 0 |
+| task_report | wing-review | 83 | 72 | 0 | 7 |
+| annotate_task | wing-review | 0 | 0 | 77 | 8 |
+| commit_queue | wing-review | 0 | 0 | 76 | 13 |
+| queue_assign | wing-review | 0 | 0 | 75 | 3 |
+| vcs_commit | wing-review | 69 | 63 | 0 | 0 |
+| queue_start | wing-review | 0 | 0 | 44 | 0 |
+| propose_tasks | wing-review | 0 | 0 | 43 | 3 |
+| mark_ready | wing-review | 0 | 0 | 25 | 0 |
+| queue_create | wing-review | 0 | 0 | 24 | 0 |
+| edit_scope | wing-analysis | 19 | 11 | 0 | 0 |
+| report_finding | wing-review | 19 | 10 | 0 | 0 |
+| move_task | wing-review | 0 | 0 | 18 | 4 |
+| get_scope_code | wing-analysis | 15 | 7 | 0 | 0 |
+| tell_worker | wing-review | 0 | 0 | 13 | 1 |
+| ask_user | wing-review | 0 | 0 | 10 | 3 |
+| queue_rename | wing-review | 0 | 0 | 5 | 0 |
+| read_task | wing-review | 5 | 2 | 0 | 2 |
+| revise_task | wing-review | 0 | 0 | 4 | 1 |
+| set_obsolete | wing-review | 0 | 0 | 4 | 0 |
+| merge_findings | wing-review | 0 | 0 | 3 | 0 |
+| project_set | wing-review | 3 | 2 | 0 | 0 |
+| queue_remove | wing-review | 0 | 0 | 3 | 0 |
+| test_get_details | wing-testing | 3 | 3 | 0 | 0 |
+| test_list | wing-testing | 3 | 3 | 0 | 0 |
+| escalate | wing-review | 0 | 0 | 2 | 0 |
+| project_get | wing-review | 2 | 2 | 0 | 0 |
+| record_decision | wing-review | 0 | 0 | 2 | 1 |
+| task_brief | wing-review | 0 | 0 | 2 | 0 |
+| tasks_overview | wing-review | 0 | 0 | 2 | 0 |
+| vcs_log | wing-review | 2 | 1 | 0 | 0 |
+| debug_test | wing-testing | 2 | 2 | 0 | 0 |
+| debug_run_tests | wing-debug | 1 | 1 | 0 | 0 |
+| answer_task | wing-review | 0 | 0 | 1 | 0 |
+| retitle_task | wing-review | 0 | 0 | 1 | 0 |
+| split_task | wing-review | 0 | 0 | 1 | 0 |
+| tests_estimate | wing-review | 0 | 0 | 1 | 0 |
+
+### Same job, Wing's tools or the agents' own
+
+| Job | Wing's tools | Calls | The agents' own | Calls |
+|---|---|---|---|---|
+| Running tests | test_run, debug_test, debug_run_tests | 132 | pytest, unittest and the like in the shell | 73 |
+| Finding code | find_definition, find_usages, find_symbols, get_scope_at_line | 0 | Grep and Glob tools; grep, rg and find in the shell | 560 |
+| Looking at changes | vcs_status, vcs_diff, vcs_log | 2 | git and hg status, diff and log in the shell | 161 |
+| Committing | vcs_commit, commit_queue | 145 | git and hg commit in the shell | 0 |
+
+### The agents' own tools
+
+- Workers: Bash 1,290, Edit 790, Read 192, ToolSearch 98, WebFetch 46, Write 13, Monitor 12, Agent 7, SubagentHandback 7, TaskStop 2, WebSearch 1
+- Tasks Manager: Read 43, ToolSearch 28, Bash 2, propose_tasks 1
 
 ## Timeline
 
@@ -280,6 +361,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-29 07:55 to 2026-10-29 07:57 (2m 40s)
 - **Outcome:** done
 - **Usage:** 2,394 input, 14k output, 182k cache read, 37k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 9 calls, 3 to Wing's MCP tools (wing-review 3)
 
 **Prompt**
 
@@ -331,6 +413,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-29 07:58 to 2026-10-29 08:04 (5m 44s)
 - **Outcome:** done; committed [`da10daa3039e`](https://github.com/wingware-dev/transitory/commit/da10daa3039e34f6049d46415f18be469ddbb704)
 - **Usage:** 2,678 input, 31k output, 1.87M cache read, 65k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 48 calls, 32 to Wing's MCP tools (wing-review 29, wing-testing 3)
 
 **Prompt**
 
@@ -388,6 +471,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-29 08:05 to 2026-10-29 08:28 (21m 41s)
 - **Outcome:** done; committed [`04cc17a71e1d`](https://github.com/wingware-dev/transitory/commit/04cc17a71e1d499b4effb7b2445a95469eb55427)
 - **Usage:** 2,059 input, 90k output, 7.43M cache read, 154k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 73 calls, 11 to Wing's MCP tools (wing-review 8, wing-testing 3)
 
 **Prompt**
 
@@ -437,6 +521,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-29 08:05 to 2026-10-29 08:22 (15m 46s)
 - **Outcome:** done; committed [`8913b09aa35c`](https://github.com/wingware-dev/transitory/commit/8913b09aa35c312fbb0c3878d89cb1ef96e07b41)
 - **Usage:** 2,286 input, 64k output, 4.53M cache read, 125k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 64 calls, 14 to Wing's MCP tools (wing-review 10, wing-testing 3, wing-analysis 1)
 
 **Prompt**
 
@@ -487,6 +572,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-29 08:05 to 2026-10-29 08:29 (23m 31s)
 - **Outcome:** done; committed [`c2f9930f809e`](https://github.com/wingware-dev/transitory/commit/c2f9930f809e07d553bc9ce67312dda380a0aa31)
 - **Usage:** 134 input, 77k output, 5.96M cache read, 136k cache write (claude-opus-5-5)
+- **Tools:** 74 calls, 21 to Wing's MCP tools (wing-review 20, wing-testing 1)
 
 **Prompt**
 
@@ -547,6 +633,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-29 08:05 to 2026-10-29 08:09 (3m 39s)
 - **Outcome:** done; committed [`c6890977798f`](https://github.com/wingware-dev/transitory/commit/c6890977798f47fca21078bd116cb0a954f43634)
 - **Usage:** 52 input, 24k output, 1.48M cache read, 76k cache write (claude-opus-5-5)
+- **Tools:** 35 calls, 8 to Wing's MCP tools (wing-review 6, wing-testing 2)
 
 **Prompt**
 
@@ -584,6 +671,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-29 08:10 to 2026-10-29 08:17 (6m 59s)
 - **Outcome:** done; committed [`effe977a0fd6`](https://github.com/wingware-dev/transitory/commit/effe977a0fd627b4759dc30ba5767860cb0f4191)
 - **Usage:** 62 input, 41k output, 3.55M cache read, 55k cache write (claude-opus-5-5)
+- **Tools:** 51 calls, 10 to Wing's MCP tools (wing-review 6, wing-testing 4)
 
 **Prompt**
 
@@ -631,6 +719,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-29 08:30 to 2026-10-29 08:37 (7m 26s)
 - **Outcome:** done; committed [`31377d5e21b4`](https://github.com/wingware-dev/transitory/commit/31377d5e21b4472b02ecc091d80e67bfb3e00895)
 - **Usage:** 1,859 input, 47k output, 6.18M cache read, 62k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 38 calls, 11 to Wing's MCP tools (wing-review 8, wing-testing 3)
 
 **Prompt**
 
@@ -687,6 +776,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-29 08:38 to 2026-10-29 09:03 (24m 37s)
 - **Outcome:** done; committed [`07adfee42ced`](https://github.com/wingware-dev/transitory/commit/07adfee42ced47341115d89d7812975c26b9bb49)
 - **Usage:** 116 input, 50k output, 5.61M cache read, 137k cache write (claude-opus-5-5)
+- **Tools:** 65 calls, 13 to Wing's MCP tools (wing-review 10, wing-testing 3)
 
 **Prompt**
 
@@ -760,6 +850,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-29 09:03 to 2026-10-29 11:52 (2h 47m)
 - **Outcome:** done; committed [`bad78f7e264f`](https://github.com/wingware-dev/transitory/commit/bad78f7e264fe6347f74835bf4b7aad983b37eef)
 - **Usage:** 3,093 input, 93k output, 16.85M cache read, 399k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 121 calls, 18 to Wing's MCP tools (wing-review 17, wing-testing 1)
 
 **Prompt**
 
@@ -829,6 +920,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-29 09:03 to 2026-10-29 09:04 (0m 48s)
 - **Outcome:** done; committed [`f98cad3e69d3`](https://github.com/wingware-dev/transitory/commit/f98cad3e69d3c8db452e4e3db5aa8c1c2ba54023)
 - **Usage:** 22 input, 2,904 output, 1.35M cache read, 4,654 cache write (claude-opus-5-5)
+- **Tools:** 8 calls, 3 to Wing's MCP tools (wing-review 2, wing-testing 1)
 
 **Prompt**
 
@@ -860,6 +952,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-29 09:04 to 2026-10-29 09:11 (6m 40s)
 - **Outcome:** done; committed [`f5135562315d`](https://github.com/wingware-dev/transitory/commit/f5135562315d2a9617d5160a22f93ae7d08836a9)
 - **Usage:** 1,777 input, 32k output, 6.66M cache read, 49k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 62 calls, 14 to Wing's MCP tools (wing-analysis 8, wing-testing 4, wing-review 2)
 
 **Prompt**
 
@@ -897,6 +990,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-29 11:49 to 2026-10-29 11:56 (7m 17s)
 - **Outcome:** done; committed [`06ae5c1ddd2b`](https://github.com/wingware-dev/transitory/commit/06ae5c1ddd2b4a42bf54a457d9dd0d2d6dd77b11)
 - **Usage:** 66 input, 27k output, 1.89M cache read, 71k cache write (claude-opus-5-5)
+- **Tools:** 38 calls, 9 to Wing's MCP tools (wing-review 4, wing-testing 4, wing-analysis 1)
 
 **Prompt**
 
@@ -943,6 +1037,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-29 11:49 to 2026-10-29 11:51 (1m 37s)
 - **Outcome:** done; committed [`8c137701669b`](https://github.com/wingware-dev/transitory/commit/8c137701669bd58b79dc8f1bc46e7ffe5d04c468)
 - **Usage:** 2,146 input, 6,446 output, 640k cache read, 41k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 19 calls, 7 to Wing's MCP tools (wing-review 5, wing-testing 2)
 
 **Prompt**
 
@@ -981,6 +1076,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:**  to 2026-10-29 11:49 ()
 - **Outcome:** dismissed
 - **Usage:** 0 input, 0 output, 0 cache read, 0 cache write (model not recorded)
+- **Tools:** not recorded (no transcript)
 
 **Prompt**
 
@@ -1000,6 +1096,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:**  to 2026-10-29 11:49 ()
 - **Outcome:** dismissed
 - **Usage:** 0 input, 0 output, 0 cache read, 0 cache write (model not recorded)
+- **Tools:** not recorded (no transcript)
 
 **Prompt**
 
@@ -1019,6 +1116,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-29 11:50 to 2026-10-29 12:02 (11m 09s)
 - **Outcome:** done; committed [`e8ce182f857a`](https://github.com/wingware-dev/transitory/commit/e8ce182f857a4dbc96f535195da21b2b814da90f)
 - **Usage:** 102 input, 38k output, 4.46M cache read, 120k cache write (claude-opus-5-5)
+- **Tools:** 62 calls, 9 to Wing's MCP tools (wing-review 6, wing-testing 3)
 
 **Prompt**
 
@@ -1065,6 +1163,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-29 11:50 to 2026-10-29 11:54 (3m 49s)
 - **Outcome:** done; committed [`fc6afe6d26b9`](https://github.com/wingware-dev/transitory/commit/fc6afe6d26b9ab0ca4f8bd6e933723b8d97e6060)
 - **Usage:** 64 input, 23k output, 1.85M cache read, 77k cache write (claude-opus-5-5)
+- **Tools:** 28 calls, 5 to Wing's MCP tools (wing-review 4, wing-testing 1)
 
 **Prompt**
 
@@ -1110,6 +1209,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-29 11:55 to 2026-10-29 11:57 (1m 11s)
 - **Outcome:** done; committed [`e37bdb090ab5`](https://github.com/wingware-dev/transitory/commit/e37bdb090ab558096230fa1c1edbe2088cc28250)
 - **Usage:** 2,064 input, 7,655 output, 782k cache read, 10k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 6 calls, 3 to Wing's MCP tools (wing-review 2, wing-testing 1)
 
 **Prompt**
 
@@ -1138,6 +1238,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:**  to 2026-10-29 11:56 ()
 - **Outcome:** obsolete
 - **Usage:** 0 input, 0 output, 0 cache read, 0 cache write (model not recorded)
+- **Tools:** not recorded (no transcript)
 
 **Prompt**
 
@@ -1157,6 +1258,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-29 11:57 to 2026-10-29 12:07 (9m 48s)
 - **Outcome:** done; committed [`bad8e55317e6`](https://github.com/wingware-dev/transitory/commit/bad8e55317e65071d14f051a6a8a22b33f69a5d5)
 - **Usage:** 2,252 input, 22k output, 3.13M cache read, 39k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 37 calls, 5 to Wing's MCP tools (wing-review 4, wing-testing 1)
 
 **Prompt**
 
@@ -1204,6 +1306,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-29 12:02 to 2026-10-29 12:18 (15m 56s)
 - **Outcome:** done; committed [`19b9a96ad1ff`](https://github.com/wingware-dev/transitory/commit/19b9a96ad1ffeb3f0a5da8f747849d4452a82b81)
 - **Usage:** 2,181 input, 32k output, 5.66M cache read, 47k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 46 calls, 9 to Wing's MCP tools (wing-analysis 5, wing-review 3, wing-testing 1)
 
 **Prompt**
 
@@ -1248,6 +1351,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-29 12:02 to 2026-10-29 12:07 (4m 35s)
 - **Outcome:** done; committed [`1dbb131fcd51`](https://github.com/wingware-dev/transitory/commit/1dbb131fcd5106e0d61cdb09f24a70403aeafbeb)
 - **Usage:** 1,872 input, 6,848 output, 703k cache read, 37k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 18 calls, 5 to Wing's MCP tools (wing-review 4, wing-testing 1)
 
 **Prompt**
 
@@ -1279,6 +1383,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-29 12:20 to 2026-10-29 17:24 (3h 07m)
 - **Outcome:** done; committed [`e9652238f1e8`](https://github.com/wingware-dev/transitory/commit/e9652238f1e838690b072ed35e04deb14e521a21)
 - **Usage:** 5,189 input, 40k output, 7.78M cache read, 444k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 94 calls, 27 to Wing's MCP tools (wing-review 20, wing-testing 5, wing-analysis 2)
 
 **Prompt**
 
@@ -1345,6 +1450,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-29 17:24 to 2026-10-29 18:33 (35m 35s)
 - **Outcome:** done
 - **Usage:** 2,150 input, 21k output, 1.79M cache read, 77k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 30 calls, 3 to Wing's MCP tools (wing-review 3)
 
 **Prompt**
 
@@ -1379,6 +1485,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-29 17:25 to 2026-10-29 17:26 (1m 10s)
 - **Outcome:** done; committed [`c95c9857211e`](https://github.com/wingware-dev/transitory/commit/c95c9857211e8f7256d376aa17e99a5a918d5876)
 - **Usage:** 1,919 input, 4,026 output, 476k cache read, 31k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 16 calls, 5 to Wing's MCP tools (wing-review 4, wing-testing 1)
 
 **Prompt**
 
@@ -1411,6 +1518,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-29 17:26 to 2026-10-29 18:10 (42m 20s)
 - **Outcome:** done; committed [`241528203db3`](https://github.com/wingware-dev/transitory/commit/241528203db38995434e15321d44286965fab57b)
 - **Usage:** 2,991 input, 33k output, 5.29M cache read, 124k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 76 calls, 8 to Wing's MCP tools (wing-review 6, wing-testing 2)
 
 **Prompt**
 
@@ -1468,6 +1576,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-29 18:10 to 2026-10-29 18:33 (22m 37s)
 - **Outcome:** done; committed [`9c5306578300`](https://github.com/wingware-dev/transitory/commit/9c530657830031254025690f435c28afedc762e6)
 - **Usage:** 66 input, 14k output, 3.24M cache read, 37k cache write (claude-opus-5-5)
+- **Tools:** 32 calls, 5 to Wing's MCP tools (wing-review 3, wing-testing 2)
 
 **Prompt**
 
@@ -1507,6 +1616,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-29 18:33 to 2026-10-29 18:44 (9m 54s)
 - **Outcome:** done; committed [`f82555674618`](https://github.com/wingware-dev/transitory/commit/f82555674618a15bbe1407d62b2a9cf5770c855d)
 - **Usage:** 42 input, 15k output, 2.68M cache read, 22k cache write (claude-opus-5-5)
+- **Tools:** 25 calls, 3 to Wing's MCP tools (wing-review 2, wing-testing 1)
 
 **Prompt**
 
@@ -1543,6 +1653,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-29 18:44 to 2026-10-29 19:59 (1h 14m)
 - **Outcome:** done; committed [`280153b9e0a1`](https://github.com/wingware-dev/transitory/commit/280153b9e0a17a952dcd733b2f46325b56d68416)
 - **Usage:** 3,008 input, 18k output, 3.24M cache read, 74k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 50 calls, 10 to Wing's MCP tools (wing-review 5, wing-testing 5)
 
 **Prompt**
 
@@ -1591,6 +1702,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-29 19:59 to 2026-10-29 20:05 (6m 03s)
 - **Outcome:** done; committed [`b0911e42ac1d`](https://github.com/wingware-dev/transitory/commit/b0911e42ac1dfe8632e6bc49e02ab5d803b9e5fa)
 - **Usage:** 122 input, 43k output, 3.74M cache read, 193k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 71 calls, 10 to Wing's MCP tools (wing-review 9, wing-testing 1)
 
 **Prompt**
 
@@ -1648,6 +1760,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-29 20:06 to 2026-10-29 20:07 (0m 57s)
 - **Outcome:** done; committed [`c1181196184d`](https://github.com/wingware-dev/transitory/commit/c1181196184d70056bdef98a3da52fee01153b4f)
 - **Usage:** 2,620 input, 4,817 output, 1.55M cache read, 14k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 14 calls, 3 to Wing's MCP tools (wing-review 2, wing-testing 1)
 
 **Prompt**
 
@@ -1677,6 +1790,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-29 20:06 to 2026-10-29 20:10 (3m 15s)
 - **Outcome:** done; committed [`524dd87c579b`](https://github.com/wingware-dev/transitory/commit/524dd87c579b5ea8de200f6d15c551b59eb426f4)
 - **Usage:** 1,801 input, 21k output, 2.39M cache read, 80k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 55 calls, 6 to Wing's MCP tools (wing-review 5, wing-testing 1)
 
 **Prompt**
 
@@ -1711,6 +1825,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-29 20:10 to 2026-10-29 20:48 (37m 38s)
 - **Outcome:** done; committed [`6b9bed987851`](https://github.com/wingware-dev/transitory/commit/6b9bed9878510ccc1d3920161972ae6598f55e6c)
 - **Usage:** 72 input, 9,935 output, 1.51M cache read, 55k cache write (claude-opus-5-5)
+- **Tools:** 34 calls, 8 to Wing's MCP tools (wing-review 6, wing-testing 2)
 
 **Prompt**
 
@@ -1758,6 +1873,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-29 20:48 to 2026-10-29 20:55 (6m 52s)
 - **Outcome:** done; committed [`e76138da8ec8`](https://github.com/wingware-dev/transitory/commit/e76138da8ec84f7ae7a7243435ab8a4cad7f9d64)
 - **Usage:** 2,300 input, 32k output, 4.83M cache read, 68k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 57 calls, 4 to Wing's MCP tools (wing-review 3, wing-testing 1)
 
 **Prompt**
 
@@ -1810,6 +1926,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-29 20:55 to 2026-10-29 21:00 (3m 54s)
 - **Outcome:** done; committed [`2337b29b2457`](https://github.com/wingware-dev/transitory/commit/2337b29b2457edcb770cc3dc433f85e556f2ab6f)
 - **Usage:** 2,444 input, 14k output, 1.44M cache read, 54k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 35 calls, 9 to Wing's MCP tools (wing-review 5, wing-testing 2, wing-analysis 1, wing-debug 1)
 
 **Prompt**
 
@@ -1855,6 +1972,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:**  to 2026-10-30 10:28 ()
 - **Outcome:** obsolete
 - **Usage:** 0 input, 0 output, 0 cache read, 0 cache write (model not recorded)
+- **Tools:** not recorded (no transcript)
 
 **Prompt**
 
@@ -1868,6 +1986,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 10:28 to 2026-10-30 10:31 (3m 06s)
 - **Outcome:** done; committed [`0085f291053b`](https://github.com/wingware-dev/transitory/commit/0085f291053b16437bc0ec2ac584778362358a73)
 - **Usage:** 68 input, 13k output, 1.39M cache read, 62k cache write (claude-opus-5-5)
+- **Tools:** 32 calls, 4 to Wing's MCP tools (wing-review 3, wing-testing 1)
 
 **Prompt**
 
@@ -1902,6 +2021,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 10:28 to 2026-10-30 11:58 (3m 30s)
 - **Outcome:** done
 - **Usage:** 1,876 input, 18k output, 1.10M cache read, 96k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 29 calls, 3 to Wing's MCP tools (wing-review 3)
 
 **Prompt**
 
@@ -1955,6 +2075,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 10:32 to 2026-10-30 10:37 (4m 41s)
 - **Outcome:** done; committed [`b4cc5a9509c2`](https://github.com/wingware-dev/transitory/commit/b4cc5a9509c254bf05b3cab9da081388d593d28d)
 - **Usage:** 62 input, 27k output, 2.52M cache read, 43k cache write (claude-opus-5-5)
+- **Tools:** 29 calls, 6 to Wing's MCP tools (wing-testing 3, wing-review 2, wing-analysis 1)
 
 **Prompt**
 
@@ -1999,6 +2120,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:**  to 2026-10-30 10:33 ()
 - **Outcome:** obsolete
 - **Usage:** 0 input, 0 output, 0 cache read, 0 cache write (model not recorded)
+- **Tools:** not recorded (no transcript)
 
 **Prompt**
 
@@ -2014,6 +2136,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 10:34 to 2026-10-30 10:44 (10m 18s)
 - **Outcome:** done; committed [`2f6aa1d1ded9`](https://github.com/wingware-dev/transitory/commit/2f6aa1d1ded905d8587ab4118167f2633ab0af3e)
 - **Usage:** 2,118 input, 28k output, 1.15M cache read, 93k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 34 calls, 10 to Wing's MCP tools (wing-review 9, wing-testing 1)
 
 **Prompt**
 
@@ -2062,6 +2185,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 10:38 to 2026-10-30 10:45 (6m 02s)
 - **Outcome:** done; committed [`89a5bfde4545`](https://github.com/wingware-dev/transitory/commit/89a5bfde4545923fc9baf791cddebc05762f80a3)
 - **Usage:** 1,835 input, 34k output, 4.30M cache read, 55k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 36 calls, 11 to Wing's MCP tools (wing-review 4, wing-testing 4, wing-analysis 3)
 
 **Prompt**
 
@@ -2107,6 +2231,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 10:45 to 2026-10-30 10:52 (6m 08s)
 - **Outcome:** done; committed [`88a8fb285ee6`](https://github.com/wingware-dev/transitory/commit/88a8fb285ee66b2999cd10846fae6e58c1140324)
 - **Usage:** 2,161 input, 28k output, 2.92M cache read, 94k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 54 calls, 9 to Wing's MCP tools (wing-review 6, wing-analysis 2, wing-testing 1)
 
 **Prompt**
 
@@ -2156,6 +2281,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 10:53 to 2026-10-30 10:59 (5m 29s)
 - **Outcome:** done; committed [`13b02cac7696`](https://github.com/wingware-dev/transitory/commit/13b02cac7696a0a214ff9f62612661d2fe6e6ba5)
 - **Usage:** 86 input, 19k output, 2.40M cache read, 73k cache write (claude-opus-5-5)
+- **Tools:** 57 calls, 6 to Wing's MCP tools (wing-review 4, wing-testing 2)
 
 **Prompt**
 
@@ -2198,6 +2324,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 10:59 to 2026-10-30 11:03 (3m 34s)
 - **Outcome:** done; committed [`54583f4f33d4`](https://github.com/wingware-dev/transitory/commit/54583f4f33d4738a7cce9426b6634d98134a48eb)
 - **Usage:** 52 input, 19k output, 2.61M cache read, 37k cache write (claude-opus-5-5)
+- **Tools:** 43 calls, 5 to Wing's MCP tools (wing-testing 3, wing-review 2)
 
 **Prompt**
 
@@ -2244,6 +2371,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 11:03 to 2026-10-30 11:06 (2m 02s)
 - **Outcome:** done; committed [`5ae4830f199c`](https://github.com/wingware-dev/transitory/commit/5ae4830f199cae3bd7b5d7ac30f8ee9b3b2e0e84)
 - **Usage:** 2,226 input, 7,070 output, 1.58M cache read, 13k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 17 calls, 4 to Wing's MCP tools (wing-review 2, wing-testing 2)
 
 **Prompt**
 
@@ -2285,6 +2413,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 11:06 to 2026-10-30 11:23 (16m 35s)
 - **Outcome:** done; committed [`d1c8475468a8`](https://github.com/wingware-dev/transitory/commit/d1c8475468a8def1edc2f0aace1c0bb20b9a84a6)
 - **Usage:** 122 input, 52k output, 5.12M cache read, 137k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 86 calls, 8 to Wing's MCP tools (wing-review 5, wing-testing 3)
 
 **Prompt**
 
@@ -2348,6 +2477,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 11:24 to 2026-10-30 11:26 (1m 59s)
 - **Outcome:** done; committed [`79e6fd6bad9c`](https://github.com/wingware-dev/transitory/commit/79e6fd6bad9c64c825450c767751b388f942ede1)
 - **Usage:** 28 input, 9,286 output, 1.80M cache read, 13k cache write (claude-opus-5-5)
+- **Tools:** 16 calls, 4 to Wing's MCP tools (wing-review 2, wing-testing 2)
 
 **Prompt**
 
@@ -2379,6 +2509,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 11:27 to 2026-10-30 11:29 (2m 03s)
 - **Outcome:** done; committed [`9aa6f8eef074`](https://github.com/wingware-dev/transitory/commit/9aa6f8eef07496870e38ef607839692e41b1e3e4)
 - **Usage:** 2,588 input, 9,840 output, 2.14M cache read, 17k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 21 calls, 3 to Wing's MCP tools (wing-review 2, wing-testing 1)
 
 **Prompt**
 
@@ -2411,6 +2542,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 11:29 to 2026-10-30 11:40 (9m 54s)
 - **Outcome:** done; committed [`0616d51e811c`](https://github.com/wingware-dev/transitory/commit/0616d51e811c67b6b7d3ee5dfde4168ad3e4643d)
 - **Usage:** 2,282 input, 49k output, 6.54M cache read, 129k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 109 calls, 17 to Wing's MCP tools (wing-testing 7, wing-analysis 6, wing-review 4)
 
 **Prompt**
 
@@ -2459,6 +2591,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 11:40 to 2026-10-30 11:48 (7m 46s)
 - **Outcome:** done; committed [`aff3dc8e438a`](https://github.com/wingware-dev/transitory/commit/aff3dc8e438afa92c4204fda4f0e51f1dd0b5515)
 - **Usage:** 1,984 input, 26k output, 2.91M cache read, 81k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 48 calls, 5 to Wing's MCP tools (wing-review 4, wing-testing 1)
 
 **Prompt**
 
@@ -2499,6 +2632,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 11:48 to 2026-10-30 11:58 (9m 35s)
 - **Outcome:** done; committed [`89cc1e1198ac`](https://github.com/wingware-dev/transitory/commit/89cc1e1198acb0290de0e71ac9bbadac561d341e)
 - **Usage:** 84 input, 20k output, 2.75M cache read, 85k cache write (claude-opus-5-5)
+- **Tools:** 47 calls, 6 to Wing's MCP tools (wing-review 5, wing-testing 1)
 
 **Prompt**
 
@@ -2566,6 +2700,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 11:59 to 2026-10-30 12:00 (0m 47s)
 - **Outcome:** done; committed [`f09fc27dc7ae`](https://github.com/wingware-dev/transitory/commit/f09fc27dc7ae8fb7dbe082f0e3e17c00dcdc0af8)
 - **Usage:** 3,094 input, 3,921 output, 1.05M cache read, 8,346 cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 10 calls, 3 to Wing's MCP tools (wing-review 2, wing-testing 1)
 
 **Prompt**
 
@@ -2598,6 +2733,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 17:10 to 2026-10-30 17:36 (6m 16s)
 - **Outcome:** blocked
 - **Usage:** 2,037 input, 6,471 output, 424k cache read, 52k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 15 calls, 2 to Wing's MCP tools (wing-review 2)
 
 **Prompt**
 
@@ -2622,6 +2758,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:**  to 2026-10-30 17:31 ()
 - **Outcome:** obsolete
 - **Usage:** 0 input, 0 output, 0 cache read, 0 cache write (model not recorded)
+- **Tools:** not recorded (no transcript)
 
 **Prompt**
 
@@ -2638,6 +2775,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 17:31 to 2026-10-30 17:36 (4m 37s)
 - **Outcome:** done; committed [`ac2326ed4c69`](https://github.com/wingware-dev/transitory/commit/ac2326ed4c69b7d6f85ca4b642506480b012a927)
 - **Usage:** 2,226 input, 22k output, 2.95M cache read, 84k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 66 calls, 6 to Wing's MCP tools (wing-review 4, wing-testing 2)
 
 **Prompt**
 
@@ -2694,6 +2832,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 17:47 to 2026-10-30 18:04 (17m 21s)
 - **Outcome:** done; committed [`7e213150d3c1`](https://github.com/wingware-dev/transitory/commit/7e213150d3c1576f528f9bcf5295f82326877262)
 - **Usage:** 132 input, 21k output, 3.79M cache read, 79k cache write (claude-opus-5-5)
+- **Tools:** 57 calls, 7 to Wing's MCP tools (wing-review 6, wing-testing 1)
 
 **Prompt**
 
@@ -2734,6 +2873,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 18:05 to 2026-10-30 18:11 (6m 23s)
 - **Outcome:** done; committed [`b909d796bab8`](https://github.com/wingware-dev/transitory/commit/b909d796bab879f272e457b0f7de27617256762c)
 - **Usage:** 108 input, 31k output, 6.13M cache read, 127k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 72 calls, 5 to Wing's MCP tools (wing-review 3, wing-testing 2)
 
 **Prompt**
 
@@ -2782,6 +2922,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 18:12 to 2026-10-30 18:14 (2m 08s)
 - **Outcome:** done; committed [`7bf97d8e04f0`](https://github.com/wingware-dev/transitory/commit/7bf97d8e04f09ff6154f6d924314c15627cc3d77)
 - **Usage:** 11k input, 13k output, 3.15M cache read, 24k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 23 calls, 3 to Wing's MCP tools (wing-review 2, wing-testing 1)
 
 **Prompt**
 
@@ -2815,6 +2956,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 18:14 to 2026-10-30 18:15 (1m 04s)
 - **Outcome:** done
 - **Usage:** 1,704 input, 794 output, 126k cache read, 17k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 5 calls, 4 to Wing's MCP tools (wing-review 3, wing-testing 1)
 
 **Prompt**
 
@@ -2834,6 +2976,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 18:38 to 2026-10-30 20:38 (8m 30s)
 - **Outcome:** done
 - **Usage:** 2,399 input, 30k output, 1.88M cache read, 91k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 29 calls, 4 to Wing's MCP tools (wing-review 4)
 
 **Prompt**
 
@@ -2886,6 +3029,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 18:48 to 2026-10-30 18:51 (2m 43s)
 - **Outcome:** done; committed [`e722d30ca139`](https://github.com/wingware-dev/transitory/commit/e722d30ca1397d12d21262a3bce1f6337cfdac52)
 - **Usage:** 2,148 input, 18k output, 1.26M cache read, 53k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 25 calls, 9 to Wing's MCP tools (wing-review 8, wing-testing 1)
 
 **Prompt**
 
@@ -2932,6 +3076,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 18:48 to 2026-10-30 18:56 (7m 19s)
 - **Outcome:** done; committed [`6367ca609787`](https://github.com/wingware-dev/transitory/commit/6367ca60978710b0fb6bbedee35626db3b5ff847)
 - **Usage:** 2,478 input, 37k output, 2.56M cache read, 101k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 33 calls, 10 to Wing's MCP tools (wing-review 8, wing-testing 2)
 
 **Prompt**
 
@@ -2992,6 +3137,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 18:48 to 2026-10-30 18:52 (3m 00s)
 - **Outcome:** done; committed [`61e1eb883667`](https://github.com/wingware-dev/transitory/commit/61e1eb8836670974eb023e7ad72ad7beb9db4250)
 - **Usage:** 66 input, 14k output, 1.65M cache read, 65k cache write (claude-opus-5-5)
+- **Tools:** 30 calls, 6 to Wing's MCP tools (wing-review 4, wing-testing 2)
 
 **Prompt**
 
@@ -3037,6 +3183,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 18:48 to 2026-10-30 19:08 (19m 47s)
 - **Outcome:** done; committed [`7a2420cab67a`](https://github.com/wingware-dev/transitory/commit/7a2420cab67a672dbfd5c2ffe807f77d6178cf61)
 - **Usage:** 36k input, 63k output, 8.84M cache read, 167k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 127 calls, 16 to Wing's MCP tools (wing-testing 9, wing-review 4, wing-analysis 3)
 
 **Prompt**
 
@@ -3091,6 +3238,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 18:56 to 2026-10-30 20:30 (1h 33m)
 - **Outcome:** done; committed [`4c3fdf6df8d1`](https://github.com/wingware-dev/transitory/commit/4c3fdf6df8d168c8aa099a055fe2416aebdaf206)
 - **Usage:** 88 input, 49k output, 6.26M cache read, 114k cache write (claude-opus-5-5)
+- **Tools:** 37 calls, 5 to Wing's MCP tools (wing-testing 3, wing-review 2)
 
 **Prompt**
 
@@ -3158,6 +3306,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 20:30 to 2026-10-30 20:38 (7m 24s)
 - **Outcome:** done; committed [`c487044cd062`](https://github.com/wingware-dev/transitory/commit/c487044cd06263a0ce77707e3b46820b729eb891)
 - **Usage:** 1,951 input, 26k output, 8.95M cache read, 55k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 43 calls, 6 to Wing's MCP tools (wing-review 4, wing-testing 2)
 
 **Prompt**
 
@@ -3215,6 +3364,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:**  to 2026-10-30 20:32 ()
 - **Outcome:** obsolete
 - **Usage:** 0 input, 0 output, 0 cache read, 0 cache write (model not recorded)
+- **Tools:** not recorded (no transcript)
 
 **Prompt**
 
@@ -3230,6 +3380,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 20:38 to 2026-10-30 20:42 (4m 07s)
 - **Outcome:** done; committed [`ab06c0f00264`](https://github.com/wingware-dev/transitory/commit/ab06c0f002648f9aea9a6726a1d922937b5d919e)
 - **Usage:** 2,794 input, 21k output, 3.18M cache read, 82k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 60 calls, 7 to Wing's MCP tools (wing-review 4, wing-testing 3)
 
 **Prompt**
 
@@ -3283,6 +3434,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 20:43 to 2026-10-30 20:45 (1m 39s)
 - **Outcome:** done
 - **Usage:** 1,831 input, 1,629 output, 195k cache read, 20k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 7 calls, 4 to Wing's MCP tools (wing-review 3, wing-testing 1)
 
 **Prompt**
 
@@ -3318,6 +3470,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 20:45 to 2026-10-30 20:50 (2m 56s)
 - **Outcome:** done
 - **Usage:** 46 input, 9,439 output, 910k cache read, 45k cache write (claude-opus-5-5)
+- **Tools:** 22 calls, 4 to Wing's MCP tools (wing-review 4)
 
 **Prompt**
 
@@ -3355,6 +3508,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:**  to 2026-10-30 20:48 ()
 - **Outcome:** dismissed
 - **Usage:** 0 input, 0 output, 0 cache read, 0 cache write (model not recorded)
+- **Tools:** not recorded (no transcript)
 
 **Prompt**
 
@@ -3371,6 +3525,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 20:48 to 2026-10-30 21:07 (18m 57s)
 - **Outcome:** done; committed [`2b6329dd19e6`](https://github.com/wingware-dev/transitory/commit/2b6329dd19e69d6912d5489694c9bb7d8e426fec)
 - **Usage:** 2,432 input, 46k output, 5.63M cache read, 128k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 82 calls, 11 to Wing's MCP tools (wing-review 7, wing-testing 3, wing-analysis 1)
 
 **Prompt**
 
@@ -3440,6 +3595,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 20:49 to 2026-10-30 20:50 (1m 06s)
 - **Outcome:** done; committed [`5cdec721e565`](https://github.com/wingware-dev/transitory/commit/5cdec721e565bb059320afab4bab0cbeadf88060)
 - **Usage:** 2,043 input, 4,914 output, 1.12M cache read, 19k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 14 calls, 5 to Wing's MCP tools (wing-review 4, wing-testing 1)
 
 **Prompt**
 
@@ -3468,6 +3624,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 21:08 to 2026-10-30 21:11 (3m 24s)
 - **Outcome:** done; committed [`453927474d9a`](https://github.com/wingware-dev/transitory/commit/453927474d9a7076a0f4f0855261537acd561e0d)
 - **Usage:** 70 input, 15k output, 5.54M cache read, 43k cache write (claude-opus-5-5)
+- **Tools:** 42 calls, 3 to Wing's MCP tools (wing-review 2, wing-testing 1)
 
 **Prompt**
 
@@ -3506,6 +3663,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 21:12 to 2026-10-30 21:15 (2m 26s)
 - **Outcome:** done
 - **Usage:** 1,753 input, 3,871 output, 309k cache read, 25k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 10 calls, 5 to Wing's MCP tools (wing-review 4, wing-testing 1)
 
 **Prompt**
 
@@ -3545,6 +3703,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 21:14 to 2026-10-30 21:15 (0m 21s)
 - **Outcome:** done; committed [`8c284248b77f`](https://github.com/wingware-dev/transitory/commit/8c284248b77f18b049d6b6f2c5a72eaee88c7511)
 - **Usage:** 14 input, 1,555 output, 1.12M cache read, 4,187 cache write (claude-opus-5-5)
+- **Tools:** 6 calls, 3 to Wing's MCP tools (wing-review 2, wing-testing 1)
 
 **Prompt**
 
@@ -3579,6 +3738,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 21:15 to 2026-10-30 21:50 (35m 06s)
 - **Outcome:** done; committed [`995f60ddcb27`](https://github.com/wingware-dev/transitory/commit/995f60ddcb27a98cd228a39f1fb3aa6f9aec8fd7)
 - **Usage:** 54 input, 6,163 output, 860k cache read, 44k cache write (claude-opus-5-5)
+- **Tools:** 21 calls, 4 to Wing's MCP tools (wing-review 4)
 
 **Prompt**
 
@@ -3616,6 +3776,7 @@ Before publishing, the DSS2 sky images the agents recorded from NASA SkyView for
 - **Ran:** 2026-10-30 21:50 to 2026-10-30 21:52 (1m 52s)
 - **Outcome:** done; committed [`901a1f4d8095`](https://github.com/wingware-dev/transitory/commit/901a1f4d80950a15dfa660b874d66b4310dfeebd)
 - **Usage:** 1,767 input, 7,678 output, 1.52M cache read, 28k cache write (claude-haiku-5-5, claude-opus-5-5)
+- **Tools:** 20 calls, 3 to Wing's MCP tools (wing-review 2, wing-testing 1)
 
 **Prompt**
 
