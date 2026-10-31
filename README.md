@@ -11,9 +11,112 @@ results as a gallery of plots per star and a summary table.
 
 It runs on macOS, Linux and Windows (Python 3.11 or later).
 
-Transitory was written entirely by AI agents, as a test of the autonomous
-development features in Wing Pro 12.1.  See [How it was built](#how-it-was-built)
-for the prompts, what went wrong, and the full trail of the run.
+## How it was built
+
+Transitory is a test of the autonomous development features in Wing Pro
+12.1, a Python IDE from [Wingware](https://wingware.com/).  AI agents
+(Claude Code) wrote all of it from one prompt and two follow-up requests,
+with Wing's Tasks Manager queueing and running the work.  The Tasks
+Manager is itself an AI agent: it turns a request into a queue of tasks,
+gives each to a separate coding agent, answers their questions, checks and
+commits their work, and starts the next.  The agents planned, built and
+tested the app, made their own judgement calls, filed the problems they
+found as new tasks, took the screenshots in `docs/shots/` with the test
+harness they built, and each finished piece of work became a commit here.
+
+This was a large run, and not a smooth one: a real-world test of how
+Wing's agents cope with interruptions and failing services, on a laptop
+that was closed for hours at a time and later used on a train with a
+connection that came and went, from 7:55 am on October 29, 2026 to about
+10 pm on October 30.  It made 80 tasks and 63 commits, with
+18 hours of agent work.  It had three parts.
+
+**The original prompt** built the dashboard, the transit search and fit,
+and the known-planet validation, which then found problems in the search
+and fit that became tasks of their own:
+
+> I'd like a Python tool that gives me a dashboard for finding planets
+> around other stars in public space-telescope data, for macOS, Linux and
+> Windows. It should show me the sky so I can zoom in and select one or
+> more stars by clicking and/or entering name or catalog number.  When I
+> submit the stars, it should fetch each star's brightness measurements
+> from the TESS or Kepler missions, clean them up, search them for the
+> small regular dips of a planet passing in front of the star, and fit the
+> best candidates to estimate each planet's orbital period, size compared
+> to its star, and how long each transit lasts. The results should be
+> shown to me with a gallery of plots for each star (the raw and cleaned
+> brightness, the search results, and the dips lined up on the period with
+> the fitted model) and a summary table of what it found and how confident
+> it is.
+>
+> I want to be able to trust what it finds, so it should prove itself by
+> rediscovering known planets. Pick a set of stars with confirmed planets
+> of different sizes and periods, plus a few stars known to have none, and
+> have the report compare what it finds with the published values,
+> including any it misses. Tests should use made-up brightness data with
+> planets put in at known periods and depths, not downloaded data, so they
+> run can offline. Keep downloaded data in a local cache that isn't
+> committed, and make sure we follow the archive's terms for using and
+> crediting its data.
+>
+> Once the code exists, set it up in Wing as the main entry point so I can
+> test/debug it. Run all tasks to completion except small details and
+> ideas for future improvements.
+>
+> Commit a screenshot of each major visible change under docs/shots/ since
+> we'll be creating a publishable trace of this run later.
+
+**Improving the sky view.**  After trying it, the next morning:
+
+> When I mouse over stars, the details section at bottom expands and
+> collapses, which also shifts the stars, making it impossible to actually
+> hover/select specific stars.  Also can't scroll or zoom on the sky and
+> in general that view seems to need improvement.  There are some
+> suggested draft tasks that might be part of that.
+
+The Tasks Manager fixed the first two and had an agent plan the rest:
+true aspect and RA in hours, a legend, field stars from the TESS Input
+Catalog when zoomed in, click and right-click actions, and a survey image
+behind the stars.  The image service, CDS hips2fits, stopped answering
+partway through and never came back during the run, so the background
+was switched off and left for later.
+
+**Fixing the data sources.**  That evening, nothing worked:
+
+> Nothing seems to work anymore.   All the stars I tried raise an
+> exception that there is no MAST data, even one in the Kepler field.
+> That one said could not connect.  I wonder if we're hitting a maximum
+> free use limit or something.
+
+MAST's observation search, which the app used to find every light curve,
+was hanging, though its other services worked; and stars from the K2
+mission had never been supported.  Asked to wait for MAST to recover, the
+user answered:
+
+> If the data sources are this flaky it sounds to me like this whole app
+> is useless.  Is there a better approach or do we give up?
+
+An agent planned a more resilient data path, and the tasks that followed
+find light-curve files at their fixed places on STScI's archive and on
+its AWS mirror before falling back to the search, give up quickly on a
+service that is down, say which source each light curve came from, add
+K2 with a correction for the spacecraft's roll, and add a NASA SkyView
+fallback for the sky images.  The validation was then rerun live with two
+K2 stars added (K2-18 and K2-334).
+
+The run ended with 18 proposed tasks left for later (see the trail's
+"Tasks not run").
+
+Before publishing, the DSS2 sky images the agents had recorded from NASA
+SkyView for the tests were replaced with made-up star fields, since DSS2
+images are copyrighted by the survey plates' owners, and were removed from
+the history.  So the commits the trail links to have the made-up images.
+
+[run-trail/RUN.md](run-trail/RUN.md) is the run's full trail: every task
+with its prompt, the questions and who answered them, the judgement calls,
+the findings filed, the commits and screenshots, and the time and tokens
+each used, followed by what went wrong along the way.
+[run-trail/trail.json](run-trail/trail.json) has the same data.
 
 ## Install
 
@@ -245,112 +348,6 @@ uses them.  **Help ▸ Data Credits…** lists the acknowledgements and data DOI
 for the stars you analysed (with *Copy as text*), with where and when their
 light curves were retrieved, and every plot carries its star's credit lines.  The full wording and the software citations are in
 [docs/CREDITS.md](docs/CREDITS.md).
-
-## How it was built
-
-Transitory is a test of the autonomous development features in Wing Pro
-12.1, a Python IDE from [Wingware](https://wingware.com/): AI agents
-(Claude Code) wrote all of it, working inside Wing.  Wing's Tasks
-Manager is itself an AI agent: it turns a request into a queue of tasks,
-gives each to a separate coding agent, answers their questions, checks and
-commits their work, and starts the next.  The agents planned, built and
-tested the app, made their own judgement calls, filed the problems they
-found as new tasks, took the screenshots in `docs/shots/` with the test
-harness they built, and each finished piece of work became a commit here.
-
-This was a large run, and not a smooth one: a real-world test of how
-Wing's agents cope with interruptions and failing services, on a laptop
-that was closed for hours at a time and later used on a train with a
-connection that came and went, from 7:55 am on October 29, 2026 to about
-10 pm on October 30.  It made 80 tasks and 63 commits, with
-18 hours of agent work.  It had three parts.
-
-**The original prompt** built the dashboard, the transit search and fit,
-and the known-planet validation, which then found problems in the search
-and fit that became tasks of their own:
-
-> I'd like a Python tool that gives me a dashboard for finding planets
-> around other stars in public space-telescope data, for macOS, Linux and
-> Windows. It should show me the sky so I can zoom in and select one or
-> more stars by clicking and/or entering name or catalog number.  When I
-> submit the stars, it should fetch each star's brightness measurements
-> from the TESS or Kepler missions, clean them up, search them for the
-> small regular dips of a planet passing in front of the star, and fit the
-> best candidates to estimate each planet's orbital period, size compared
-> to its star, and how long each transit lasts. The results should be
-> shown to me with a gallery of plots for each star (the raw and cleaned
-> brightness, the search results, and the dips lined up on the period with
-> the fitted model) and a summary table of what it found and how confident
-> it is.
->
-> I want to be able to trust what it finds, so it should prove itself by
-> rediscovering known planets. Pick a set of stars with confirmed planets
-> of different sizes and periods, plus a few stars known to have none, and
-> have the report compare what it finds with the published values,
-> including any it misses. Tests should use made-up brightness data with
-> planets put in at known periods and depths, not downloaded data, so they
-> run can offline. Keep downloaded data in a local cache that isn't
-> committed, and make sure we follow the archive's terms for using and
-> crediting its data.
->
-> Once the code exists, set it up in Wing as the main entry point so I can
-> test/debug it. Run all tasks to completion except small details and
-> ideas for future improvements.
->
-> Commit a screenshot of each major visible change under docs/shots/ since
-> we'll be creating a publishable trace of this run later.
-
-**Improving the sky view.**  After trying it, the next morning:
-
-> When I mouse over stars, the details section at bottom expands and
-> collapses, which also shifts the stars, making it impossible to actually
-> hover/select specific stars.  Also can't scroll or zoom on the sky and
-> in general that view seems to need improvement.  There are some
-> suggested draft tasks that might be part of that.
-
-The Tasks Manager fixed the first two and had an agent plan the rest:
-true aspect and RA in hours, a legend, field stars from the TESS Input
-Catalog when zoomed in, click and right-click actions, and a survey image
-behind the stars.  The image service, CDS hips2fits, stopped answering
-partway through and never came back during the run, so the background
-was switched off and left for later.
-
-**Fixing the data sources.**  That evening, nothing worked:
-
-> Nothing seems to work anymore.   All the stars I tried raise an
-> exception that there is no MAST data, even one in the Kepler field.
-> That one said could not connect.  I wonder if we're hitting a maximum
-> free use limit or something.
-
-MAST's observation search, which the app used to find every light curve,
-was hanging, though its other services worked; and stars from the K2
-mission had never been supported.  Asked to wait for MAST to recover, the
-user answered:
-
-> If the data sources are this flaky it sounds to me like this whole app
-> is useless.  Is there a better approach or do we give up?
-
-An agent planned a more resilient data path, and the tasks that followed
-find light-curve files at their fixed places on STScI's archive and on
-its AWS mirror before falling back to the search, give up quickly on a
-service that is down, say which source each light curve came from, add
-K2 with a correction for the spacecraft's roll, and add a NASA SkyView
-fallback for the sky images.  The validation was then rerun live with two
-K2 stars added (K2-18 and K2-334).
-
-The run ended with 18 proposed tasks left for later (see the trail's
-"Tasks not run").
-
-Before publishing, the DSS2 sky images the agents had recorded from NASA
-SkyView for the tests were replaced with made-up star fields, since DSS2
-images are copyrighted by the survey plates' owners, and were removed from
-the history.  So the commits the trail links to have the made-up images.
-
-[run-trail/RUN.md](run-trail/RUN.md) is the run's full trail: every task
-with its prompt, the questions and who answered them, the judgement calls,
-the findings filed, the commits and screenshots, and the time and tokens
-each used, followed by what went wrong along the way.
-[run-trail/trail.json](run-trail/trail.json) has the same data.
 
 ## License
 
