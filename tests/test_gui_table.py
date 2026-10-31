@@ -102,6 +102,15 @@ def test_stars_without_planets_explain_why():
     assert rows_for(failed)[0].notes == "fetch: no data"
 
 
+def test_notes_name_where_the_light_curve_came_from():
+    analysis = make_analysis()
+    analysis.raw.source = "AWS Open Data (stpubdata)"
+    notes = [row.notes for row in rows_for(analysis)]
+    assert notes and all(n.endswith("; data from AWS Open Data (stpubdata)") for n in notes)
+    analysis.planets = []
+    assert rows_for(analysis)[0].notes == "no transit signal found; data from AWS Open Data (stpubdata)"
+
+
 def test_confidence_colour_coding(table):
     strong = cell(table, 0, CONFIDENCE_COLUMN, Qt.ItemDataRole.BackgroundRole)
     weak = cell(table, 1, CONFIDENCE_COLUMN, Qt.ItemDataRole.BackgroundRole)

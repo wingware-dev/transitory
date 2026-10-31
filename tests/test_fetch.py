@@ -707,6 +707,27 @@ def test_credits():
     assert mission_credits(LightCurve(np.zeros(1), np.ones(1), np.ones(1), "Synthetic")) == []
 
 
+def test_credits_say_where_the_files_were_retrieved_from():
+    def lc(mission, source, retrieved="2026-10-30"):
+        return LightCurve(np.zeros(1), np.ones(1), np.ones(1), mission, dois=[DOIS[{"TESS": "SPOC"}.get(
+            mission, mission)]], source=source, retrieved=retrieved)
+
+    static = mission_credits(lc("TESS", "STScI archive files"))
+    assert static[2:] == ["Light curves retrieved on 2026-10-30 from STScI archive files "
+                          "(https://archive.stsci.edu/missions/).", fetch.LIGHTKURVE_CREDIT]
+    s3 = mission_credits(lc("Kepler", "AWS Open Data (stpubdata)"))
+    assert s3[2:4] == ["Light curves retrieved on 2026-10-30 from AWS Open Data (s3://stpubdata).",
+                       "Kepler Mission Data was accessed on 2026-10-30 from "
+                       "https://registry.opendata.aws/mast-kepler."]
+    both = fetch.retrieval_credits(lc("K2", "STScI archive files + AWS Open Data (stpubdata)", ""))
+    assert both == ["Light curves retrieved from STScI archive files (https://archive.stsci.edu/missions/)"
+                    " and AWS Open Data (s3://stpubdata).",
+                    "K2 Mission Data was accessed on DATE from https://registry.opendata.aws/mast-k2."]
+    assert fetch.retrieval_credits(lc("TESS", "MAST search")) == [
+        "Light curves retrieved on 2026-10-30 from the MAST search (https://mast.stsci.edu)."]
+    assert fetch.retrieval_credits(lc("TESS", "")) == []
+
+
 def test_target_without_any_identifier():
     with pytest.raises(SourceError, match="No identifier"):
         MastSource().fetch(StarTarget("  ", mission_hint="TESS"))
@@ -832,7 +853,7 @@ def test_static_files_are_used_and_cached(mirrors, fake_lk):
     add_kepler(mirrors, fake_lk)
     calls = []
     lc = chain_source(mirrors).fetch(KEPLER_10, progress_cb=lambda m, f: calls.append(m))
-    assert lc.source == "STScI archive files"
+    assert lc.source == "STScI archive files" and lc.retrieved == cache_mod.now_iso()[:10]
     assert lc.mission == "Kepler" and lc.sectors_or_quarters == [1, 2]
     assert lc.dois == [DOIS["Kepler"]]
     assert all(u.startswith(archive_files.STSCI_URL) for u in mirrors.listings + mirrors.downloads)
@@ -850,7 +871,7 @@ def test_static_files_are_used_and_cached(mirrors, fake_lk):
     fake_lk.search_error = ConnectionError("MAST is down")
     n_listings = len(mirrors.listings)
     again = chain_source(mirrors).fetch(KEPLER_10)
-    assert again.source == "STScI archive files"
+    assert again.source == "STScI archive files" and again.retrieved == lc.retrieved
     np.testing.assert_array_equal(again.flux, lc.flux)
     assert len(mirrors.listings) == n_listings and fake_lk.searches == []
 
@@ -863,6 +884,7 @@ def test_static_unreachable_falls_back_to_s3(mirrors, fake_lk):
     assert lc.source == "AWS Open Data (stpubdata)"
     assert lc.sectors_or_quarters == [1, 2]
     assert all(u.startswith(archive_files.S3_URL) for u in mirrors.downloads)
+    assert "https://registry.opendata.aws/mast-kepler." in mission_credits(lc)[-2]
     assert "STScI archive files unavailable; trying AWS Open Data (stpubdata)" in calls
     assert fake_lk.searches == []
 

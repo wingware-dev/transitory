@@ -123,6 +123,27 @@ LIGHTKURVE_CREDIT = ("This research made use of Lightkurve, a Python package for
                      "data analysis (Lightkurve Collaboration, 2018).")
 
 
+# Where a light curve's files came from (``LightCurve.source``), for its credits.
+RETRIEVED_FROM = {
+    "STScI archive files": "STScI archive files (https://archive.stsci.edu/missions/)",
+    "AWS Open Data (stpubdata)": "AWS Open Data (s3://stpubdata)",
+    "MAST search": "the MAST search (https://mast.stsci.edu)",
+}
+RETRIEVAL_NOTE = (
+    "Light curves are retrieved from STScI archive files (https://archive.stsci.edu/missions/), "
+    "else from AWS Open Data (s3://stpubdata), else found with the MAST search "
+    "(https://mast.stsci.edu). They are the same MAST products, with the same DOIs and "
+    "acknowledgements, from whichever copy; each star's credits name the one used and the date.")
+# The Registry of Open Data on AWS asks to be cited as "<name> was accessed on
+# DATE from https://registry.opendata.aws/<slug>" (each dataset's "How to Cite",
+# checked 2026-10-30).
+AWS_DATASETS = {
+    "TESS": ("Transiting Exoplanet Survey Satellite (TESS)", "mast-tess"),
+    "Kepler": ("Kepler Mission Data", "mast-kepler"),
+    "K2": ("K2 Mission Data", "mast-k2"),
+}
+
+
 def doi_line(doi: str, mission: str = "") -> str:
     """``title: https://doi.org/...`` for a mission data DOI."""
     title = DOI_TITLES.get(doi, f"{mission} data".strip())
@@ -411,8 +432,32 @@ def mission_credits(lc: LightCurve) -> list[str]:
         sectors = lc.sectors_for(doi)
         used = f" ({sector_unit(lc.mission)} {number_ranges(sectors)})" if sectors else ""
         lines.append(doi_line(doi, lc.mission) + used)
+    lines += retrieval_credits(lc)
     lines.append(LIGHTKURVE_CREDIT)
     return lines
+
+
+def retrieval_credits(lc: LightCurve) -> list[str]:
+    """Where ``lc``'s files were retrieved from, and when; for AWS, the citation it asks for.
+
+    The products, DOIs and acknowledgements are MAST's whichever source gave
+    them; these lines say which copy was used.
+    """
+    sources = [s for s in lc.source.split(" + ") if s]
+    if not sources:
+        return []
+    when = f" on {lc.retrieved}" if lc.retrieved else ""
+    where = " and ".join(RETRIEVED_FROM.get(s, s) for s in sources)
+    lines = [f"Light curves retrieved{when} from {where}."]
+    if SOURCE_TITLES["s3"] in sources and lc.mission in AWS_DATASETS:
+        lines.append(aws_citation(lc.mission, lc.retrieved or "DATE"))
+    return lines
+
+
+def aws_citation(mission: str, date: str) -> str:
+    """The Registry of Open Data's "How to Cite" line for a mission's files on AWS."""
+    name, slug = AWS_DATASETS[mission]
+    return f"{name} was accessed on {date} from https://registry.opendata.aws/{slug}."
 
 
 def sector_unit(mission: str) -> str:
@@ -618,19 +663,20 @@ class MastSource:
                     log.info("%s: no %s data (cached %s)", query, mission, entry["created"])
                     return []
             else:
-                products = [dict(p, path=index.absolute(p["file"])) for p in entry["products"]]
+                products = [dict(p, path=index.absolute(p["file"]), retrieved=entry["created"][:10])
+                            for p in entry["products"]]
                 if all(p["path"].exists() for p in products):
                     progress(f"Reading {len(products)} cached {mission} file(s)", 0.1)
                     return products
                 log.info("%s: cached %s files missing; fetching again", query, mission)
 
         products = self._download(index, target, query, mission, progress)
-        index.put(key, {
+        stored = index.put(key, {
             "query": query,
             "mission": mission,
             "products": [{k: v for k, v in p.items() if k != "path"} for p in products],
         })
-        return products
+        return [dict(p, retrieved=stored["created"][:10]) for p in products]
 
     def _negative_fresh(self, index: CacheIndex, key: str) -> bool:
         return index.get(key, max_age_days=NEGATIVE_CACHE_DAYS) is not None
@@ -842,6 +888,7 @@ class MastSource:
         return lc, "PDCSAP"
 
     def _stitch(self, products: Iterable[dict], mission: Mission) -> LightCurve:
+        products = list(products)
         times, fluxes, errs = [], [], []
         seqs, ids, authors, exptimes, kinds = set(), [], [], [], set()
         sources = []
@@ -898,4 +945,5 @@ class MastSource:
             cadence_s=float(np.nanmedian(exptimes)) if exptimes else None,
             doi_sectors={doi: sorted(s) for doi, s in doi_seqs.items()} if len(doi_seqs) > 1 else {},
             source=" + ".join(dict.fromkeys(sources)),
+            retrieved=min((p["retrieved"] for p in products if p.get("retrieved")), default=""),
         )

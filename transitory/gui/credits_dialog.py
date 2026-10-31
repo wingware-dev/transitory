@@ -1,7 +1,7 @@
 """Help ▸ Data Credits: the acknowledgements for the data and software used.
 
 The general section lists what the dashboard can use (TESS and Kepler data
-from MAST, the NASA Exoplanet Archive, Lightkurve / Astropy / Astroquery,
+from MAST, the copies of it the light curves are retrieved from, the NASA Exoplanet Archive, Lightkurve / Astropy / Astroquery,
 and the CDS hips2fits / NASA SkyView sky images and their surveys while the sky view shows
 them, ``sky_background.SKY_IMAGES``);
 the session section collects the credit lines of each star analysed so far,
@@ -26,7 +26,8 @@ from ..catalog.archive import ARCHIVE_CREDIT, ARCHIVE_REFERENCES
 from ..catalog.hips import HIPS2FITS_CREDIT, SKYVIEW_CREDIT, SURVEY_CREDITS
 from ..catalog.tic import TIC_CREDIT
 from ..models import StarAnalysis
-from ..pipeline.fetch import DOI_TITLES, LIGHTKURVE_CREDIT, MAST_CREDITS, doi_line
+from ..pipeline.fetch import (AWS_DATASETS, DOI_TITLES, LIGHTKURVE_CREDIT, MAST_CREDITS,
+                              RETRIEVAL_NOTE, aws_citation, doi_line)
 from . import sky_background
 
 # As each package's citation page asks (checked 2026-10-29).  Astroquery is
@@ -58,6 +59,8 @@ def general_credits() -> list[tuple[str, list[str]]]:
         ("TESS data (MAST)", [MAST_CREDITS["TESS"]]),
         ("Kepler and K2 data (MAST)", [MAST_CREDITS["Kepler"]]),
         ("Mission data DOIs", [doi_line(doi) for doi in DOI_TITLES]),
+        ("Where the light-curve files come from",
+         [RETRIEVAL_NOTE, *(aws_citation(mission, "DATE") for mission in AWS_DATASETS)]),
         ("TESS Input Catalog (MAST)", [TIC_CREDIT]),
         ("NASA Exoplanet Archive", [ARCHIVE_CREDIT, *ARCHIVE_REFERENCES]),
         *(sky_image_credits() if sky_background.SKY_IMAGES else []),  # not while CDS is down

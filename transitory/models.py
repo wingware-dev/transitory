@@ -73,8 +73,10 @@ class LightCurve:
     # Sectors or quarters each DOI's products cover, where they differ (SPOC + TESS-SPOC);
     # a DOI not listed covers all of sectors_or_quarters.
     doi_sectors: dict[str, list[int]] = field(default_factory=dict)
-    # Where the files came from, e.g. "STScI archive files" or "MAST search".
+    # Where the files came from, e.g. "STScI archive files" or "MAST search", and when
+    # (YYYY-MM-DD, the oldest file's download).
     source: str = ""
+    retrieved: str = ""
 
     def __len__(self) -> int:
         return len(self.time)

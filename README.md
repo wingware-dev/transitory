@@ -171,7 +171,9 @@ report), without searching again.
 
 Downloaded data are kept so nothing is fetched twice:
 
-- light-curve FITS files (via lightkurve) under `cache/mastDownload/`, with
+- light-curve FITS files under `cache/archive/<mission>/` (from STScI's
+  archive files or the AWS mirror) or `cache/mastDownload/` (from the MAST
+  search, via lightkurve), with
   `cache/index.json` recording which files answer which query;
 - MAST and Exoplanet Archive query results under `cache/catalog/` (archive
   results are refreshed after 30 days).
@@ -181,6 +183,21 @@ Set `TRANSITORY_CACHE_DIR` to put it elsewhere, and `TRANSITORY_REPORTS_DIR`
 for the reports directory (default `reports/`).  Deleting the cache is safe;
 it is rebuilt on demand.  Requests to MAST are made one at a time, with a
 descriptive user agent, timeouts and a single retry.
+
+### Where light curves come from
+
+A star's files are looked up by its KIC, EPIC or TIC in **STScI's archive
+files** (archive.stsci.edu), else on **AWS Open Data** (`s3://stpubdata`),
+MAST's copy on Amazon's servers, else found with the **MAST search**: the
+search is for stars known only by name, or when neither copy can be reached.
+A source that times out or fails is skipped for the next, and not asked
+again for the rest of the run, so one service being down doesn't stall
+every star.  The gallery header and the table's notes say which source gave
+each star's light curve, and its credits say where and when.
+`TRANSITORY_LC_SOURCES` (e.g. `s3,search`) changes the order or leaves sources
+out.
+
+![A star's light curve retrieved from STScI's archive files](docs/shots/10-data-source.png)
 
 ## Tests
 
@@ -212,8 +229,8 @@ shot keeps its old file.
 TESS and Kepler data come from MAST at STScI, and published planet values
 from the NASA Exoplanet Archive; both ask to be acknowledged in any work that
 uses them.  **Help ▸ Data Credits…** lists the acknowledgements and data DOIs
-for the stars you analysed (with *Copy as text*), and every plot carries its
-star's credit lines.  The full wording and the software citations are in
+for the stars you analysed (with *Copy as text*), with where and when their
+light curves were retrieved, and every plot carries its star's credit lines.  The full wording and the software citations are in
 [docs/CREDITS.md](docs/CREDITS.md).
 
 ## License

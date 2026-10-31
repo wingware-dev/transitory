@@ -49,6 +49,28 @@ For a paper covering several stars, combine their sector ranges, as the
 validation report's credits do (each star's ranges listed under the combined
 line).
 
+## Where the light-curve files come from
+
+In code: `transitory.pipeline.fetch.RETRIEVED_FROM`, `RETRIEVAL_NOTE`, `AWS_DATASETS`.
+
+Light curves are retrieved from STScI's archive files
+(<https://archive.stsci.edu/missions/>), else from AWS Open Data
+(`s3://stpubdata`), else found with the MAST search
+(<https://mast.stsci.edu>).  They are the same MAST products from whichever
+copy, so the acknowledgements and DOIs above apply unchanged.  Each star's
+credits add a line naming the copy used and the date, e.g.
+`Light curves retrieved on 2026-10-30 from STScI archive files (https://archive.stsci.edu/missions/).`
+
+Files from AWS also carry the citation the
+[Registry of Open Data on AWS](https://registry.opendata.aws/mast-tess/) asks
+for in each dataset's "How to Cite" (checked 2026-10-30), with the date
+retrieved:
+
+- Transiting Exoplanet Survey Satellite (TESS) was accessed on DATE from
+  https://registry.opendata.aws/mast-tess.
+- Kepler Mission Data was accessed on DATE from https://registry.opendata.aws/mast-kepler.
+- K2 Mission Data was accessed on DATE from https://registry.opendata.aws/mast-k2.
+
 ## TESS Input Catalog (MAST)
 
 Star names are resolved, and stellar Teff, log g, mass and radius taken,

@@ -110,6 +110,8 @@ def _summary_text(analysis: StarAnalysis) -> str:
     if analysis.raw is not None:
         parts.append(f"{analysis.raw.mission}, {len(analysis.raw):,} points, "
                      f"{analysis.raw.baseline_days:.1f} d")
+        if analysis.raw.source:
+            parts.append(f"from {analysis.raw.source}")
     n = len(analysis.planets)
     parts.append("no candidates" if n == 0 else plots.candidate_count_text(
         n, sum(1 for p in analysis.planets if p.is_duo_transit)))

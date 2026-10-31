@@ -320,6 +320,7 @@ def clean_light_curve(
         cadence_s=lc.cadence_s,
         doi_sectors={doi: list(s) for doi, s in lc.doi_sectors.items()},
         source=lc.source,
+        retrieved=lc.retrieved,
     )
     log.append(f"Kept {int(keep.sum())} of {n_raw} points; flattened scatter "
                f"{robust_std(flat - 1.0) * 1e6:.0f} ppm")

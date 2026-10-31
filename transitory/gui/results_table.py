@@ -122,6 +122,10 @@ def rows_for(analysis: StarAnalysis) -> list[ResultRow]:
         note = "; ".join(analysis.errors) if analysis.errors else "no transit signal found"
         rows.append(ResultRow(star=analysis.target.label, star_key=analysis.target.name,
                               planet_index=None, notes=note))
+    source = analysis.raw.source if analysis.raw is not None else ""
+    if source:
+        for row in rows:
+            row.notes = f"{row.notes}; data from {source}" if row.notes else f"data from {source}"
     return rows
 
 

@@ -63,6 +63,16 @@ def test_duo_transit_badge_and_count(gallery):
     assert gallery.status.text() == "1 star, 1 candidate, 1 duo-transit"
 
 
+def test_header_names_where_the_light_curve_came_from(gallery):
+    star = make_analysis(name="Archive Star")
+    star.raw.source = "STScI archive files"
+    section = gallery.add_analysis(star)
+    assert section.summary.text().startswith(f"{star.raw.mission}, ")
+    assert " · from STScI archive files · " in section.summary.text()
+    plain = gallery.add_analysis(make_analysis(name="Synthetic Star"))
+    assert "from" not in plain.summary.text()  # synthetic data name no source
+
+
 def test_canvas_keeps_figure_layout_when_resized(gallery, qtbot):
     section = gallery.add_analysis(make_analysis())
     settle()

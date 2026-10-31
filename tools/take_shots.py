@@ -6,8 +6,9 @@
 
 Each later step registers its shot in SHOTS: a function that drives a
 demo-mode window into the state to capture and returns the widget to grab.
-The sky shots use the live archive, MAST and CDS; when a service they need
-doesn't answer, the shot is skipped and its old file kept.
+The sky shots and the data-source shot use the live archive, MAST, CDS and
+STScI's archive files; when a service they need doesn't answer, the shot is
+skipped and its old file kept.
 """
 
 from __future__ import annotations
@@ -45,6 +46,46 @@ def shot_validation(app):
     return dialog
 
 
+def shot_data_source(app):
+    """A real star analysed on MAST data, the gallery header naming where its files came from.
+
+    Uses the live archive, MAST and STScI's archive files, with an empty
+    temporary cache so the files come from the first source rather than the
+    user's cache.
+    """
+    import tempfile
+
+    from dashboard_host import type_stars, wait_for_results
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    from transitory.pipeline.fetch import MastSource
+
+    cache = tempfile.TemporaryDirectory(prefix="transitory-shot-")
+    old = os.environ.get("TRANSITORY_CACHE_DIR")
+    os.environ["TRANSITORY_CACHE_DIR"] = cache.name
+    try:
+        window = make_main_window(MastSource(max_products=2))
+        type_stars(window, "pi Men", timeout_s=60.0)
+        if not window.panel.targets():
+            raise ShotUnavailable("pi Men could not be resolved (Exoplanet Archive or MAST down?)")
+        QTest.mouseClick(window.panel.submit_button, Qt.MouseButton.LeftButton)
+        wait_for_results(window, timeout_s=300.0)
+        analyses = window.gallery.analyses()
+        if not analyses or analyses[0].raw is None:
+            errors = "; ".join(analyses[0].errors) if analyses else "no result"
+            raise ShotUnavailable(f"pi Men's light curve could not be fetched: {errors}")
+        window.tabs.setCurrentIndex([window.tabs.tabText(i) for i in range(window.tabs.count())]
+                                    .index("Gallery"))
+        app.processEvents()
+        window.shot_cache = cache  # removed with the window, after the shot
+        return window
+    finally:
+        if old is None:
+            os.environ.pop("TRANSITORY_CACHE_DIR", None)
+        else:
+            os.environ["TRANSITORY_CACHE_DIR"] = old
+
+
 def shot_final(app):
     """Every demo star analysed, on the summary table: the README's picture."""
     from dashboard_host import analysed_window
@@ -64,6 +105,7 @@ SHOTS = {
     "validation": ("07-validation.png", shot_validation),
     "final": ("08-final.png", shot_final),
     "sky-zoomed": ("09-sky-zoomed.png", shot_sky_zoomed),
+    "data-source": ("10-data-source.png", shot_data_source),
 }
 
 
