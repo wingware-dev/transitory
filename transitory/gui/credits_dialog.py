@@ -27,7 +27,7 @@ from ..catalog.hips import HIPS2FITS_CREDIT, SKYVIEW_CREDIT, SURVEY_CREDITS
 from ..catalog.tic import TIC_CREDIT
 from ..models import StarAnalysis
 from ..pipeline.fetch import (AWS_DATASETS, DOI_TITLES, LIGHTKURVE_CREDIT, MAST_CREDITS,
-                              RETRIEVAL_NOTE, aws_citation, doi_line)
+                              RETRIEVAL_NOTE, TESS_SPOC_REFERENCE, aws_citation, doi_line)
 from . import sky_background
 
 # As each package's citation page asks (checked 2026-10-29).  Astroquery is
@@ -60,7 +60,8 @@ def general_credits() -> list[tuple[str, list[str]]]:
         ("Kepler and K2 data (MAST)", [MAST_CREDITS["Kepler"]]),
         ("Mission data DOIs", [doi_line(doi) for doi in DOI_TITLES]),
         ("Where the light-curve files come from",
-         [RETRIEVAL_NOTE, *(aws_citation(mission, "DATE") for mission in AWS_DATASETS)]),
+         [RETRIEVAL_NOTE, *(aws_citation(dataset, "DATE") for dataset in AWS_DATASETS),
+          TESS_SPOC_REFERENCE]),
         ("TESS Input Catalog (MAST)", [TIC_CREDIT]),
         ("NASA Exoplanet Archive", [ARCHIVE_CREDIT, *ARCHIVE_REFERENCES]),
         *(sky_image_credits() if sky_background.SKY_IMAGES else []),  # not while CDS is down

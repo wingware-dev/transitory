@@ -188,7 +188,8 @@ descriptive user agent, timeouts and a single retry.
 
 A star's files are looked up by its KIC, EPIC or TIC in **STScI's archive
 files** (archive.stsci.edu), else on **AWS Open Data** (`s3://stpubdata`),
-MAST's copy on Amazon's servers, else found with the **MAST search**: the
+MAST's copy on Amazon's servers (TESS-SPOC full-frame-image light curves
+included), else found with the **MAST search**: the
 search is for stars known only by name, or when neither copy can be reached.
 A source that times out or fails is skipped for the next, and not asked
 again for the rest of the run, so one service being down doesn't stall

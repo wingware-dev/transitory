@@ -19,9 +19,9 @@ without the search service, which can be down when the files are not:
 
 Two mirrors hold them (``MIRRORS``): archive.stsci.edu, listed by reading
 its Apache index pages, and the AWS Open Data bucket ``stpubdata``, listed
-with S3's ListObjectsV2 XML over anonymous HTTPS.  S3 has no TESS-SPOC
-files (``Mirror.has_tess_spoc``), so a TESS sector with no SPOC file there
-is not proof that the star has no light curve for it.
+with S3's ListObjectsV2 XML over anonymous HTTPS.  Both hold every
+collection above, TESS-SPOC on S3 under ``mast/hlsp/tess-spoc`` with the
+same layout as STScI's ``hlsps/tess-spoc``.
 
 ``find_products`` returns product records in ``fetch.py``'s shape, one per
 sector, quarter or campaign half, ranked as ``fetch.select_products`` ranks
@@ -223,6 +223,7 @@ MIRRORS = {
         "kepler": "kepler/public/lightcurves",
         "k2": "k2/public/lightcurves",
         "tess": "tess/public/tid",
+        "tess-spoc": "mast/hlsp/tess-spoc",
     }, "s3"),
 }
 MIRROR_TITLES = {"stsci": "STScI archive files", "s3": "AWS Open Data (stpubdata)"}

@@ -72,7 +72,9 @@ def test_mirror_urls():
     assert s3.url("k2", "c1/201900000/12000", "ktwo201912552-c01_llc.fits") == (
         "https://stpubdata.s3.amazonaws.com/k2/public/lightcurves/c1/201900000/12000/"
         "ktwo201912552-c01_llc.fits")
-    assert stsci.has_tess_spoc and not s3.has_tess_spoc
+    assert s3.url("tess-spoc", A.tess_hlsp_dir(1, PI_MEN)) == (
+        "https://stpubdata.s3.amazonaws.com/mast/hlsp/tess-spoc/s0001/target/0000/0002/6113/6679/")
+    assert stsci.has_tess_spoc and s3.has_tess_spoc
 
 
 def test_s3_listing_url_and_continuation():
@@ -183,6 +185,11 @@ def test_tess_needs_sectors():
 
 # --- ranking ----------------------------------------------------------------------------
 
+STSCI_HLSP_S27 = "https://archive.stsci.edu/hlsps/tess-spoc/s0027/target/0000/0002/6113/6679/"
+S3_SPOC_S27 = ("https://stpubdata.s3.amazonaws.com/?list-type=2"
+               "&prefix=mast/hlsp/tess-spoc/s0027/target/0000/0002/6113/6679/hlsp_")
+
+
 def test_tess_ranking_without_two_minute_files():
     no_2min = {STSCI_S27: without(STSCI_S27, "s_lc.fits"), S3_S27: without(S3_S27, "s_lc.fits")}
     stsci = A.find_products("TESS", PI_MEN, sectors=[27], transport=Replay(no_2min))
@@ -191,10 +198,17 @@ def test_tess_ranking_without_two_minute_files():
          "archive/TESS/hlsp_tess-spoc_tess_phot_0000000261136679-s0027_tess_v1_lc.fits")]
     assert stsci[0]["url"] == ("https://archive.stsci.edu/hlsps/tess-spoc/s0027/target/0000/0002/"
                                "6113/6679/hlsp_tess-spoc_tess_phot_0000000261136679-s0027_tess_v1_lc.fits")
-    # S3 has no TESS-SPOC files: the 20-second ones are next best there.
     s3 = A.find_products("TESS", PI_MEN, sectors=[27], mirror="s3", transport=Replay(no_2min))
-    assert [(p["author"], p["exptime"]) for p in s3] == [("SPOC", 20.0)]
-    assert s3[0]["product"].endswith("-a_fast-lc")
+    assert [(p["author"], p["exptime"], p["file"]) for p in s3] == [
+        (p["author"], p["exptime"], p["file"]) for p in stsci]
+    assert s3[0]["url"] == ("https://stpubdata.s3.amazonaws.com/mast/hlsp/tess-spoc/s0027/target/"
+                            "0000/0002/6113/6679/hlsp_tess-spoc_tess_phot_0000000261136679-s0027_tess_v1_lc.fits")
+    # With no TESS-SPOC file either, the 20-second ones are next best.
+    no_hlsp = dict(no_2min, **{STSCI_HLSP_S27: None, S3_SPOC_S27: without(S3_SPOC_S27, "hlsp_")})
+    for mirror in A.MIRRORS:
+        fast = A.find_products("TESS", PI_MEN, sectors=[27], mirror=mirror, transport=Replay(no_hlsp))
+        assert [(p["author"], p["exptime"]) for p in fast] == [("SPOC", 20.0)]
+        assert fast[0]["product"].endswith("-a_fast-lc")
 
 
 def test_tess_spoc_cadence_by_sector():

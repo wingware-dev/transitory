@@ -19,13 +19,13 @@ such as ``static,s3,search``, overrides it):
    found by path from its KIC, EPIC or TIC (``archive_files``); for TESS,
    the sectors whose images cover the star come from MAST's footprint file,
    read once a run (``tess_sectors``), else from TESScut.
-2. ``s3``: the same files on the AWS Open Data mirror (``stpubdata``), which
-   has no TESS-SPOC light curves.
+2. ``s3``: the same files, TESS-SPOC included, on the AWS Open Data mirror
+   (``stpubdata``).
 3. ``search``: lightkurve's search of MAST's CAOM database, for stars known
    only by name or position, or when neither mirror can be reached.
 
 The answer of a source that could be asked is believed: a mirror with no
-files for the star (STScI's, or S3's for Kepler and K2) means no data, and
+files for the star means no data, and
 the next source is not asked.  A source that cannot be asked (timeout, no
 connection, HTTP 5xx or 429) is skipped for the next, and held off for
 other stars until the next run starts (``MastSource.new_run``) or
@@ -139,9 +139,14 @@ RETRIEVAL_NOTE = (
 # checked 2026-10-30).
 AWS_DATASETS = {
     "TESS": ("Transiting Exoplanet Survey Satellite (TESS)", "mast-tess"),
+    "TESS-SPOC": ("TESS-SPOC", "mast-tess-spoc"),
     "Kepler": ("Kepler Mission Data", "mast-kepler"),
     "K2": ("K2 Mission Data", "mast-k2"),
 }
+# TESS-SPOC's "How to Cite" also asks for Caldwell et al. 2020.
+TESS_SPOC_REFERENCE = (
+    "Caldwell, D. A., et al. 2020, TESS Science Processing Operations Center FFI Target List "
+    "Products, RNAAS, 4, 201, https://doi.org/10.3847/2515-5172/abc9b3")
 
 
 def doi_line(doi: str, mission: str = "") -> str:
@@ -449,14 +454,30 @@ def retrieval_credits(lc: LightCurve) -> list[str]:
     when = f" on {lc.retrieved}" if lc.retrieved else ""
     where = " and ".join(RETRIEVED_FROM.get(s, s) for s in sources)
     lines = [f"Light curves retrieved{when} from {where}."]
-    if SOURCE_TITLES["s3"] in sources and lc.mission in AWS_DATASETS:
-        lines.append(aws_citation(lc.mission, lc.retrieved or "DATE"))
+    if SOURCE_TITLES["s3"] in sources:
+        for dataset in aws_datasets(lc):
+            lines.append(aws_citation(dataset, lc.retrieved or "DATE"))
+            if dataset == "TESS-SPOC":
+                lines.append(TESS_SPOC_REFERENCE)
     return lines
 
 
-def aws_citation(mission: str, date: str) -> str:
-    """The Registry of Open Data's "How to Cite" line for a mission's files on AWS."""
-    name, slug = AWS_DATASETS[mission]
+def aws_datasets(lc: LightCurve) -> list[str]:
+    """The Registry of Open Data datasets (``AWS_DATASETS`` keys) ``lc``'s products belong to.
+
+    For TESS, SPOC files are in the TESS dataset and TESS-SPOC ones in their
+    own; which were used is told by the DOIs.
+    """
+    if lc.mission != "TESS":
+        return [lc.mission] if lc.mission in AWS_DATASETS else []
+    if DOIS["TESS-SPOC"] not in lc.dois:
+        return ["TESS"]
+    return ["TESS", "TESS-SPOC"] if DOIS["SPOC"] in lc.dois else ["TESS-SPOC"]
+
+
+def aws_citation(dataset: str, date: str) -> str:
+    """The Registry of Open Data's "How to Cite" line for a dataset's files on AWS."""
+    name, slug = AWS_DATASETS[dataset]
     return f"{name} was accessed on {date} from https://registry.opendata.aws/{slug}."
 
 
@@ -740,11 +761,6 @@ class MastSource:
             self._hold(source, problem)
             raise _Skip(f"could not be reached ({exc})",
                         SourceError(f"{problem}: {exc}. {_NOT_MISSING_DATA}")) from exc
-        if not records and mission == "TESS" and not mirror.has_tess_spoc:
-            raise _Skip("has no SPOC light curve for the star and does not hold TESS-SPOC ones",
-                        SourceError(f"{title} has no SPOC light curves for {query!r} and does not "
-                                    f"hold TESS-SPOC ones, so cannot say whether the star has any. "
-                                    f"{_NOT_MISSING_DATA}"))
         if self.max_products is not None:
             records = records[: self.max_products]
         products = []

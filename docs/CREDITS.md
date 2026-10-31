@@ -51,7 +51,8 @@ line).
 
 ## Where the light-curve files come from
 
-In code: `transitory.pipeline.fetch.RETRIEVED_FROM`, `RETRIEVAL_NOTE`, `AWS_DATASETS`.
+In code: `transitory.pipeline.fetch.RETRIEVED_FROM`, `RETRIEVAL_NOTE`, `AWS_DATASETS`,
+`TESS_SPOC_REFERENCE`.
 
 Light curves are retrieved from STScI's archive files
 (<https://archive.stsci.edu/missions/>), else from AWS Open Data
@@ -64,10 +65,15 @@ credits add a line naming the copy used and the date, e.g.
 Files from AWS also carry the citation the
 [Registry of Open Data on AWS](https://registry.opendata.aws/mast-tess/) asks
 for in each dataset's "How to Cite" (checked 2026-10-30), with the date
-retrieved:
+retrieved.  A TESS star cites the TESS dataset for SPOC files and the
+TESS-SPOC dataset, with the paper it asks for, for full-frame-image ones:
 
 - Transiting Exoplanet Survey Satellite (TESS) was accessed on DATE from
   https://registry.opendata.aws/mast-tess.
+- TESS-SPOC was accessed on DATE from https://registry.opendata.aws/mast-tess-spoc.
+- Caldwell, D. A., et al. 2020, *TESS Science Processing Operations Center
+  FFI Target List Products*, RNAAS, 4, 201,
+  [doi:10.3847/2515-5172/abc9b3](https://doi.org/10.3847/2515-5172/abc9b3)
 - Kepler Mission Data was accessed on DATE from https://registry.opendata.aws/mast-kepler.
 - K2 Mission Data was accessed on DATE from https://registry.opendata.aws/mast-k2.
 

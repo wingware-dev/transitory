@@ -728,6 +728,21 @@ def test_credits_say_where_the_files_were_retrieved_from():
     assert fetch.retrieval_credits(lc("TESS", "")) == []
 
 
+def test_aws_credits_cite_the_tess_datasets_used():
+    def lc(*authors):
+        return LightCurve(np.zeros(1), np.ones(1), np.ones(1), "TESS", dois=[DOIS[a] for a in authors],
+                          source="AWS Open Data (stpubdata)", retrieved="2026-10-30")
+
+    tess = ("Transiting Exoplanet Survey Satellite (TESS) was accessed on 2026-10-30 from "
+            "https://registry.opendata.aws/mast-tess.")
+    ffi = ["TESS-SPOC was accessed on 2026-10-30 from https://registry.opendata.aws/mast-tess-spoc.",
+           fetch.TESS_SPOC_REFERENCE]
+    assert fetch.retrieval_credits(lc("SPOC"))[1:] == [tess]
+    assert fetch.retrieval_credits(lc("TESS-SPOC"))[1:] == ffi
+    assert fetch.retrieval_credits(lc("SPOC", "TESS-SPOC"))[1:] == [tess, *ffi]
+    assert "Caldwell" in fetch.TESS_SPOC_REFERENCE
+
+
 def test_target_without_any_identifier():
     with pytest.raises(SourceError, match="No identifier"):
         MastSource().fetch(StarTarget("  ", mission_hint="TESS"))
@@ -1015,12 +1030,25 @@ def test_tess_with_no_covering_sector_is_no_data_without_listing(mirrors, fake_l
     assert mirrors.listings == [] and fake_lk.searches == []
 
 
-def test_s3_without_spoc_files_is_not_taken_as_no_tess_data(mirrors, fake_lk):
+def test_s3_without_tess_files_is_no_data(mirrors, fake_lk):
     mirrors.down = {"stsci"}
     tess_setup(fake_lk)
+    with pytest.raises(SourceError, match="No light curves"):
+        chain_source(mirrors).fetch(PI_MEN)
+    assert fake_lk.searches == []  # S3 holds TESS-SPOC too, so its answer is believed
+
+
+def test_tess_spoc_files_from_s3(mirrors, fake_lk):
+    add_tess(mirrors, fake_lk, sectors=(1,))
+    name = f"hlsp_tess-spoc_tess_phot_{TIC:016d}-s0004_tess_v1_lc.fits"
+    mirrors.add("s3", "tess-spoc", archive_files.tess_hlsp_dir(4, TIC), name)
+    fake_lk.add_data(name, np.arange(120.0, 147, 0.1), 1e3)
+    mirrors.down = {"stsci"}
     lc = chain_source(mirrors).fetch(PI_MEN)
-    assert lc.source == "MAST search"  # S3 lacks TESS-SPOC, so the search was asked
-    assert len(fake_lk.searches) == 1
+    assert lc.source == "AWS Open Data (stpubdata)" and fake_lk.searches == []
+    assert lc.author == "SPOC+TESS-SPOC" and lc.sectors_or_quarters == [1, 4]
+    assert lc.doi_sectors == {DOIS["SPOC"]: [1], DOIS["TESS-SPOC"]: [4]}
+    assert fetch.TESS_SPOC_REFERENCE in mission_credits(lc)
 
 
 def test_tess_sectors_that_cannot_be_looked_up_skip_the_mirrors(mirrors, fake_lk):

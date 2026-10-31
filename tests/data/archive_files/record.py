@@ -44,7 +44,9 @@ def main():
             print(mission, number, mirror, [p["label"] + " " + p["author"] for p in products])
     # TESS-SPOC listings the cases above skip, since SPOC has 2-minute files there.
     for sector in (1, 27):
-        recording(A.MIRRORS["stsci"].url("tess-spoc", A.tess_hlsp_dir(sector, 261136679)), 15)
+        for mirror in A.MIRRORS.values():
+            mirror.list("tess-spoc", A.tess_hlsp_dir(sector, 261136679), "hlsp_",
+                        transport=recording)
     OUTPUT.write_text(json.dumps(dict(sorted(recorded.items())), indent=1) + "\n")
 
 
