@@ -142,16 +142,16 @@ stars with confirmed planets of different sizes and periods, plus null stars
 with no published planet or candidate, compared with the NASA Exoplanet
 Archive's published values.
 
-The latest live run ([full report](docs/validation/validation.md), 11 targets,
-all sectors / quarters, archive values retrieved 2026-10-29):
+The latest live run ([full report](docs/validation/validation.md), 13 targets,
+all sectors / quarters / campaigns, archive values retrieved 2026-10-29):
 
 | | |
 |---|---|
-| Known planets recovered at the published period | **11 / 11** (none missed, none at an alias) |
+| Known planets recovered at the published period | **13 / 13** (none missed, none at an alias; K2-18 b from its 2 transits in Campaign 1) |
 | Spurious detections on the 3 null stars | 1 (KIC 8006161, *weak*, 3 transits) |
 | Spurious detections on planet hosts | 0 |
 | Duo-transit signals on planet hosts | 4 (Kepler-7, Kepler-22; not counted as candidates) |
-| Median \|ΔRp/Rs\| against published | 3.4% |
+| Median \|ΔRp/Rs\| against published | 4.6% |
 
 Run it yourself from **Validation ▸ Run known-planet validation…** (and
 *Show validation report*), or from the command line:

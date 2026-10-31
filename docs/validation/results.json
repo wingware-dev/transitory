@@ -1,14 +1,14 @@
 {
- "started": "2026-10-30T00:12:16.335079+00:00",
- "finished": "2026-10-30T00:46:40.765984+00:00",
+ "started": "2026-10-31T01:15:36.473846+00:00",
+ "finished": "2026-10-31T01:49:31.582002+00:00",
  "source": "MAST",
  "max_products": null,
  "cancelled": false,
  "published_retrieved": "2026-10-29",
  "tally": {
-  "targets": 11,
-  "published": 11,
-  "found": 11,
+  "targets": 13,
+  "published": 13,
+  "found": 13,
   "aliases": 0,
   "missed": 0,
   "spurious_null": 1,
@@ -23,7 +23,7 @@
   {
    "name": "Kepler-10",
    "role": "planet-host",
-   "elapsed_s": 93.3,
+   "elapsed_s": 94.1,
    "errors": [],
    "published_source": "NASA Exoplanet Archive pscomppars",
    "published_retrieved": "2026-10-29",
@@ -88,6 +88,7 @@
    "credits": [
     "This paper includes data collected by the Kepler mission and obtained from the MAST data archive at the Space Telescope Science Institute (STScI). Funding to US Institutions for the Kepler mission was provided by the NASA Science Mission Directorate. STScI is operated by the Association of Universities for Research in Astronomy, Inc., under NASA contract NAS5-26555.",
     "Kepler LC, Q0-Q17: https://doi.org/10.17909/T9488N (quarters 0-7, 9-11, 13-15, 17)",
+    "Light curves retrieved on 2026-10-29 from the MAST search (https://mast.stsci.edu).",
     "This research made use of Lightkurve, a Python package for Kepler and TESS data analysis (Lightkurve Collaboration, 2018).",
     "Stellar parameters from the TESS Input Catalog (Stassun et al. 2019, AJ 158, 138), via the MAST API.",
     "This research has made use of the NASA Exoplanet Archive, which is operated by the California Institute of Technology, under contract with the National Aeronautics and Space Administration under the Exoplanet Exploration Program."
@@ -118,7 +119,7 @@
   {
    "name": "Kepler-7",
    "role": "planet-host",
-   "elapsed_s": 102.6,
+   "elapsed_s": 103.5,
    "errors": [],
    "published_source": "NASA Exoplanet Archive pscomppars",
    "published_retrieved": "2026-10-29",
@@ -168,6 +169,7 @@
    "credits": [
     "This paper includes data collected by the Kepler mission and obtained from the MAST data archive at the Space Telescope Science Institute (STScI). Funding to US Institutions for the Kepler mission was provided by the NASA Science Mission Directorate. STScI is operated by the Association of Universities for Research in Astronomy, Inc., under NASA contract NAS5-26555.",
     "Kepler LC, Q0-Q17: https://doi.org/10.17909/T9488N (quarters 0-17)",
+    "Light curves retrieved on 2026-10-29 from the MAST search (https://mast.stsci.edu).",
     "This research made use of Lightkurve, a Python package for Kepler and TESS data analysis (Lightkurve Collaboration, 2018).",
     "Stellar parameters from the TESS Input Catalog (Stassun et al. 2019, AJ 158, 138), via the MAST API.",
     "This research has made use of the NASA Exoplanet Archive, which is operated by the California Institute of Technology, under contract with the National Aeronautics and Space Administration under the Exoplanet Exploration Program."
@@ -201,7 +203,7 @@
   {
    "name": "Kepler-2",
    "role": "planet-host",
-   "elapsed_s": 110.1,
+   "elapsed_s": 111.1,
    "errors": [],
    "published_source": "NASA Exoplanet Archive pscomppars",
    "published_retrieved": "2026-10-29",
@@ -251,6 +253,7 @@
    "credits": [
     "This paper includes data collected by the Kepler mission and obtained from the MAST data archive at the Space Telescope Science Institute (STScI). Funding to US Institutions for the Kepler mission was provided by the NASA Science Mission Directorate. STScI is operated by the Association of Universities for Research in Astronomy, Inc., under NASA contract NAS5-26555.",
     "Kepler LC, Q0-Q17: https://doi.org/10.17909/T9488N (quarters 0-17)",
+    "Light curves retrieved on 2026-10-29 from the MAST search (https://mast.stsci.edu).",
     "This research made use of Lightkurve, a Python package for Kepler and TESS data analysis (Lightkurve Collaboration, 2018).",
     "Stellar parameters from the TESS Input Catalog (Stassun et al. 2019, AJ 158, 138), via the MAST API.",
     "This research has made use of the NASA Exoplanet Archive, which is operated by the California Institute of Technology, under contract with the National Aeronautics and Space Administration under the Exoplanet Exploration Program."
@@ -284,7 +287,7 @@
   {
    "name": "Kepler-22",
    "role": "planet-host",
-   "elapsed_s": 145.1,
+   "elapsed_s": 146.2,
    "errors": [],
    "published_source": "NASA Exoplanet Archive pscomppars",
    "published_retrieved": "2026-10-29",
@@ -334,6 +337,7 @@
    "credits": [
     "This paper includes data collected by the Kepler mission and obtained from the MAST data archive at the Space Telescope Science Institute (STScI). Funding to US Institutions for the Kepler mission was provided by the NASA Science Mission Directorate. STScI is operated by the Association of Universities for Research in Astronomy, Inc., under NASA contract NAS5-26555.",
     "Kepler LC, Q0-Q17: https://doi.org/10.17909/T9488N (quarters 0-17)",
+    "Light curves retrieved on 2026-10-29 from the MAST search (https://mast.stsci.edu).",
     "This research made use of Lightkurve, a Python package for Kepler and TESS data analysis (Lightkurve Collaboration, 2018).",
     "Stellar parameters from the TESS Input Catalog (Stassun et al. 2019, AJ 158, 138), via the MAST API.",
     "This research has made use of the NASA Exoplanet Archive, which is operated by the California Institute of Technology, under contract with the National Aeronautics and Space Administration under the Exoplanet Exploration Program."
@@ -367,7 +371,7 @@
   {
    "name": "pi Men",
    "role": "planet-host",
-   "elapsed_s": 697.9,
+   "elapsed_s": 707.5,
    "errors": [],
    "published_source": "NASA Exoplanet Archive pscomppars",
    "published_retrieved": "2026-10-29",
@@ -400,6 +404,7 @@
    "credits": [
     "This paper includes data collected with the TESS mission, obtained from the MAST data archive at the Space Telescope Science Institute (STScI). Funding for US Institutions for the TESS mission is provided by the NASA Explorer Program. STScI is operated by the Association of Universities for Research in Astronomy, Inc., under NASA contract NAS5-26555.",
     "TESS Light Curves - All Sectors: https://doi.org/10.17909/t9-nmc8-f686 (sectors 1, 4, 8, 11-13, 27-28, 31, 34, 38-39, 61-62, 64-68, 88-89, 93-95)",
+    "Light curves retrieved on 2026-10-29 from the MAST search (https://mast.stsci.edu).",
     "This research made use of Lightkurve, a Python package for Kepler and TESS data analysis (Lightkurve Collaboration, 2018).",
     "Stellar parameters from the TESS Input Catalog (Stassun et al. 2019, AJ 158, 138), via the MAST API.",
     "This research has made use of the NASA Exoplanet Archive, which is operated by the California Institute of Technology, under contract with the National Aeronautics and Space Administration under the Exoplanet Exploration Program."
@@ -439,7 +444,7 @@
   {
    "name": "LHS 3844",
    "role": "planet-host",
-   "elapsed_s": 145.8,
+   "elapsed_s": 145.9,
    "errors": [],
    "published_source": "NASA Exoplanet Archive pscomppars",
    "published_retrieved": "2026-10-29",
@@ -489,6 +494,7 @@
    "credits": [
     "This paper includes data collected with the TESS mission, obtained from the MAST data archive at the Space Telescope Science Institute (STScI). Funding for US Institutions for the TESS mission is provided by the NASA Explorer Program. STScI is operated by the Association of Universities for Research in Astronomy, Inc., under NASA contract NAS5-26555.",
     "TESS Light Curves - All Sectors: https://doi.org/10.17909/t9-nmc8-f686 (sectors 1, 27-28, 67-68, 94-95, 101-104)",
+    "Light curves retrieved on 2026-10-29 from the MAST search (https://mast.stsci.edu).",
     "This research made use of Lightkurve, a Python package for Kepler and TESS data analysis (Lightkurve Collaboration, 2018).",
     "Stellar parameters from the TESS Input Catalog (Stassun et al. 2019, AJ 158, 138), via the MAST API.",
     "This research has made use of the NASA Exoplanet Archive, which is operated by the California Institute of Technology, under contract with the National Aeronautics and Space Administration under the Exoplanet Exploration Program."
@@ -515,7 +521,7 @@
   {
    "name": "WASP-18",
    "role": "planet-host",
-   "elapsed_s": 133.0,
+   "elapsed_s": 132.5,
    "errors": [],
    "published_source": "NASA Exoplanet Archive pscomppars",
    "published_retrieved": "2026-10-29",
@@ -565,6 +571,7 @@
    "credits": [
     "This paper includes data collected with the TESS mission, obtained from the MAST data archive at the Space Telescope Science Institute (STScI). Funding for US Institutions for the TESS mission is provided by the NASA Explorer Program. STScI is operated by the Association of Universities for Research in Astronomy, Inc., under NASA contract NAS5-26555.",
     "TESS Light Curves - All Sectors: https://doi.org/10.17909/t9-nmc8-f686 (sectors 2-3, 29-30, 69, 96, 103-106)",
+    "Light curves retrieved on 2026-10-29 from the MAST search (https://mast.stsci.edu).",
     "This research made use of Lightkurve, a Python package for Kepler and TESS data analysis (Lightkurve Collaboration, 2018).",
     "Stellar parameters from the TESS Input Catalog (Stassun et al. 2019, AJ 158, 138), via the MAST API.",
     "This research has made use of the NASA Exoplanet Archive, which is operated by the California Institute of Technology, under contract with the National Aeronautics and Space Administration under the Exoplanet Exploration Program."
@@ -590,7 +597,7 @@
   {
    "name": "TOI-270",
    "role": "planet-host",
-   "elapsed_s": 168.9,
+   "elapsed_s": 171.4,
    "errors": [],
    "published_source": "NASA Exoplanet Archive pscomppars",
    "published_retrieved": "2026-10-29",
@@ -669,6 +676,7 @@
    "credits": [
     "This paper includes data collected with the TESS mission, obtained from the MAST data archive at the Space Telescope Science Institute (STScI). Funding for US Institutions for the TESS mission is provided by the NASA Explorer Program. STScI is operated by the Association of Universities for Research in Astronomy, Inc., under NASA contract NAS5-26555.",
     "TESS Light Curves - All Sectors: https://doi.org/10.17909/t9-nmc8-f686 (sectors 3-5, 30, 32, 97-98)",
+    "Light curves retrieved on 2026-10-29 from the MAST search (https://mast.stsci.edu).",
     "This research made use of Lightkurve, a Python package for Kepler and TESS data analysis (Lightkurve Collaboration, 2018).",
     "Stellar parameters from the TESS Input Catalog (Stassun et al. 2019, AJ 158, 138), via the MAST API.",
     "This research has made use of the NASA Exoplanet Archive, which is operated by the California Institute of Technology, under contract with the National Aeronautics and Space Administration under the Exoplanet Exploration Program."
@@ -689,9 +697,111 @@
    }
   },
   {
+   "name": "K2-18",
+   "role": "planet-host",
+   "elapsed_s": 6.2,
+   "errors": [],
+   "published_source": "NASA Exoplanet Archive pscomppars",
+   "published_retrieved": "2026-10-31",
+   "planets": [
+    {
+     "star": "K2-18",
+     "planet": "K2-18 b",
+     "status": "found",
+     "factor": 1.0,
+     "period_pub": 32.939623,
+     "period_err_pub": 9.5e-05,
+     "rp_rs_pub": 0.05375,
+     "t14_pub": 2.682,
+     "depth_pub": 0.003098,
+     "ref": "Sarkis et al. 2018 (https://ui.adsabs.harvard.edu/abs/2018AJ....155..257S/abstract); NASA Exoplanet Archive pscomppars, retrieved 2026-10-31",
+     "explanation": "",
+     "period": 32.940992626690786,
+     "period_err": 0.004182418056843122,
+     "rp_rs": 0.050704737537668694,
+     "rp_rs_err": 0.0018179897128574338,
+     "t14": 2.8018798469916955,
+     "t14_err": 0.11924608346006599,
+     "snr": 33.745855440338886,
+     "sde": 26.86597236591133,
+     "confidence": "duo-transit",
+     "letter": "b"
+    }
+   ],
+   "others": [],
+   "credits": [
+    "This paper includes data collected by the Kepler mission and obtained from the MAST data archive at the Space Telescope Science Institute (STScI). Funding to US Institutions for the Kepler mission was provided by the NASA Science Mission Directorate. STScI is operated by the Association of Universities for Research in Astronomy, Inc., under NASA contract NAS5-26555.",
+    "K2 Light Curves (all): https://doi.org/10.17909/T9WS3R (campaign 1)",
+    "Light curves retrieved on 2026-10-31 from STScI archive files (https://archive.stsci.edu/missions/).",
+    "K2 light curves were corrected for spacecraft roll with the self-flat-fielding method (Vanderburg & Johnson 2014, PASP 126, 948) as implemented in Lightkurve.",
+    "This research made use of Lightkurve, a Python package for Kepler and TESS data analysis (Lightkurve Collaboration, 2018).",
+    "Stellar parameters from the TESS Input Catalog (Stassun et al. 2019, AJ 158, 138), via the MAST API.",
+    "This research has made use of the NASA Exoplanet Archive, which is operated by the California Institute of Technology, under contract with the National Aeronautics and Space Administration under the Exoplanet Exploration Program."
+   ],
+   "data": {
+    "mission": "K2",
+    "sectors": {
+     "10.17909/T9WS3R": [
+      1
+     ]
+    }
+   }
+  },
+  {
+   "name": "K2-334",
+   "role": "planet-host",
+   "elapsed_s": 5.9,
+   "errors": [],
+   "published_source": "NASA Exoplanet Archive pscomppars",
+   "published_retrieved": "2026-10-31",
+   "planets": [
+    {
+     "star": "K2-334",
+     "planet": "K2-334 b",
+     "status": "found",
+     "factor": 1.0,
+     "period_pub": 5.113981,
+     "period_err_pub": 6.1e-05,
+     "rp_rs_pub": 0.0343,
+     "t14_pub": 2.46,
+     "depth_pub": 0.001290375,
+     "ref": "de Leon et al. 2021 (https://ui.adsabs.harvard.edu/abs/2021MNRAS.508..195D/abstract); NASA Exoplanet Archive pscomppars, retrieved 2026-10-31",
+     "explanation": "",
+     "period": 5.113864614011413,
+     "period_err": 8.04530684359167e-05,
+     "rp_rs": 0.03752081362923118,
+     "rp_rs_err": 0.0007696681718022091,
+     "t14": 2.6125661379956333,
+     "t14_err": 0.04860811055884537,
+     "snr": 100.05440740993043,
+     "sde": 32.90878849347637,
+     "confidence": "strong",
+     "letter": "b"
+    }
+   ],
+   "others": [],
+   "credits": [
+    "This paper includes data collected by the Kepler mission and obtained from the MAST data archive at the Space Telescope Science Institute (STScI). Funding to US Institutions for the Kepler mission was provided by the NASA Science Mission Directorate. STScI is operated by the Association of Universities for Research in Astronomy, Inc., under NASA contract NAS5-26555.",
+    "K2 Light Curves (all): https://doi.org/10.17909/T9WS3R (campaign 16)",
+    "Light curves retrieved on 2026-10-31 from STScI archive files (https://archive.stsci.edu/missions/).",
+    "K2 light curves were corrected for spacecraft roll with the self-flat-fielding method (Vanderburg & Johnson 2014, PASP 126, 948) as implemented in Lightkurve.",
+    "This research made use of Lightkurve, a Python package for Kepler and TESS data analysis (Lightkurve Collaboration, 2018).",
+    "Stellar parameters from the TESS Input Catalog (Stassun et al. 2019, AJ 158, 138), via the MAST API.",
+    "This research has made use of the NASA Exoplanet Archive, which is operated by the California Institute of Technology, under contract with the National Aeronautics and Space Administration under the Exoplanet Exploration Program."
+   ],
+   "data": {
+    "mission": "K2",
+    "sectors": {
+     "10.17909/T9WS3R": [
+      16
+     ]
+    }
+   }
+  },
+  {
    "name": "KIC 8006161",
    "role": "null",
-   "elapsed_s": 137.9,
+   "elapsed_s": 138.3,
    "errors": [],
    "published_source": "NASA Exoplanet Archive pscomppars, cumulative KOI and TOI tables",
    "published_retrieved": "2026-10-29",
@@ -709,6 +819,7 @@
    "credits": [
     "This paper includes data collected by the Kepler mission and obtained from the MAST data archive at the Space Telescope Science Institute (STScI). Funding to US Institutions for the Kepler mission was provided by the NASA Science Mission Directorate. STScI is operated by the Association of Universities for Research in Astronomy, Inc., under NASA contract NAS5-26555.",
     "Kepler LC, Q0-Q17: https://doi.org/10.17909/T9488N (quarters 0-17)",
+    "Light curves retrieved on 2026-10-29 from the MAST search (https://mast.stsci.edu).",
     "This research made use of Lightkurve, a Python package for Kepler and TESS data analysis (Lightkurve Collaboration, 2018).",
     "Stellar parameters from the TESS Input Catalog (Stassun et al. 2019, AJ 158, 138), via the MAST API.",
     "This research has made use of the NASA Exoplanet Archive, which is operated by the California Institute of Technology, under contract with the National Aeronautics and Space Administration under the Exoplanet Exploration Program."
@@ -742,7 +853,7 @@
   {
    "name": "KIC 6106415",
    "role": "null",
-   "elapsed_s": 118.0,
+   "elapsed_s": 105.4,
    "errors": [],
    "published_source": "NASA Exoplanet Archive pscomppars, cumulative KOI and TOI tables",
    "published_retrieved": "2026-10-29",
@@ -776,6 +887,7 @@
    "credits": [
     "This paper includes data collected by the Kepler mission and obtained from the MAST data archive at the Space Telescope Science Institute (STScI). Funding to US Institutions for the Kepler mission was provided by the NASA Science Mission Directorate. STScI is operated by the Association of Universities for Research in Astronomy, Inc., under NASA contract NAS5-26555.",
     "Kepler LC, Q0-Q17: https://doi.org/10.17909/T9488N (quarters 0-4, 6-8, 10-12, 14-16)",
+    "Light curves retrieved on 2026-10-29 from the MAST search (https://mast.stsci.edu).",
     "This research made use of Lightkurve, a Python package for Kepler and TESS data analysis (Lightkurve Collaboration, 2018).",
     "Stellar parameters from the TESS Input Catalog (Stassun et al. 2019, AJ 158, 138), via the MAST API.",
     "This research has made use of the NASA Exoplanet Archive, which is operated by the California Institute of Technology, under contract with the National Aeronautics and Space Administration under the Exoplanet Exploration Program."
@@ -805,7 +917,7 @@
   {
    "name": "TIC 31410749",
    "role": "null",
-   "elapsed_s": 211.9,
+   "elapsed_s": 167.0,
    "errors": [],
    "published_source": "NASA Exoplanet Archive pscomppars, cumulative KOI and TOI tables",
    "published_retrieved": "2026-10-29",
@@ -815,6 +927,7 @@
     "This paper includes data collected with the TESS mission, obtained from the MAST data archive at the Space Telescope Science Institute (STScI). Funding for US Institutions for the TESS mission is provided by the NASA Explorer Program. STScI is operated by the Association of Universities for Research in Astronomy, Inc., under NASA contract NAS5-26555.",
     "TESS Light Curves - All Sectors: https://doi.org/10.17909/t9-nmc8-f686 (sectors 2, 9, 12, 29, 39)",
     "TESS Light Curves From Full Frame Images (\"TESS-SPOC\"): https://doi.org/10.17909/t9-wpz1-8s54 (sectors 6, 36, 61-62, 66-69)",
+    "Light curves retrieved on 2026-10-29 from the MAST search (https://mast.stsci.edu).",
     "This research made use of Lightkurve, a Python package for Kepler and TESS data analysis (Lightkurve Collaboration, 2018).",
     "Stellar parameters from the TESS Input Catalog (Stassun et al. 2019, AJ 158, 138), via the MAST API.",
     "This research has made use of the NASA Exoplanet Archive, which is operated by the California Institute of Technology, under contract with the National Aeronautics and Space Administration under the Exoplanet Exploration Program."

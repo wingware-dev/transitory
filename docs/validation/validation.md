@@ -1,6 +1,6 @@
 # Known-planet validation
 
-Run 2026-10-30 00:12 UTC (34 min) on **MAST** light curves, using all sectors / quarters.
+Run 2026-10-31 01:15 UTC (34 min) on **MAST** light curves, using all sectors / quarters.
 
 Published values: NASA Exoplanet Archive, retrieved 2026-10-29 (pscomppars for planets; pscomppars, the cumulative KOI table and the TOI table to check that the null stars have no published signal).
 
@@ -10,9 +10,9 @@ Pipeline: BLS search from 0.3 d to half the baseline, up to 3 passes per star, d
 
 | | |
 |---|---|
-| Targets | 11 (3 null stars) |
-| Published planets | 11 |
-| Recovered at the published period | 11 |
+| Targets | 13 (3 null stars) |
+| Published planets | 13 |
+| Recovered at the published period | 13 |
 | Recovered at an alias | 0 |
 | Missed | 0 |
 | Spurious detections on null stars | 1 |
@@ -31,7 +31,7 @@ Pipeline: BLS search from 0.3 d to half the baseline, up to 3 passes per star, d
 - 4 duo-transit signals (Kepler-7 c at 720 d, Kepler-7 d at 435 d, Kepler-22 c at 477 d, Kepler-22 d at 733 d): 2 transits that pass every vetting check, including a fitted T14 that agrees with the dip's width. A real planet on a long period can show only two transits, so they are kept, but two dips can't show periodicity: they are counted neither as recoveries nor as spurious detections; 2 lie near an instrumental period, which makes systematics the likelier cause.
 - 1 spurious detection passed vetting as 'weak' (KIC 8006161); it covers at most 3 transits. Its SNR (102) already allows for correlated noise (the red-noise beta factor), so the SNR cannot tell it from a planet: with so few events, a recurring instrumental or stellar dip looks like a transit.
 - Found periods differ from the published ones by more than 5σ (the fit's and the published errors combined) for TOI-270 d (20σ). The fit's errors already allow for red noise and transit-timing scatter; the published period comes from a different time span, and transit-timing variations shift the mean period with the span observed (TOI-270 c and d are near a 2:1 resonance).
-- Rp/Rs agrees with the published value within a median of 3.4%; beyond 10%: Kepler-22 b (+14%), TOI-270 c (+15%), TOI-270 d (+15%). The fit takes limb darkening for the mission's bandpass and the star's Teff and constrains a/Rs by the stellar density, but shallow transits still leave Rp/Rs degenerate with the impact parameter; for TOI-270 c, TOI-270 d T14 is also off by more than 10%, so the fitted transit shape differs from the published one; limb darkening is least certain for M dwarfs (the host of TOI-270 c, TOI-270 d).
+- Rp/Rs agrees with the published value within a median of 4.6%; beyond 10%: Kepler-22 b (+14%), TOI-270 c (+15%), TOI-270 d (+15%). The fit takes limb darkening for the mission's bandpass and the star's Teff and constrains a/Rs by the stellar density, but shallow transits still leave Rp/Rs degenerate with the impact parameter; for TOI-270 c, TOI-270 d T14 is also off by more than 10%, so the fitted transit shape differs from the published one; limb darkening is least certain for M dwarfs (the host of TOI-270 c, TOI-270 d).
 
 ## Planets: found vs. published
 
@@ -48,6 +48,8 @@ Pipeline: BLS search from 0.3 d to half the baseline, up to 3 passes per star, d
 | TOI-270 b (d) | found | 3.35992 | 3.36016285 ± 0.00000099 (+0.00024285 d, 4.9σ) | 0.0307 | 0.0313 ± 0.0007 | +2.1% | 1.29 | 1.38 ± 0.02 | +6.8% | 27.9 | 32.0 | strong |
 | TOI-270 c (b) | found | 5.66051 | 5.6604781 ± 0.0000046 (-0.0000319 d, 0.8σ) | 0.0560 | 0.0646 ± 0.0007 | +15.4% | 1.68 | 1.95 ± 0.03 | +15.7% | 76.4 | 15.5 | strong |
 | TOI-270 d (c) | found | 11.38194 | 11.379703 ± 0.000011 (-0.002237 d, 20.2σ) | 0.0491 | 0.0566 ± 0.0010 | +15.3% | 2.12 | 2.35 ± 0.05 | +11.2% | 61.5 | 60.9 | strong |
+| K2-18 b (b) | found | 32.93962 | 32.94099 ± 0.00418 (+0.00137 d, 0.3σ) | 0.0537 | 0.0507 ± 0.0018 | -5.7% | 2.68 | 2.80 ± 0.12 | +4.5% | 33.7 | 26.9 | duo-transit |
+| K2-334 b (b) | found | 5.11398 | 5.113865 ± 0.000080 (-0.000116 d, 1.2σ) | 0.0343 | 0.0375 ± 0.0008 | +9.4% | 2.46 | 2.61 ± 0.05 | +6.2% | 100.1 | 32.9 | strong |
 
 ## Missed planets
 
@@ -87,17 +89,19 @@ Candidates that match no published planet. *Spurious* ones passed vetting (weak 
 
 | Star | Role | Data | Time (s) | Errors |
 |---|---|---|---|---|
-| Kepler-10 | planet-host | Kepler 15 quarters, 51,973 points, 1,470 d baseline | 93 |  |
-| Kepler-7 | planet-host | Kepler 18 quarters, 65,263 points, 1,470 d baseline | 103 |  |
-| Kepler-2 | planet-host | Kepler 18 quarters, 65,283 points, 1,470 d baseline | 110 |  |
-| Kepler-22 | planet-host | Kepler 18 quarters, 65,262 points, 1,470 d baseline | 145 |  |
-| pi Men | planet-host | TESS SPOC 24 sectors, 393,701 points, 2,582 d baseline | 698 |  |
+| Kepler-10 | planet-host | Kepler 15 quarters, 51,973 points, 1,470 d baseline | 94 |  |
+| Kepler-7 | planet-host | Kepler 18 quarters, 65,263 points, 1,470 d baseline | 104 |  |
+| Kepler-2 | planet-host | Kepler 18 quarters, 65,283 points, 1,470 d baseline | 111 |  |
+| Kepler-22 | planet-host | Kepler 18 quarters, 65,262 points, 1,470 d baseline | 146 |  |
+| pi Men | planet-host | TESS SPOC 24 sectors, 393,701 points, 2,582 d baseline | 708 |  |
 | LHS 3844 | planet-host | TESS SPOC 11 sectors, 168,801 points, 2,879 d baseline | 146 |  |
-| WASP-18 | planet-host | TESS SPOC 10 sectors, 151,222 points, 2,906 d baseline | 133 |  |
-| TOI-270 | planet-host | TESS SPOC 7 sectors, 137,828 points, 2,660 d baseline | 169 |  |
+| WASP-18 | planet-host | TESS SPOC 10 sectors, 151,222 points, 2,906 d baseline | 132 |  |
+| TOI-270 | planet-host | TESS SPOC 7 sectors, 137,828 points, 2,660 d baseline | 171 |  |
+| K2-18 | planet-host | K2 (SFF roll-corrected) 1 campaign, 3,518 points, 80 d baseline | 6 |  |
+| K2-334 | planet-host | K2 (SFF roll-corrected) 1 campaign, 3,627 points, 80 d baseline | 6 |  |
 | KIC 8006161 | null | Kepler 18 quarters, 65,262 points, 1,470 d baseline | 138 |  |
-| KIC 6106415 | null | Kepler 14 quarters, 50,642 points, 1,437 d baseline | 118 |  |
-| TIC 31410749 | null | TESS SPOC+TESS-SPOC 13 sectors, 143,305 points, 1,852 d baseline | 212 |  |
+| KIC 6106415 | null | Kepler 14 quarters, 50,642 points, 1,437 d baseline | 105 |  |
+| TIC 31410749 | null | TESS SPOC+TESS-SPOC 13 sectors, 143,305 points, 1,852 d baseline | 167 |  |
 
 ## Folded light curves
 
@@ -123,6 +127,8 @@ Candidates that match no published planet. *Spurious* ones passed vetting (weak 
 ![TOI-270 b](figures/toi-270-b.png)
 ![TOI-270 c](figures/toi-270-c.png)
 ![TOI-270 d](figures/toi-270-d.png)
+![K2-18 b](figures/k2-18-b.png)
+![K2-334 b](figures/k2-334-b.png)
 ![KIC 8006161 b](figures/kic-8006161-b.png)
 ![KIC 6106415 b](figures/kic-6106415-b.png)
 ![KIC 6106415 c](figures/kic-6106415-c.png)
@@ -137,7 +143,9 @@ Candidates that match no published planet. *Spurious* ones passed vetting (weak 
 - Kaye et al. 2022 (https://ui.adsabs.harvard.edu/abs/2022MNRAS.510.5464K/abstract); NASA Exoplanet Archive pscomppars, retrieved 2026-10-29
 - Kunovac Hodžić et al. 2021 (https://ui.adsabs.harvard.edu/abs/2021MNRAS.502.2893K/abstract); NASA Exoplanet Archive pscomppars, retrieved 2026-10-29
 - Nagel et al. 2026 (https://ui.adsabs.harvard.edu/abs/2026A&A...710A.311N/abstract); NASA Exoplanet Archive pscomppars, retrieved 2026-10-29
+- Sarkis et al. 2018 (https://ui.adsabs.harvard.edu/abs/2018AJ....155..257S/abstract); NASA Exoplanet Archive pscomppars, retrieved 2026-10-31
 - Stassun et al. 2017 (https://ui.adsabs.harvard.edu/abs/2017AJ....153..136S/abstract); NASA Exoplanet Archive pscomppars, retrieved 2026-10-29
+- de Leon et al. 2021 (https://ui.adsabs.harvard.edu/abs/2021MNRAS.508..195D/abstract); NASA Exoplanet Archive pscomppars, retrieved 2026-10-31
 
 ## Data credits
 
@@ -158,8 +166,14 @@ Candidates that match no published planet. *Spurious* ones passed vetting (weak 
   - Kepler-22: quarters 0-17
   - KIC 8006161: quarters 0-17
   - KIC 6106415: quarters 0-4, 6-8, 10-12, 14-16
+- K2 Light Curves (all): https://doi.org/10.17909/T9WS3R (campaigns 1, 16)
+  - K2-18: campaign 1
+  - K2-334: campaign 16
+- Light curves retrieved on 2026-10-29 from the MAST search (https://mast.stsci.edu).
 - This research made use of Lightkurve, a Python package for Kepler and TESS data analysis (Lightkurve Collaboration, 2018).
 - Stellar parameters from the TESS Input Catalog (Stassun et al. 2019, AJ 158, 138), via the MAST API.
+- Light curves retrieved on 2026-10-31 from STScI archive files (https://archive.stsci.edu/missions/).
+- K2 light curves were corrected for spacecraft roll with the self-flat-fielding method (Vanderburg & Johnson 2014, PASP 126, 948) as implemented in Lightkurve.
 - This research has made use of the NASA Exoplanet Archive, which is operated by the California Institute of Technology, under contract with the National Aeronautics and Space Administration under the Exoplanet Exploration Program.
 - Christiansen et al. 2025, The NASA Exoplanet Archive, PSJ: https://doi.org/10.3847/PSJ/ade3c2
 - Planetary Systems Composite Parameters Table: https://doi.org/10.26133/NEA13
