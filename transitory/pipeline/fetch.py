@@ -1,4 +1,4 @@
-"""``MastSource``: real TESS, Kepler and K2 light curves from MAST, via lightkurve.
+"""``MastSource``: real TESS, Kepler and K2 light curves from MAST.
 
 Products chosen, per sector, quarter or campaign:
 
@@ -12,39 +12,69 @@ PDCSAP flux is used, falling back to SAP for a file with no PDCSAP values.
 Quality-flagged cadences are dropped on reading (lightkurve's default
 bitmask) and each file is normalised by its median before stitching.
 
-Being polite to the archive: files go to ``config.cache_dir()`` and the
-query -> files mapping to the cache index (``pipeline/cache.py``), so nothing
-is downloaded twice and a repeated fetch makes no request at all.  Requests
-are serial across all threads and carry a descriptive user agent.
+Where the files come from, tried in this order (``$TRANSITORY_LC_SOURCES``,
+such as ``static,s3,search``, overrides it):
 
-MAST is sometimes slow for minutes at a time.  astroquery sends its requests
-with no timeout, so each one here gets ``MAST_TIMEOUT_SECONDS``, and a search
-or download that times out or cannot connect is tried once more after
-``MAST_RETRY_BACKOFF_SECONDS`` before the star fails with a ``SourceError``.
-A search MAST keeps answering "still executing" is given up after
-``MAST_PORTAL_TIMEOUT_SECONDS`` in all, without another try.  Once a search
-has found MAST down like this, stars that would need MAST fail at once with
-the same message for the rest of the run, rather than waiting minutes each;
-stars already in the cache are unaffected.
+1. ``static``: STScI's static archive directories, where a star's files are
+   found by path from its KIC, EPIC or TIC (``archive_files``); for TESS,
+   the sectors whose images cover the star come from MAST's footprint file,
+   read once a run (``tess_sectors``), else from TESScut.
+2. ``s3``: the same files on the AWS Open Data mirror (``stpubdata``), which
+   has no TESS-SPOC light curves.
+3. ``search``: lightkurve's search of MAST's CAOM database, for stars known
+   only by name or position, or when neither mirror can be reached.
+
+The answer of a source that could be asked is believed: a mirror with no
+files for the star (STScI's, or S3's for Kepler and K2) means no data, and
+the next source is not asked.  A source that cannot be asked (timeout, no
+connection, HTTP 5xx or 429) is skipped for the next, and held off for
+other stars until the next run starts (``MastSource.new_run``) or
+``MAST_OUTAGE_HOLD_SECONDS`` pass, so they don't wait on it too.  A star
+fails only when no source can be used, with a message naming each source
+and why, which says it is not a lack of data.
+
+Being polite to the archive: files go to ``config.cache_dir()`` (from the
+mirrors, ``archive/<mission>/<filename>``) and the query -> files mapping to
+the cache index (``pipeline/cache.py``), whichever source gave them, so
+nothing is downloaded twice and a repeated fetch makes no request at all.
+Requests are serial across all threads and carry a descriptive user agent.
+
+Timeouts are set so a source that is down fails fast:
+
+* Mirror listings get ``archive_files.LISTING_TIMEOUT_SECONDS`` and no
+  retry: the next source is the retry.
+* Downloads get ``MAST_TIMEOUT_SECONDS`` between bytes and are tried once
+  more after ``MAST_RETRY_BACKOFF_SECONDS``.
+* astroquery sends its requests with no timeout, so each gets
+  ``MAST_TIMEOUT_SECONDS``, and a search MAST keeps answering "still
+  executing" is given up after ``MAST_PORTAL_TIMEOUT_SECONDS``.  A search
+  that times out or cannot connect is tried once more, except as a
+  fallback after the mirrors failed, when it gets
+  ``MAST_FALLBACK_SEARCH_SECONDS`` and one try.
 """
 
 from __future__ import annotations
 
+import contextlib
 import logging
+import os
 import re
 import threading
 import time
 import warnings
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from typing import Any
 
 import numpy as np
 import requests
 from requests.adapters import HTTPAdapter
 
+from ..catalog.client import CatalogError
 from ..config import USER_AGENT, cache_dir
 from ..models import LightCurve, Mission, ProgressCallback, StarTarget
 from ..sources import SourceError
+from . import archive_files, tess_sectors
+from .archive_files import SourceUnavailable
 from .cache import CacheIndex, cache_key
 
 log = logging.getLogger(__name__)
@@ -98,6 +128,30 @@ def doi_line(doi: str, mission: str = "") -> str:
     title = DOI_TITLES.get(doi, f"{mission} data".strip())
     return f"{title}: https://doi.org/{doi}"
 
+# Where light curves come from, in the order tried (see the module docstring).
+LC_SOURCES_ENV = "TRANSITORY_LC_SOURCES"
+DEFAULT_LC_SOURCES = ("static", "s3", "search")
+SOURCE_TITLES = {
+    "static": archive_files.MIRROR_TITLES["stsci"],
+    "s3": archive_files.MIRROR_TITLES["s3"],
+    "search": "MAST search",
+}
+_MIRROR_FOR = {"static": "stsci", "s3": "s3"}
+# A product record's ``source``: the mirror it was listed on (``archive_files``), or the search.
+_RECORD_SOURCE_TITLES = {**archive_files.MIRROR_TITLES, "search": SOURCE_TITLES["search"]}
+
+
+def lc_sources() -> list[str]:
+    """The light-curve sources to try, in order: ``$TRANSITORY_LC_SOURCES``, else the default."""
+    names = [n.strip().lower() for n in os.environ.get(LC_SOURCES_ENV, "").split(",") if n.strip()]
+    unknown = [n for n in names if n not in SOURCE_TITLES]
+    if unknown:
+        log.warning("$%s: ignoring unknown source(s) %s; known: %s", LC_SOURCES_ENV,
+                    ", ".join(unknown), ", ".join(SOURCE_TITLES))
+    names = list(dict.fromkeys(n for n in names if n in SOURCE_TITLES))
+    return names or list(DEFAULT_LC_SOURCES)
+
+
 # A search that found nothing is believed for this long before MAST is asked again.
 NEGATIVE_CACHE_DAYS = 7.0
 
@@ -110,9 +164,11 @@ _timeouts_set = False
 MAST_TIMEOUT_SECONDS = 120.0
 # Seconds in all astroquery keeps asking about a search MAST is still executing.
 MAST_PORTAL_TIMEOUT_SECONDS = 180.0
+# A search tried after the mirrors failed gets this long, and one try.
+MAST_FALLBACK_SEARCH_SECONDS = 60.0
 # A failed search or download is tried once more after this pause.
 MAST_RETRY_BACKOFF_SECONDS = 10.0
-# After a search finds MAST down, other stars fail at once without asking it,
+# After a request finds a source down, other stars skip it without asking,
 # until the next run starts (``MastSource.new_run``) or this many seconds pass.
 MAST_OUTAGE_HOLD_SECONDS = 600.0
 
@@ -186,16 +242,59 @@ def _ensure_timeouts() -> None:
     adapter = _TimeoutAdapter(MAST_TIMEOUT_SECONDS)
     session.mount("https://", adapter)
     session.mount("http://", adapter)
+    _limits["adapter"] = adapter
     if getattr(mast_utils, "requests", None) is requests:
-        mast_utils.requests = _TimeoutRequests(MAST_TIMEOUT_SECONDS)
+        mast_utils.requests = _limits["resolver"] = _TimeoutRequests(MAST_TIMEOUT_SECONDS)
     else:
         log.warning("MAST name resolution keeps astroquery's default (no) timeout")
     portal = getattr(Observations, "_portal_api_connection", None)
     if hasattr(portal, "TIMEOUT"):
         portal.TIMEOUT = MAST_PORTAL_TIMEOUT_SECONDS
+        _limits["portal"] = portal
     else:
         log.warning("MAST searches keep astroquery's default polling limit")
     _timeouts_set = True
+
+
+# What _ensure_timeouts set, by name, for _search_budget to shorten for a while.
+_limits: dict[str, Any] = {}
+
+
+@contextlib.contextmanager
+def _search_budget(seconds: float | None):
+    """Within the block, MAST requests and search polling are limited to ``seconds``.
+
+    ``None`` leaves the limits as they are.  Callers hold ``_network_lock``.
+    """
+    if seconds is None:
+        yield
+        return
+    saved = []
+    for name, attribute in (("adapter", "timeout"), ("resolver", "timeout"), ("portal", "TIMEOUT")):
+        holder = _limits.get(name)
+        if holder is not None:
+            saved.append((holder, attribute, getattr(holder, attribute)))
+            setattr(holder, attribute, seconds)
+    try:
+        yield
+    finally:
+        for holder, attribute, value in saved:
+            setattr(holder, attribute, value)
+
+
+def _lookup_transport(method: str, url: str, params: dict[str, str]) -> str:
+    """``tess_sectors``' transport: one GET with the listing timeout and no retry.
+
+    TESScut is the footprint file's fallback, so is its retry.
+    """
+    try:
+        reply = requests.request(method, url, params=params, headers={"User-Agent": USER_AGENT},
+                                 timeout=archive_files.LISTING_TIMEOUT_SECONDS)
+    except requests.RequestException as exc:
+        raise CatalogError(f"{url}: {exc}") from exc
+    if reply.status_code != 200:
+        raise CatalogError(f"{url}: HTTP {reply.status_code}")
+    return reply.text
 
 
 def _http_status(exc: BaseException | None) -> int | None:
@@ -222,11 +321,13 @@ def _is_transient(exc: BaseException) -> bool:
     return False
 
 
-def _with_retry(what: str, call, on_retry=None):
+def _with_retry(what: str, call, on_retry=None, retry: bool = True):
     """``call()``, tried once more after a pause if MAST timed out or was unreachable.
 
-    ``on_retry(message)`` is told before the pause.
+    ``on_retry(message)`` is told before the pause.  With ``retry`` False, just ``call()``.
     """
+    if not retry:
+        return call()
     try:
         return call()
     except Exception as exc:
@@ -256,13 +357,13 @@ def _outage(exc: Exception) -> str | None:
     return None
 
 
-def _failure(what: str, exc: Exception) -> SourceError:
+def _failure(what: str, exc: Exception, tries: int = 2) -> SourceError:
     problem = _outage(exc)
     if problem is not None:
         if _http_status(exc) == 429:
             happened = "was refused"
         elif _is_transient(exc):
-            happened = "timed out or could not connect (tried twice)"
+            happened = "timed out or could not connect" + (" (tried twice)" if tries == 2 else "")
         else:
             happened = "timed out"
         return SourceError(f"{problem}: {what} {happened}. {_NOT_MISSING_DATA} ({exc})")
@@ -271,6 +372,19 @@ def _failure(what: str, exc: Exception) -> SourceError:
         return SourceError(f"MAST reported an error on its side: {what} failed. "
                            f"{_NOT_MISSING_DATA} ({exc})")
     return SourceError(f"{what} failed: {exc}")
+
+
+def _all_failed(mission: Mission, query: str, skipped: list[tuple[str, _Skip]]) -> SourceError:
+    """The error for a star no source could answer for: each one tried, and why."""
+    tried = [(name, skip) for name, skip in skipped if skip.tried]
+    if len(tried) == 1:
+        return tried[0][1].error
+    if not tried:
+        reasons = "; ".join(f"{SOURCE_TITLES[name]} {skip.reason}" for name, skip in skipped)
+        return SourceError(f"No source can look for {mission} light curves of {query!r}: {reasons}")
+    reasons = "; ".join(f"{SOURCE_TITLES[name]}: {skip.reason}" for name, skip in tried)
+    return SourceError(f"No source could be used for {mission} light curves of {query!r}: "
+                       f"{reasons}. {_NOT_MISSING_DATA}")
 
 
 def number_ranges(numbers: Iterable[int]) -> str:
@@ -403,36 +517,65 @@ def _values(q: Any) -> np.ndarray:
     return np.asarray(v, dtype=float)
 
 
+class _Skip(Exception):
+    """A source gave no answer for a star: ``reason`` in a few words, ``error`` in full.
+
+    ``tried`` is False for a source that does not apply to the star (no
+    catalog number or position to find its files by), which no error names.
+    """
+
+    def __init__(self, reason: str, error: SourceError | None = None, tried: bool = True):
+        super().__init__(reason)
+        self.reason = reason
+        self.error = error or SourceError(reason)
+        self.tried = tried
+
+
 class MastSource:
     """TESS / Kepler / K2 light curves from MAST, cached in ``cache_dir()``.
 
     ``max_products`` caps how many sectors or quarters are used (the most
     recent ones are dropped first), for stars with very long coverage.
+    ``transport``, ``get`` and ``sectors_for`` stand in for the network in
+    tests: the mirrors' listing transport (``archive_files.Transport``),
+    ``requests.get`` for downloads, and ``(ra, dec) -> sectors``.
     """
 
     name = "MAST"
 
-    def __init__(self, index: CacheIndex | None = None, max_products: int | None = None):
+    def __init__(self, index: CacheIndex | None = None, max_products: int | None = None, *,
+                 transport: archive_files.Transport | None = None, get=None,
+                 sectors_for: Callable[[float, float], list[int]] | None = None):
         self._index = index
         self.max_products = max_products
-        # (time.monotonic(), message) of the search that found MAST down this run.
-        self._outage: tuple[float, str] | None = None
+        self._transport = transport
+        self._get = get
+        self._sectors_for = sectors_for
+        # source -> (time.monotonic(), message) of the request that found it unusable this run.
+        self._outages: dict[str, tuple[float, str]] = {}
+        # The TESS footprints, read once a run, or the SectorLookupError that reading them gave.
+        self._footprints: tess_sectors.Footprints | Exception | None = None
+        self._sectors: dict[tuple[float, float], list[int]] = {}
 
     def new_run(self) -> None:
-        """A new batch of stars starts: ask MAST again even if it was down."""
-        self._outage = None
+        """A new batch of stars starts: ask every source again, even one that was down."""
+        self._outages.clear()
+        self._footprints = None
+        self._sectors.clear()
 
-    def _check_outage(self, query: str) -> None:
-        """Fail at once, without asking MAST, if a search this run found it down."""
-        outage = self._outage
+    def _held(self, source: str) -> str | None:
+        """Why ``source`` is not to be asked now, if a request this run found it unusable."""
+        outage = self._outages.get(source)
         if outage is None:
-            return
+            return None
         when, message = outage
         if time.monotonic() - when > MAST_OUTAGE_HOLD_SECONDS:
-            self._outage = None
-            return
-        raise SourceError(f"{message}: MAST was not asked for {query!r}, as an earlier search "
-                          f"in this run found it unusable. {_NOT_MISSING_DATA}")
+            del self._outages[source]
+            return None
+        return message
+
+    def _hold(self, source: str, message: str) -> None:
+        self._outages[source] = (time.monotonic(), message)
 
     @property
     def index(self) -> CacheIndex:
@@ -453,17 +596,18 @@ class MastSource:
             query = _query_for(target, mission)
             tried.append(f"{mission} ({query})")
             base, span = m_i / len(missions), 1.0 / len(missions)
-            products = self._products(query, mission,
+            products = self._products(target, query, mission,
                                       lambda msg, f: progress(msg, base + span * f))
             if products:
                 lc = self._stitch(products, mission)
-                progress(f"{mission} light curve ready", 1.0)
+                progress(f"{mission} light curve ready (from {lc.source})", 1.0)
                 return lc
         raise SourceError(f"No light curves at MAST for {target.label}: searched {', '.join(tried)}")
 
-    # --- products: from the index, else search + download ---------------------------
+    # --- products: from the index, else the first source that answers -----------------
 
-    def _products(self, query: str, mission: Mission, progress: ProgressCallback) -> list[dict]:
+    def _products(self, target: StarTarget, query: str, mission: Mission,
+                  progress: ProgressCallback) -> list[dict]:
         """Product records (with absolute ``path``) for ``query``, downloading as needed."""
         index = self.index
         key = cache_key("lightcurve", mission, query)
@@ -480,7 +624,7 @@ class MastSource:
                     return products
                 log.info("%s: cached %s files missing; fetching again", query, mission)
 
-        products = self._download(index, query, mission, progress)
+        products = self._download(index, target, query, mission, progress)
         index.put(key, {
             "query": query,
             "mission": mission,
@@ -491,72 +635,200 @@ class MastSource:
     def _negative_fresh(self, index: CacheIndex, key: str) -> bool:
         return index.get(key, max_age_days=NEGATIVE_CACHE_DAYS) is not None
 
-    def _download(self, index: CacheIndex, query: str, mission: Mission,
+    def _download(self, index: CacheIndex, target: StarTarget, query: str, mission: Mission,
                   progress: ProgressCallback) -> list[dict]:
+        """Products from the first source in ``lc_sources()`` that can answer for the star."""
+        skipped: list[tuple[str, _Skip]] = []
+        with _network_lock:
+            for name in lc_sources():
+                title = SOURCE_TITLES[name]
+                unusable = [SOURCE_TITLES[n] for n, s in skipped if s.tried]
+                if unusable:
+                    progress(f"{' and '.join(unusable)} unavailable; trying {title}", 0.0)
+                try:
+                    # Checked once the lock is ours: stars queued behind the request that
+                    # found a source down skip it as soon as it does.
+                    held = self._held(name)
+                    if held is not None:
+                        raise self._held_skip(name, held, query)
+                    if name == "search":
+                        return self._search(index, query, mission, progress, fallback=bool(unusable))
+                    return self._from_mirror(index, target, query, mission, name, progress)
+                except _Skip as skip:
+                    log.info("%s for %s light curves of %s: %s", title, mission, query, skip.reason)
+                    skipped.append((name, skip))
+        raise _all_failed(mission, query, skipped)
+
+    def _held_skip(self, source: str, held: str, query: str) -> _Skip:
+        if source == "search":
+            error = SourceError(f"{held}: MAST was not asked for {query!r}, as an earlier search "
+                                f"in this run found it unusable. {_NOT_MISSING_DATA}")
+        else:
+            error = SourceError(f"{held}: it was not asked for {query!r}, as it could not be "
+                                f"reached earlier in this run. {_NOT_MISSING_DATA}")
+        return _Skip(f"{held} (earlier in this run)", error)
+
+    # --- the mirrors: files found by path ----------------------------------------------
+
+    def _from_mirror(self, index: CacheIndex, target: StarTarget, query: str, mission: Mission,
+                     source: str, progress: ProgressCallback) -> list[dict]:
+        mirror = archive_files.MIRRORS[_MIRROR_FOR[source]]
+        title = SOURCE_TITLES[source]
+        number, kind = {"TESS": (target.tic, "TIC"), "Kepler": (target.kic, "KIC"),
+                        "K2": (target.epic, "EPIC")}[mission]
+        if number is None:
+            raise _Skip(f"needs the star's {kind} number", tried=False)
+        sectors = None
+        if mission == "TESS":
+            sectors = self._tess_sectors(target)
+            if not sectors:
+                log.info("%s: no TESS sector covers it", query)
+                return []
+        progress(f"Looking for {mission} light curves of {query} in {title}", 0.0)
+        try:
+            records = archive_files.find_products(mission, number, mirror=mirror, sectors=sectors,
+                                                  transport=self._transport)
+        except SourceUnavailable as exc:
+            log.warning("%s: %s", title, exc)
+            problem = f"{title} could not be reached"
+            self._hold(source, problem)
+            raise _Skip(f"could not be reached ({exc})",
+                        SourceError(f"{problem}: {exc}. {_NOT_MISSING_DATA}")) from exc
+        if not records and mission == "TESS" and not mirror.has_tess_spoc:
+            raise _Skip("has no SPOC light curve for the star and does not hold TESS-SPOC ones",
+                        SourceError(f"{title} has no SPOC light curves for {query!r} and does not "
+                                    f"hold TESS-SPOC ones, so cannot say whether the star has any. "
+                                    f"{_NOT_MISSING_DATA}"))
+        if self.max_products is not None:
+            records = records[: self.max_products]
+        products = []
+        for n, record in enumerate(records):
+            path = index.absolute(record["file"])
+            if not path.exists():  # another source may have fetched the same file already
+                what = f"Download of {record['label']} from {title}"
+                progress(f"Downloading {record['label']} ({n + 1}/{len(records)}) from {title}",
+                         0.1 + 0.8 * n / len(records))
+                self._download_file(record["url"], path, what, source, progress)
+            products.append(dict(record, path=path))
+        return products
+
+    def _download_file(self, url: str, path, what: str, source: str,
+                       progress: ProgressCallback) -> None:
+        """Download ``url`` to ``path``, once more after a pause if the mirror could not be reached."""
+        for attempt in (1, 2):
+            try:
+                archive_files.download(url, path, get=self._get)
+                return
+            except SourceUnavailable as exc:
+                if attempt == 2:
+                    self._hold(source, f"{SOURCE_TITLES[source]} could not be reached")
+                    raise _Skip(f"a download failed twice ({exc})",
+                                SourceError(f"{what} failed twice: {exc}. {_NOT_MISSING_DATA}")) from exc
+                log.warning("%s failed (%s); trying again in %.0f s", what, exc,
+                            MAST_RETRY_BACKOFF_SECONDS)
+                progress(f"{what} failed; trying again", 0.1)
+                time.sleep(MAST_RETRY_BACKOFF_SECONDS)
+            except SourceError as exc:  # a listed file that is not there
+                raise _Skip(f"listed a file that is not there ({exc})",
+                            SourceError(f"{what} failed: {exc}")) from exc
+
+    def _tess_sectors(self, target: StarTarget) -> list[int]:
+        """The TESS sectors whose images cover ``target``, looked up once a run."""
+        if target.ra is None or target.dec is None:
+            raise _Skip("needs the star's position to find its TESS sectors", tried=False)
+        key = (target.ra, target.dec)
+        if key not in self._sectors:
+            lookup = self._sectors_for or self._footprint_sectors
+            try:
+                self._sectors[key] = lookup(target.ra, target.dec)
+            except CatalogError as exc:
+                raise _Skip(f"could not find the star's TESS sectors ({exc})",
+                            SourceError(f"The TESS sectors of {target.label} could not be looked "
+                                        f"up: {exc}. {_NOT_MISSING_DATA}")) from exc
+        return self._sectors[key]
+
+    def _footprint_sectors(self, ra: float, dec: float) -> list[int]:
+        """Sectors from the footprint file, read once a run, else from TESScut."""
+        footprints = self._footprints
+        if footprints is None:
+            try:
+                footprints = tess_sectors.footprints(transport=_lookup_transport)
+            except tess_sectors.SectorLookupError as exc:
+                log.warning("%s; asking TESScut for each star's sectors this run", exc)
+                footprints = exc
+            self._footprints = footprints
+        if isinstance(footprints, tess_sectors.Footprints):
+            return footprints.sectors_at(ra, dec)
+        return tess_sectors.tesscut_sectors(ra, dec, transport=_lookup_transport)
+
+    # --- the MAST search, via lightkurve -------------------------------------------------
+
+    def _search(self, index: CacheIndex, query: str, mission: Mission,
+                progress: ProgressCallback, fallback: bool) -> list[dict]:
+        """Products from lightkurve's search; ``fallback``: the mirrors failed, so fail fast."""
         lk = _lightkurve()
         download_dir = str(cache_dir())
-        with _network_lock:
-            # Checked once the lock is ours: stars queued behind the search that
-            # found MAST down fail as soon as it does.
-            self._check_outage(query)
-            _ensure_user_agent()
-            _ensure_timeouts()
-            progress(f"Searching MAST for {mission} light curves of {query}", 0.0)
+        _ensure_user_agent()
+        _ensure_timeouts()
+        progress(f"Searching MAST for {mission} light curves of {query}", 0.0)
 
-            def search():
-                if mission == "TESS":
-                    return lk.search_lightcurve(query, mission="TESS", author=TESS_AUTHORS)
-                if mission == "K2":
-                    return lk.search_lightcurve(query, mission="K2", author=K2_AUTHOR, exptime="long")
-                return lk.search_lightcurve(query, mission="Kepler", author=KEPLER_AUTHOR,
-                                            exptime="long")
+        def search():
+            if mission == "TESS":
+                return lk.search_lightcurve(query, mission="TESS", author=TESS_AUTHORS)
+            if mission == "K2":
+                return lk.search_lightcurve(query, mission="K2", author=K2_AUTHOR, exptime="long")
+            return lk.search_lightcurve(query, mission="Kepler", author=KEPLER_AUTHOR,
+                                        exptime="long")
 
+        what = f"MAST search for {query!r}"
+        try:
+            with _search_budget(MAST_FALLBACK_SEARCH_SECONDS if fallback else None):
+                sr = _with_retry(what, search, lambda msg: progress(msg, 0.0), retry=not fallback)
+        except Exception as exc:
+            if type(exc).__name__ == "SearchError" and "resolve" in str(exc).lower():
+                # An unknown name: the same as finding no data.
+                log.info("MAST could not resolve %r: %s", query, exc)
+                return []
+            log.exception("MAST search for %r (%s) failed", query, mission)
+            problem = _outage(exc)
+            if problem is not None:
+                self._hold("search", problem)
+            raise _Skip(problem or f"failed: {exc}",
+                        _failure(what, exc, tries=1 if fallback else 2)) from exc
+
+        rows = select_products(sr.table, mission)
+        if self.max_products is not None:
+            rows = rows[: self.max_products]
+        tab = sr.table
+        products = []
+        for n, row in enumerate(rows):
+            label = str(tab["mission"][row])
+            progress(f"Downloading {label} ({n + 1}/{len(rows)})", 0.1 + 0.8 * n / max(len(rows), 1))
+            what = f"Download of {label} for {query!r}"
             try:
-                sr = _with_retry(f"MAST search for {query!r}", search,
-                                 lambda msg: progress(msg, 0.0))
+                lc = _with_retry(what, lambda r=row: sr[r].download(quality_bitmask="default",
+                                                                    download_dir=download_dir,
+                                                                    flux_column="pdcsap_flux"))
             except Exception as exc:
-                if type(exc).__name__ == "SearchError" and "resolve" in str(exc).lower():
-                    # An unknown name: the same as finding no data.
-                    log.info("MAST could not resolve %r: %s", query, exc)
-                    return []
-                log.exception("MAST search for %r (%s) failed", query, mission)
-                problem = _outage(exc)
-                if problem is not None:
-                    self._outage = (time.monotonic(), problem)
-                raise _failure(f"MAST search for {query!r}", exc) from exc
-
-            rows = select_products(sr.table, mission)
-            if self.max_products is not None:
-                rows = rows[: self.max_products]
-            products = []
-            for n, row in enumerate(rows):
-                tab = sr.table
-                label = str(tab["mission"][row])
-                progress(f"Downloading {label} ({n + 1}/{len(rows)})", 0.1 + 0.8 * n / max(len(rows), 1))
-                try:
-                    lc = _with_retry(
-                        f"Download of {label} for {query!r}",
-                        lambda r=row: sr[r].download(quality_bitmask="default",
-                                                     download_dir=download_dir,
-                                                     flux_column="pdcsap_flux"))
-                except Exception as exc:
-                    log.exception("Download of %s for %r failed", label, query)
-                    raise _failure(f"Download of {label} for {query!r}", exc) from exc
-                path = lc.meta.get("FILENAME") if lc is not None else None
-                if not path:
-                    raise SourceError(f"Download of {label} for {query!r} returned no file")
-                rel = index.relative(path)
-                products.append({
-                    "file": rel,
-                    "path": index.absolute(rel),
-                    "author": str(tab["author"][row]),
-                    "exptime": float(tab["exptime"][row]),
-                    "seq": _seq_number(label),
-                    "obs_id": str(tab["obs_id"][row]),
-                    # Kepler quarters share one obs_id; the file name is unique.
-                    "product": re.sub(r"\.fits(\.gz)?$", "", str(tab["productFilename"][row])),
-                    "target_name": str(tab["target_name"][row]),
-                })
+                log.exception("Download of %s for %r failed", label, query)
+                raise _Skip(_outage(exc) or f"a download failed: {exc}", _failure(what, exc)) from exc
+            path = lc.meta.get("FILENAME") if lc is not None else None
+            if not path:
+                raise SourceError(f"Download of {label} for {query!r} returned no file")
+            rel = index.relative(path)
+            products.append({
+                "file": rel,
+                "path": index.absolute(rel),
+                "url": str(tab["dataURI"][row]) if "dataURI" in tab.colnames else "",
+                "source": "search",
+                "author": str(tab["author"][row]),
+                "exptime": float(tab["exptime"][row]),
+                "seq": _seq_number(label),
+                "obs_id": str(tab["obs_id"][row]),
+                # Kepler quarters share one obs_id; the file name is unique.
+                "product": re.sub(r"\.fits(\.gz)?$", "", str(tab["productFilename"][row])),
+                "target_name": str(tab["target_name"][row]),
+            })
         return products
 
     # --- reading and stitching ---------------------------------------------------------
@@ -572,6 +844,7 @@ class MastSource:
     def _stitch(self, products: Iterable[dict], mission: Mission) -> LightCurve:
         times, fluxes, errs = [], [], []
         seqs, ids, authors, exptimes, kinds = set(), [], [], [], set()
+        sources = []
         doi_seqs: dict[str, set[int]] = {}
         for p in products:
             try:
@@ -592,6 +865,9 @@ class MastSource:
             fluxes.append(f[good] / med)
             errs.append(e[good] / med)
             kinds.add(kind)
+            # Records cached before there were other sources came from the search.
+            source = p.get("source") or "search"
+            sources.append(_RECORD_SOURCE_TITLES.get(source, source))
             if p.get("seq") is not None:
                 seqs.add(int(p["seq"]))
                 if p.get("author") in DOIS:
@@ -621,4 +897,5 @@ class MastSource:
             author=author,
             cadence_s=float(np.nanmedian(exptimes)) if exptimes else None,
             doi_sectors={doi: sorted(s) for doi, s in doi_seqs.items()} if len(doi_seqs) > 1 else {},
+            source=" + ".join(dict.fromkeys(sources)),
         )

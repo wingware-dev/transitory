@@ -4,6 +4,7 @@ import http.server
 import threading
 import time as _time
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 import numpy as np
 import pytest
@@ -12,8 +13,10 @@ from astropy.table import Table
 
 from transitory.config import USER_AGENT, cache_dir
 from transitory.models import LightCurve, StarTarget
+from transitory.pipeline import archive_files
 from transitory.pipeline import cache as cache_mod
 from transitory.pipeline import fetch, run
+from transitory.pipeline.archive_files import MIRRORS, SourceUnavailable
 from transitory.pipeline.cache import CacheIndex, cache_key, load_json, save_json
 from transitory.pipeline.fetch import DOIS, MastSource, mission_credits, select_products
 from transitory.sources import LightCurveSource, SourceError
@@ -120,9 +123,11 @@ class FakeLightkurve:
 
 @pytest.fixture
 def fake_lk(monkeypatch):
+    """lightkurve replaced, and the MAST search the only source (``mirrors`` adds the others)."""
     lk = FakeLightkurve()
     monkeypatch.setattr(fetch, "_lightkurve", lambda: lk)
     monkeypatch.setattr(fetch, "MAST_RETRY_BACKOFF_SECONDS", 0.0)
+    monkeypatch.setenv(fetch.LC_SOURCES_ENV, "search")
     return lk
 
 
@@ -705,6 +710,340 @@ def test_credits():
 def test_target_without_any_identifier():
     with pytest.raises(SourceError, match="No identifier"):
         MastSource().fetch(StarTarget("  ", mission_hint="TESS"))
+
+
+# --- the source chain: STScI archive files, the AWS mirror, then the search ---------
+
+class _Reply:
+    def __init__(self, status, body=b""):
+        self.status_code, self.body = status, body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def iter_content(self, size):
+        yield self.body
+
+
+class FakeMirrors:
+    """archive.stsci.edu and stpubdata: listings and downloads of ``files``, by URL.
+
+    A file's content is its name, which ``FakeLightkurve.read`` serves data for.
+    Mirrors named in ``down`` time out; ``download_failures`` fail that many downloads.
+    """
+
+    def __init__(self):
+        self.files: dict[str, str] = {}
+        self.down: set[str] = set()
+        self.download_failures = 0
+        self.listings: list[str] = []
+        self.downloads: list[str] = []
+        self.sector_lookups = 0
+        self.sectors = [1, 4]
+
+    @staticmethod
+    def mirror_of(url):
+        return "s3" if url.startswith(archive_files.S3_URL) else "stsci"
+
+    def add(self, mirror, collection, path, name):
+        self.files[MIRRORS[mirror].url(collection, path, name)] = name
+
+    def transport(self, url, timeout):
+        assert timeout == archive_files.LISTING_TIMEOUT_SECONDS
+        mirror = self.mirror_of(url)
+        self.listings.append(url)
+        if mirror in self.down:
+            raise SourceUnavailable(f"{url} could not be fetched: Read timed out")
+        if mirror == "stsci":
+            names = [u[len(url):] for u in self.files if u.startswith(url) and "/" not in u[len(url):]]
+            return "".join(f'<a href="{n}">{n}</a>' for n in names).encode() if names else None
+        prefix = parse_qs(urlsplit(url).query)["prefix"][0]
+        keys = [u[len(archive_files.S3_URL) + 1:] for u in self.files if self.mirror_of(u) == "s3"]
+        contents = "".join(f"<Contents><Key>{k}</Key></Contents>" for k in keys if k.startswith(prefix))
+        return (f'<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">'
+                f"<IsTruncated>false</IsTruncated>{contents}</ListBucketResult>").encode()
+
+    def get(self, url, headers, timeout, stream):
+        self.downloads.append(url)
+        if self.mirror_of(url) in self.down:
+            raise requests.ConnectionError(f"{url}: connection refused")
+        if self.download_failures:
+            self.download_failures -= 1
+            raise requests.ReadTimeout(f"{url}: Read timed out")
+        name = self.files.get(url)
+        return _Reply(404) if name is None else _Reply(200, name.encode())
+
+    def sectors_for(self, ra, dec):
+        self.sector_lookups += 1
+        return self.sectors
+
+
+KIC = 11904151
+TIC = 261136679
+
+
+def add_kepler(mirrors, lk, quarters=(1, 2), on=("stsci", "s3")):
+    stamps = {q: stamp for stamp, q in archive_files.KEPLER_QUARTER_STAMPS.items()}
+    for q in quarters:
+        name = f"kplr{KIC:09d}-{stamps[q]}_llc.fits"
+        for mirror in on:
+            mirrors.add(mirror, "kepler", archive_files.kepler_dir(KIC), name)
+        lk.add_data(name, np.arange(q * 90.0, q * 90.0 + 80, 0.02), 5e4)
+
+
+def add_tess(mirrors, lk, sectors=(1, 4), on=("stsci", "s3")):
+    for sector in sectors:
+        name = f"tess2018206045859-s{sector:04d}-{TIC:016d}-0120-s_lc.fits"
+        for mirror in on:
+            mirrors.add(mirror, "tess", archive_files.tess_spoc_dir(sector, TIC), name)
+        lk.add_data(name, np.arange(sector * 30.0, sector * 30.0 + 27, 0.1), 1e3)
+
+
+KEPLER_10 = StarTarget("Kepler-10", kic=KIC, mission_hint="Kepler")
+PI_MEN = StarTarget("pi Men", tic=TIC, ra=84.29, dec=-80.47, mission_hint="TESS")
+
+
+@pytest.fixture
+def mirrors(fake_lk, monkeypatch):
+    """Every source in the default order, the mirrors faked by a FakeMirrors."""
+    monkeypatch.delenv(fetch.LC_SOURCES_ENV)
+    return FakeMirrors()
+
+
+def chain_source(mirrors, **kw):
+    return MastSource(transport=mirrors.transport, get=mirrors.get,
+                      sectors_for=mirrors.sectors_for, **kw)
+
+
+def test_lc_sources_default_and_override(monkeypatch, caplog):
+    monkeypatch.delenv(fetch.LC_SOURCES_ENV, raising=False)
+    assert fetch.lc_sources() == ["static", "s3", "search"]
+    monkeypatch.setenv(fetch.LC_SOURCES_ENV, " S3, search,s3 ")
+    assert fetch.lc_sources() == ["s3", "search"]
+    monkeypatch.setenv(fetch.LC_SOURCES_ENV, "ftp")
+    assert fetch.lc_sources() == ["static", "s3", "search"]
+    assert "unknown source(s) ftp" in caplog.text
+
+
+def test_static_files_are_used_and_cached(mirrors, fake_lk):
+    add_kepler(mirrors, fake_lk)
+    calls = []
+    lc = chain_source(mirrors).fetch(KEPLER_10, progress_cb=lambda m, f: calls.append(m))
+    assert lc.source == "STScI archive files"
+    assert lc.mission == "Kepler" and lc.sectors_or_quarters == [1, 2]
+    assert lc.dois == [DOIS["Kepler"]]
+    assert all(u.startswith(archive_files.STSCI_URL) for u in mirrors.listings + mirrors.downloads)
+    assert len(mirrors.downloads) == 2 and fake_lk.searches == []
+    assert "Downloading Kepler Quarter 02 (2/2) from STScI archive files" in calls
+    assert calls[-1] == "Kepler light curve ready (from STScI archive files)"
+
+    entry = CacheIndex().get(cache_key("lightcurve", "Kepler", f"KIC {KIC}"))
+    assert [p["source"] for p in entry["products"]] == ["stsci", "stsci"]
+    assert all(p["file"].startswith("archive/Kepler/kplr") for p in entry["products"])
+    assert all(p["url"] in mirrors.files for p in entry["products"])
+    assert (cache_dir() / entry["products"][0]["file"]).exists()
+
+    mirrors.down = {"stsci", "s3"}
+    fake_lk.search_error = ConnectionError("MAST is down")
+    n_listings = len(mirrors.listings)
+    again = chain_source(mirrors).fetch(KEPLER_10)
+    assert again.source == "STScI archive files"
+    np.testing.assert_array_equal(again.flux, lc.flux)
+    assert len(mirrors.listings) == n_listings and fake_lk.searches == []
+
+
+def test_static_unreachable_falls_back_to_s3(mirrors, fake_lk):
+    add_kepler(mirrors, fake_lk)
+    mirrors.down = {"stsci"}
+    calls = []
+    lc = chain_source(mirrors).fetch(KEPLER_10, progress_cb=lambda m, f: calls.append(m))
+    assert lc.source == "AWS Open Data (stpubdata)"
+    assert lc.sectors_or_quarters == [1, 2]
+    assert all(u.startswith(archive_files.S3_URL) for u in mirrors.downloads)
+    assert "STScI archive files unavailable; trying AWS Open Data (stpubdata)" in calls
+    assert fake_lk.searches == []
+
+
+def test_both_mirrors_unreachable_fall_back_to_the_search(mirrors, fake_lk):
+    mirrors.down = {"stsci", "s3"}
+    rows = [row(q, "Kepler", 1800, target="kplr011904151", mission="Kepler") for q in (1, 2)]
+    fake_lk.rows["Kepler"] = rows
+    for r in rows:
+        fake_lk.add_data(r["productFilename"], np.arange(0, 80, 0.02), 5e4)
+    calls = []
+    lc = chain_source(mirrors).fetch(KEPLER_10, progress_cb=lambda m, f: calls.append(m))
+    assert lc.source == "MAST search"
+    assert [s[0] for s in fake_lk.searches] == [f"KIC {KIC}"]
+    assert ("STScI archive files and AWS Open Data (stpubdata) unavailable; trying MAST search"
+            in calls)
+    entry = CacheIndex().get(cache_key("lightcurve", "Kepler", f"KIC {KIC}"))
+    assert {p["source"] for p in entry["products"]} == {"search"}
+
+
+def test_search_as_a_fallback_gets_one_short_try_and_the_error_lists_every_source(
+        mirrors, fake_lk, monkeypatch):
+    mirrors.down = {"stsci", "s3"}
+    fake_lk.search_errors = [_read_timeout(), _read_timeout()]
+    budgets = []
+
+    @fetch.contextlib.contextmanager
+    def budget(seconds):
+        budgets.append(seconds)
+        yield
+
+    monkeypatch.setattr(fetch, "_search_budget", budget)
+    with pytest.raises(SourceError) as info:
+        chain_source(mirrors).fetch(KEPLER_10)
+    message = str(info.value)
+    assert message.startswith(f"No source could be used for Kepler light curves of 'KIC {KIC}': "
+                              "STScI archive files: could not be reached (")
+    assert "; AWS Open Data (stpubdata): could not be reached (" in message
+    assert message.endswith("; MAST search: MAST is down or cannot be reached from this network. "
+                            "This is not a lack of data for the star: try again later.")
+    assert len(fake_lk.searches) == 1 and budgets == [fetch.MAST_FALLBACK_SEARCH_SECONDS]
+    assert CacheIndex().keys() == []
+
+
+def test_search_budget_shortens_and_restores_the_mast_limits(monkeypatch):
+    adapter, portal = fetch._TimeoutAdapter(120.0), type("Portal", (), {"TIMEOUT": 180.0})()
+    monkeypatch.setattr(fetch, "_limits", {"adapter": adapter, "portal": portal})
+    with fetch._search_budget(60.0):
+        assert (adapter.timeout, portal.TIMEOUT) == (60.0, 60.0)
+    assert (adapter.timeout, portal.TIMEOUT) == (120.0, 180.0)
+    with fetch._search_budget(None):
+        assert adapter.timeout == 120.0
+
+
+def test_a_missing_directory_is_no_data_and_does_not_fall_through(mirrors, fake_lk):
+    source = chain_source(mirrors)
+    with pytest.raises(SourceError, match="No light curves at MAST"):
+        source.fetch(KEPLER_10)
+    assert all(u.startswith(archive_files.STSCI_URL) for u in mirrors.listings)
+    assert fake_lk.searches == []
+    entry = CacheIndex().get(cache_key("lightcurve", "Kepler", f"KIC {KIC}"))
+    assert entry["products"] == []
+    n_listings = len(mirrors.listings)
+    with pytest.raises(SourceError, match="No light curves at MAST"):
+        source.fetch(KEPLER_10)
+    assert len(mirrors.listings) == n_listings  # the negative cache answered
+
+
+def test_an_unreachable_mirror_is_held_off_per_source(mirrors, fake_lk, monkeypatch):
+    add_kepler(mirrors, fake_lk, on=("s3",))
+    mirrors.down = {"stsci"}
+    source = chain_source(mirrors)
+    assert source.fetch(KEPLER_10).source == "AWS Open Data (stpubdata)"
+    stsci = [u for u in mirrors.listings if u.startswith(archive_files.STSCI_URL)]
+    assert len(stsci) == 1
+
+    other = StarTarget("Kepler-22", kic=10593626, mission_hint="Kepler")
+    with pytest.raises(SourceError, match="No light curves"):  # S3 answers for it: no data
+        source.fetch(other)
+    assert [u for u in mirrors.listings if u.startswith(archive_files.STSCI_URL)] == stsci
+    assert fake_lk.searches == []
+
+    source.new_run()
+    mirrors.down = set()
+    with pytest.raises(SourceError, match="No light curves"):
+        source.fetch(StarTarget("KIC 3", kic=3, mission_hint="Kepler"))
+    assert len([u for u in mirrors.listings if u.startswith(archive_files.STSCI_URL)]) == 2
+
+
+def test_a_held_search_is_skipped_while_the_mirrors_still_work(mirrors, fake_lk):
+    source = chain_source(mirrors)
+    fake_lk.search_errors = [_read_timeout(), _read_timeout()]
+    with pytest.raises(SourceError, match="MAST is down"):
+        source.fetch(StarTarget("Some star", mission_hint="Kepler"))  # name only: search
+    add_kepler(mirrors, fake_lk)
+    assert source.fetch(KEPLER_10).source == "STScI archive files"
+    with pytest.raises(SourceError, match="MAST was not asked for 'Other star'"):
+        source.fetch(StarTarget("Other star", mission_hint="Kepler"))
+    assert len(fake_lk.searches) == 2
+
+
+def test_cached_stars_load_with_every_source_down(mirrors, fake_lk):
+    add_tess(mirrors, fake_lk)
+    source = chain_source(mirrors)
+    first = source.fetch(PI_MEN)
+    assert first.sectors_or_quarters == [1, 4] and first.source == "STScI archive files"
+    mirrors.down = {"stsci", "s3"}
+    fake_lk.search_error = ConnectionError("MAST is down")
+    with pytest.raises(SourceError, match="not a lack of data"):
+        source.fetch(StarTarget("Kepler-22", kic=10593626, mission_hint="Kepler"))
+    n = (len(mirrors.listings), len(mirrors.downloads), mirrors.sector_lookups)
+    assert source.fetch(PI_MEN).sectors_or_quarters == [1, 4]
+    assert (len(mirrors.listings), len(mirrors.downloads), mirrors.sector_lookups) == n
+
+
+def test_tess_files_found_in_the_covering_sectors(mirrors, fake_lk):
+    add_tess(mirrors, fake_lk)
+    lc = chain_source(mirrors).fetch(PI_MEN)
+    assert lc.mission == "TESS" and lc.author == "SPOC" and lc.cadence_s == 120.0
+    assert lc.source_ids == [f"tess2018206045859-s{s:04d}-{TIC:016d}-0120-s_lc" for s in (1, 4)]
+    assert mirrors.sector_lookups == 1
+
+
+def test_tess_with_no_covering_sector_is_no_data_without_listing(mirrors, fake_lk):
+    mirrors.sectors = []
+    with pytest.raises(SourceError, match="No light curves"):
+        chain_source(mirrors).fetch(PI_MEN)
+    assert mirrors.listings == [] and fake_lk.searches == []
+
+
+def test_s3_without_spoc_files_is_not_taken_as_no_tess_data(mirrors, fake_lk):
+    mirrors.down = {"stsci"}
+    tess_setup(fake_lk)
+    lc = chain_source(mirrors).fetch(PI_MEN)
+    assert lc.source == "MAST search"  # S3 lacks TESS-SPOC, so the search was asked
+    assert len(fake_lk.searches) == 1
+
+
+def test_tess_sectors_that_cannot_be_looked_up_skip_the_mirrors(mirrors, fake_lk):
+    def lookup(ra, dec):
+        raise fetch.CatalogError("footprint file and TESScut both unreachable")
+
+    tess_setup(fake_lk)
+    source = MastSource(transport=mirrors.transport, get=mirrors.get, sectors_for=lookup)
+    assert source.fetch(PI_MEN).source == "MAST search"
+    assert mirrors.listings == []
+
+
+def test_a_star_with_no_catalog_number_goes_straight_to_the_search(mirrors, fake_lk):
+    tess_setup(fake_lk)
+    fake_lk.search_errors = [_read_timeout()]  # the search is primary: tried once more
+    calls = []
+    lc = chain_source(mirrors).fetch(StarTarget("Pi Mensae", mission_hint="TESS"),
+                                     progress_cb=lambda m, f: calls.append(m))
+    assert lc.source == "MAST search" and len(fake_lk.searches) == 2
+    assert mirrors.listings == [] and not any("unavailable" in m for m in calls)
+
+
+def test_mirror_download_is_tried_once_more(mirrors, fake_lk):
+    add_kepler(mirrors, fake_lk)
+    mirrors.download_failures = 1
+    lc = chain_source(mirrors).fetch(KEPLER_10)
+    assert lc.source == "STScI archive files" and len(mirrors.downloads) == 3
+
+
+def test_mirror_download_failing_twice_falls_back_and_reuses_what_was_fetched(mirrors, fake_lk):
+    add_kepler(mirrors, fake_lk)
+    stsci_q2 = [u for u in mirrors.files if u.startswith(archive_files.STSCI_URL)][1]
+    original = mirrors.get
+
+    def get(url, **kw):
+        if url == stsci_q2:
+            raise requests.ConnectionError("reset")
+        return original(url, **kw)
+
+    source = MastSource(transport=mirrors.transport, get=get, sectors_for=mirrors.sectors_for)
+    lc = source.fetch(KEPLER_10)
+    assert lc.source == "AWS Open Data (stpubdata)"
+    # Quarter 1 came from STScI before quarter 2 failed; S3 gave only quarter 2.
+    assert [u.startswith(archive_files.S3_URL) for u in mirrors.downloads] == [False, True]
+    assert lc.sectors_or_quarters == [1, 2]
 
 
 # --- cache index -------------------------------------------------------------------------
