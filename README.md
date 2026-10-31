@@ -200,6 +200,14 @@ out.
 
 ![A star's light curve retrieved from STScI's archive files](docs/shots/10-data-source.png)
 
+K2 light curves keep a few-ppt sawtooth from the spacecraft's roll, which
+its thrusters corrected every six hours.  Each K2 campaign's flux is
+decorrelated from the star's motion with Lightkurve's self-flat-fielding
+(Vanderburg & Johnson 2014) before cleaning, and the credits say so.
+Without it K2-18 b (32.9 days, in Campaign 1) is missed.
+
+![K2-18 b's two transits in K2 Campaign 1, after the roll correction](docs/shots/11-k2-roll-correction.png)
+
 ## Tests
 
 ```bash

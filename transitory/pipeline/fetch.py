@@ -11,6 +11,9 @@ Products chosen, per sector, quarter or campaign:
 PDCSAP flux is used, falling back to SAP for a file with no PDCSAP values.
 Quality-flagged cadences are dropped on reading (lightkurve's default
 bitmask) and each file is normalised by its median before stitching.
+K2 files are first corrected for the spacecraft's roll (``roll_correct``):
+PDCSAP keeps the few-ppt sawtooth of K2's 6-hour thruster firings, which
+the flattening in ``clean.py`` cannot follow.
 
 Where the files come from, tried in this order (``$TRANSITORY_LC_SOURCES``,
 such as ``static,s3,search``, overrides it):
@@ -121,6 +124,10 @@ MAST_CREDITS["K2"] = MAST_CREDITS["Kepler"]
 # Lightkurve's own recommended acknowledgement ("Citing Lightkurve").
 LIGHTKURVE_CREDIT = ("This research made use of Lightkurve, a Python package for Kepler and TESS "
                      "data analysis (Lightkurve Collaboration, 2018).")
+# Marks, in LightCurve.author, K2 light curves corrected by ``roll_correct``.
+SFF_LABEL = "SFF roll-corrected"
+SFF_CREDIT = ("K2 light curves were corrected for spacecraft roll with the self-flat-fielding "
+              "method (Vanderburg & Johnson 2014, PASP 126, 948) as implemented in Lightkurve.")
 
 
 # Where a light curve's files came from (``LightCurve.source``), for its credits.
@@ -438,8 +445,24 @@ def mission_credits(lc: LightCurve) -> list[str]:
         used = f" ({periods_used(lc.mission, sectors)})" if sectors else ""
         lines.append(doi_line(doi, lc.mission) + used)
     lines += retrieval_credits(lc)
+    if SFF_LABEL in lc.author:
+        lines.append(SFF_CREDIT)
     lines.append(LIGHTKURVE_CREDIT)
     return lines
+
+
+def roll_correct(lc):
+    """``lc`` (a lightkurve K2 light curve) with its roll systematics removed by SFF.
+
+    Lightkurve's self-flat-fielding (Vanderburg & Johnson 2014) fits the flux
+    against the star's motion along its centroid arc, in windows between
+    thruster firings.  On K2-18 (C1) this turns a missed 32.9-day planet into
+    the only, strong candidate, and leaves K2-334 b (C16) as strong as
+    before; lightkurve's default windows did as well as any tried.  The
+    star's own slow variability is kept (``restore_trend``) for the raw plot;
+    ``clean.py`` flattens it.
+    """
+    return lc.remove_nans().to_corrector("sff").correct(restore_trend=True)
 
 
 def retrieval_credits(lc: LightCurve) -> list[str]:
@@ -899,23 +922,30 @@ class MastSource:
 
     # --- reading and stitching ---------------------------------------------------------
 
-    def _read(self, path) -> tuple[Any, str]:
+    def _read(self, path, mission: Mission) -> tuple[Any, str, bool]:
+        """The light curve in ``path``, its flux column, and whether it was roll-corrected."""
         lk = _lightkurve()
-        lc = lk.read(str(path), flux_column="pdcsap_flux", quality_bitmask="default")
+        lc, kind = lk.read(str(path), flux_column="pdcsap_flux", quality_bitmask="default"), "PDCSAP"
         if not np.isfinite(_values(lc.flux)).any():
             log.info("%s has no PDCSAP flux; using SAP", path)
-            return lk.read(str(path), flux_column="sap_flux", quality_bitmask="default"), "SAP"
-        return lc, "PDCSAP"
+            lc, kind = lk.read(str(path), flux_column="sap_flux", quality_bitmask="default"), "SAP"
+        if mission != "K2":
+            return lc, kind, False
+        try:
+            return roll_correct(lc), kind, True
+        except Exception:
+            log.exception("Roll correction of %s failed; using its %s flux uncorrected", path, kind)
+            return lc, kind, False
 
     def _stitch(self, products: Iterable[dict], mission: Mission) -> LightCurve:
         products = list(products)
         times, fluxes, errs = [], [], []
-        seqs, ids, authors, exptimes, kinds = set(), [], [], [], set()
+        seqs, ids, authors, exptimes, kinds, corrected = set(), [], [], [], set(), []
         sources = []
         doi_seqs: dict[str, set[int]] = {}
         for p in products:
             try:
-                lc, kind = self._read(p["path"])
+                lc, kind, sff = self._read(p["path"], mission)
             except Exception as exc:
                 log.exception("Could not read %s", p["path"])
                 raise SourceError(f"Could not read cached file {p['path']}: {exc}") from exc
@@ -932,6 +962,7 @@ class MastSource:
             fluxes.append(f[good] / med)
             errs.append(e[good] / med)
             kinds.add(kind)
+            corrected.append(sff)
             # Records cached before there were other sources came from the search.
             source = p.get("source") or "search"
             sources.append(_RECORD_SOURCE_TITLES.get(source, source))
@@ -949,10 +980,17 @@ class MastSource:
         order = np.argsort(t, kind="stable")
         uniq_authors = list(dict.fromkeys(a for a in authors if a))
         author = "+".join(uniq_authors)
+        notes = []
         if kinds == {"SAP"}:
-            author += " (SAP)"
+            notes.append("SAP")
         elif "SAP" in kinds:
-            author += " (PDCSAP; SAP for some)"
+            notes.append("PDCSAP; SAP for some")
+        if all(corrected):
+            notes.append(SFF_LABEL)
+        elif any(corrected):
+            notes.append(f"{SFF_LABEL} for some")
+        if notes:
+            author += f" ({', '.join(notes)})"
         return LightCurve(
             time=t[order],
             flux=np.concatenate(fluxes)[order],

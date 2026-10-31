@@ -3,7 +3,9 @@ per-sector normalisation and flattening.
 
 Quality-flagged cadences are dropped when the light curve is read (see
 ``pipeline/fetch.py``, which uses lightkurve's default quality bitmask), so
-here "bad" means non-finite or non-positive values.  The curve is split into
+here "bad" means non-finite or non-positive values.  K2's roll systematics,
+a sawtooth on the 6-hour thruster cycle this filter cannot follow, are also
+removed on reading (``fetch.roll_correct``).  The curve is split into
 segments at gaps longer than half the flattening window (sectors, quarters,
 TESS orbit gaps), and each segment is normalised and flattened on its own.
 

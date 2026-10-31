@@ -6,7 +6,7 @@
 
 Each later step registers its shot in SHOTS: a function that drives a
 demo-mode window into the state to capture and returns the widget to grab.
-The sky shots and the data-source shot use the live archive, MAST, CDS and
+The sky shots and the data-source and K2 shots use the live archive, MAST, CDS and
 STScI's archive files; when a service they need doesn't answer, the shot is
 skipped and its old file kept.
 """
@@ -46,8 +46,8 @@ def shot_validation(app):
     return dialog
 
 
-def shot_data_source(app):
-    """A real star analysed on MAST data, the gallery header naming where its files came from.
+def _live_gallery(app, stars: str, mission: str | None = None, max_products: int = 2):
+    """``stars`` analysed on live MAST data (on ``mission``, if given), on the Gallery tab.
 
     Uses the live archive, MAST and STScI's archive files, with an empty
     temporary cache so the files come from the first source rather than the
@@ -64,16 +64,19 @@ def shot_data_source(app):
     old = os.environ.get("TRANSITORY_CACHE_DIR")
     os.environ["TRANSITORY_CACHE_DIR"] = cache.name
     try:
-        window = make_main_window(MastSource(max_products=2))
-        type_stars(window, "pi Men", timeout_s=60.0)
-        if not window.panel.targets():
-            raise ShotUnavailable("pi Men could not be resolved (Exoplanet Archive or MAST down?)")
+        window = make_main_window(MastSource(max_products=max_products))
+        type_stars(window, stars, timeout_s=60.0)
+        if len(window.panel.targets()) < len(stars.split(",")):
+            raise ShotUnavailable(f"{stars} could not be resolved (Exoplanet Archive or MAST down?)")
+        if mission is not None:
+            window.panel.mission.setCurrentIndex(window.panel.mission.findData(mission))
         QTest.mouseClick(window.panel.submit_button, Qt.MouseButton.LeftButton)
         wait_for_results(window, timeout_s=300.0)
         analyses = window.gallery.analyses()
-        if not analyses or analyses[0].raw is None:
-            errors = "; ".join(analyses[0].errors) if analyses else "no result"
-            raise ShotUnavailable(f"pi Men's light curve could not be fetched: {errors}")
+        failed = [a for a in analyses if a.raw is None]
+        if not analyses or failed:
+            errors = "; ".join(e for a in failed for e in a.errors) if analyses else "no result"
+            raise ShotUnavailable(f"A light curve for {stars} could not be fetched: {errors}")
         window.tabs.setCurrentIndex([window.tabs.tabText(i) for i in range(window.tabs.count())]
                                     .index("Gallery"))
         app.processEvents()
@@ -84,6 +87,16 @@ def shot_data_source(app):
             os.environ.pop("TRANSITORY_CACHE_DIR", None)
         else:
             os.environ["TRANSITORY_CACHE_DIR"] = old
+
+
+def shot_data_source(app):
+    """A real star analysed on MAST data, the gallery header naming where its files came from."""
+    return _live_gallery(app, "pi Men")
+
+
+def shot_k2_roll(app):
+    """K2-18 b found in K2 Campaign 1 once the spacecraft's roll is corrected (live data)."""
+    return _live_gallery(app, "K2-18, K2-334", mission="K2", max_products=20)
 
 
 def shot_final(app):
@@ -106,6 +119,7 @@ SHOTS = {
     "final": ("08-final.png", shot_final),
     "sky-zoomed": ("09-sky-zoomed.png", shot_sky_zoomed),
     "data-source": ("10-data-source.png", shot_data_source),
+    "k2-roll": ("11-k2-roll-correction.png", shot_k2_roll),
 }
 
 

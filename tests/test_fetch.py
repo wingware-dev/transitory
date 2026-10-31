@@ -1,6 +1,7 @@
 """MastSource and the cache index, with lightkurve replaced by a fake (no network)."""
 
 import http.server
+import logging
 import threading
 import time as _time
 from pathlib import Path
@@ -18,6 +19,8 @@ from transitory.pipeline import cache as cache_mod
 from transitory.pipeline import fetch, run
 from transitory.pipeline.archive_files import MIRRORS, SourceUnavailable
 from transitory.pipeline.cache import CacheIndex, cache_key, load_json, save_json
+from transitory.pipeline.clean import clean_light_curve
+from transitory.pipeline.search import search_transits
 from transitory.pipeline.fetch import DOIS, MastSource, mission_credits, select_products
 from transitory.sources import LightCurveSource, SourceError
 
@@ -32,11 +35,35 @@ class FakeQuantity:
 
 
 class FakeLC:
-    def __init__(self, time, flux, flux_err, filename):
+    def __init__(self, time, flux, flux_err, filename, lk=None):
         self.time = FakeQuantity(time)
         self.flux = FakeQuantity(flux)
         self.flux_err = FakeQuantity(flux_err)
         self.meta = {"FILENAME": filename}
+        self.lk = lk
+
+    def remove_nans(self):
+        return self
+
+    def to_corrector(self, method):
+        return FakeCorrector(self, method)
+
+
+class FakeCorrector:
+    """Stands in for lightkurve's SFFCorrector: records the call, halves the flux's spread."""
+
+    def __init__(self, lc, method):
+        self.lc, self.method = lc, method
+
+    def correct(self, **kw):
+        lk = self.lc.lk
+        lk.corrections.append((Path(self.lc.meta["FILENAME"]).name, self.method, kw))
+        if lk.correct_errors:
+            raise lk.correct_errors.pop(0)
+        f = self.lc.flux.value
+        med = np.nanmedian(f)
+        return FakeLC(self.lc.time.value, med + (f - med) / 2, self.lc.flux_err.value,
+                      self.lc.meta["FILENAME"], lk)
 
 
 def row(seq, author="SPOC", exptime=120, target="261136679", distance=0.0, mission="TESS"):
@@ -73,6 +100,8 @@ class FakeLightkurve:
         self.searches = []
         self.downloads = []
         self.reads = []
+        self.corrections = []  # (file name, method, correct() kwargs)
+        self.correct_errors = []  # raised one per correction
         self.data = {}  # productFilename -> (time, pdcsap, sap)
         self.search_error = None
         self.search_errors = []  # raised one per search, before search_error
@@ -118,7 +147,7 @@ class FakeLightkurve:
         self.reads.append((Path(path).name, flux_column, quality_bitmask))
         time, pdc, sap = self.data[Path(path).read_text()]
         flux = pdc if flux_column == "pdcsap_flux" else sap
-        return FakeLC(time, flux, np.full_like(flux, 1e-4 * np.nanmedian(sap)), path)
+        return FakeLC(time, flux, np.full_like(flux, 1e-4 * np.nanmedian(sap)), path, self)
 
 
 @pytest.fixture
@@ -289,6 +318,64 @@ def test_k2_host_fetches_k2_campaigns(fake_lk):
     credits = mission_credits(lc)
     assert credits[0] == fetch.MAST_CREDITS["Kepler"]
     assert credits[1] == "K2 Light Curves (all): https://doi.org/10.17909/T9WS3R (campaigns 5, 10)"
+    assert fetch.SFF_CREDIT in credits
+
+
+def test_k2_files_are_roll_corrected_on_reading(fake_lk):
+    fake_lk.rows["K2"] = [k2_row("05")]
+    fake_lk.add_data(k2_row("05")["productFilename"], np.arange(0, 70, 0.02), 3e4)
+    lc = MastSource().fetch(StarTarget("K2-334", mission_hint="K2"))
+    assert fake_lk.corrections == [(k2_row("05")["productFilename"], "sff", {"restore_trend": True})]
+    assert lc.author == f"K2 ({fetch.SFF_LABEL})"
+    # The corrected flux is the one used: the fake halves the spread.
+    raw = fake_lk.data[k2_row("05")["productFilename"]][1]
+    assert np.std(lc.flux) == pytest.approx(np.std(raw / np.median(raw)) / 2, rel=1e-6)
+
+
+def test_tess_and_kepler_files_are_not_roll_corrected(fake_lk):
+    tess_setup(fake_lk)
+    lc = MastSource().fetch(StarTarget("Pi Mensae", tic=261136679, mission_hint="TESS"))
+    assert fake_lk.corrections == []
+    assert fetch.SFF_LABEL not in lc.author
+    assert fetch.SFF_CREDIT not in mission_credits(lc)
+
+
+def test_a_failed_roll_correction_is_logged_and_the_flux_kept(fake_lk, caplog):
+    rows = [k2_row("10a"), k2_row("10b")]
+    fake_lk.rows["K2"] = rows
+    for n, r in enumerate(rows):
+        fake_lk.add_data(r["productFilename"], np.arange(n * 40.0, n * 40.0 + 35, 0.02), 3e4)
+    fake_lk.correct_errors = [ValueError("no centroids")]
+    with caplog.at_level(logging.ERROR, logger=fetch.__name__):
+        lc = MastSource().fetch(StarTarget("K2-334", mission_hint="K2"))
+    assert "Roll correction of" in caplog.text and "no centroids" in caplog.text
+    assert lc.author == f"K2 ({fetch.SFF_LABEL} for some)"
+    assert fetch.SFF_CREDIT in mission_credits(lc)
+
+
+def test_roll_correction_recovers_a_planet_under_k2_roll_systematics():
+    """Made-up K2 data: flux that follows the star's 6-hourly drift along its centroid arc."""
+    import lightkurve
+    rng = np.random.default_rng(1)
+    t = np.arange(0.0, 80.0, 30.0 / 1440.0)
+    arc = (t / 0.25) % 1.0 + 0.05 * np.sin(2 * np.pi * t / 20.0)  # resets at each thruster firing
+    col = 50 + 0.6 * arc + rng.normal(0, 0.01, len(t))
+    row = 40 + 0.25 * arc + 0.1 * arc ** 2 + rng.normal(0, 0.01, len(t))
+    roll = 1 + 0.008 * (arc - 0.5) ** 2 - 0.003 * arc
+    in_transit = np.abs((t - 12.3 + 16.5) % 33.0 - 16.5) < 0.06  # 3 ppt, 33 days, ~3 hours
+    flux = (roll * (1 - 0.003 * in_transit) * (1 + 0.002 * np.sin(2 * np.pi * t / 9.0))
+            + rng.normal(0, 2e-4, len(t)))
+    err = np.full(len(t), 2e-4)
+
+    def periods(f):
+        lc = LightCurve(time=t, flux=f / np.median(f), flux_err=err, mission="K2")
+        return [p.best.period for p in search_transits(clean_light_curve(lc)) if p.best is not None]
+
+    assert not any(abs(p - 33.0) < 0.3 for p in periods(flux))
+    corrected = fetch.roll_correct(lightkurve.KeplerLightCurve(
+        time=t, flux=flux, flux_err=err, centroid_col=col, centroid_row=row))
+    found = periods(np.asarray(corrected.flux.value))
+    assert found and found[0] == pytest.approx(33.0, abs=0.1)
 
 
 def test_k2_search_is_not_blocked_by_an_old_kepler_no_data_entry(fake_lk):
