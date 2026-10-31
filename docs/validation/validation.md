@@ -1,6 +1,6 @@
 # Known-planet validation
 
-Run 2026-10-31 01:15 UTC (34 min) on **MAST** light curves, using all sectors / quarters.
+Run 2026-10-31 01:15 UTC (34 min) on **MAST** light curves, using all sectors / quarters / campaigns.
 
 Published values: NASA Exoplanet Archive, retrieved 2026-10-29 (pscomppars for planets; pscomppars, the cumulative KOI table and the TOI table to check that the null stars have no published signal).
 

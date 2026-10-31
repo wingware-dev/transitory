@@ -55,9 +55,16 @@ def _pct(found, published) -> str:
     return f"{100.0 * (found - published) / published:+.1f}%"
 
 
-def _cap(run: ValidationRun) -> str:
-    return "all sectors / quarters" if run.max_products is None else \
-        f"at most {run.max_products} sectors / quarters per star"
+def _cap(max_products: int | None, missions: set[str]) -> str:
+    """The light curves used, as "all sectors / quarters" (and campaigns, when any star is on K2)."""
+    units = "sectors / quarters / campaigns" if "K2" in missions else "sectors / quarters"
+    return f"all {units}" if max_products is None else f"at most {max_products} {units} per star"
+
+
+def _run_cap(run: ValidationRun) -> str:
+    missions = {r.analysis.raw.mission for r in run.results
+                if r.analysis is not None and r.analysis.raw is not None}
+    return _cap(run.max_products, missions)
 
 
 def _uses_archive(run: ValidationRun) -> bool:
@@ -122,6 +129,13 @@ def _period_cell(v: dict) -> str:
 def summary_figure(run: ValidationRun) -> Figure:
     rows = [_planet_values(r, c) for r in run.results for c in r.comparisons
             if r.vt.role == "planet-host" and c.found_index is not None]
+    return _summary_figure(rows, run.tally(), f"{run.source_name}, {_run_cap(run)}",
+                           run.retrieved if _uses_archive(run) else None)
+
+
+def _summary_figure(rows: list[dict], tally: dict[str, int], caption: str, retrieved: str | None) -> Figure:
+    """Found vs. published period, Rp/Rs and T14 of the recovered planets (``_planet_values`` rows);
+    ``retrieved``: the Exoplanet Archive's retrieval date, None when it wasn't used."""
     fig = Figure(figsize=(12, 4.6))
     axes = fig.subplots(1, 3)
     panels = [("Period", "period_pub", "period", "d", True),
@@ -157,13 +171,12 @@ def summary_figure(run: ValidationRun) -> Figure:
         ax.set_title(title)
         ax.set_xlabel(f"published{f' ({unit})' if unit else ''}")
         ax.grid(alpha=0.3)
-    tally = run.tally()
     fig.suptitle(f"Known-planet validation: {tally['found'] + tally['aliases']} of {tally['published']} "
                  f"recovered, {tally['missed']} missed, {tally['spurious_null'] + tally['spurious_host']} "
                  f"spurious, {tally['duo_null'] + tally['duo_host']} duo-transit "
-                 f"({run.source_name}, {_cap(run)})", fontsize=11, x=0.01, ha="left")
-    if _uses_archive(run):
-        fig.text(0.01, 0.01, f"Published values: NASA Exoplanet Archive (retrieved {run.retrieved}). "
+                 f"({caption})", fontsize=11, x=0.01, ha="left")
+    if retrieved is not None:
+        fig.text(0.01, 0.01, f"Published values: NASA Exoplanet Archive (retrieved {retrieved}). "
                  + ARCHIVE_CREDIT, fontsize=6, color="#555", wrap=True)
     fig.subplots_adjust(left=0.06, right=0.99, top=0.84, bottom=0.2, wspace=0.3)
     return fig
@@ -342,7 +355,7 @@ def report_markdown(run: ValidationRun, figures: dict[tuple[str, int], str]) -> 
         sources = sorted({r.published.source for r in run.results if r.published.source})
         published = f"Published values: {', '.join(sources) or 'none'}."
     out += [
-        f"Run {when} ({minutes:.0f} min) on **{run.source_name}** light curves, using {_cap(run)}.",
+        f"Run {when} ({minutes:.0f} min) on **{run.source_name}** light curves, using {_run_cap(run)}.",
         "",
         published,
         "",

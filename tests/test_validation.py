@@ -149,6 +149,26 @@ def test_report_data_line_names_the_mission_once(mission, author, expected):
     assert line == f"{expected}, 160 points, 80 d baseline"
 
 
+def test_report_names_campaigns_when_a_star_is_on_k2():
+    from datetime import UTC, datetime
+
+    from transitory.validation.validate import TargetResult, ValidationRun
+
+    def run(*missions, max_products=None):
+        vt = ValidationTarget(target=StarTarget(name="Star"), role="planet-host")
+        results = [TargetResult(vt=vt, analysis=_analysis([], mission), published=PublishedSet())
+                   for mission in missions]
+        return ValidationRun(results=results, source_name="MAST", max_products=max_products,
+                             started=datetime.now(UTC))
+
+    assert report._run_cap(run("TESS", "Kepler")) == "all sectors / quarters"
+    assert report._run_cap(run("TESS", "K2")) == "all sectors / quarters / campaigns"
+    assert report._run_cap(run("K2", max_products=2)) == "at most 2 sectors / quarters / campaigns per star"
+    k2 = run("Kepler", "K2")
+    assert "light curves, using all sectors / quarters / campaigns." in report.report_markdown(k2, {})
+    assert "(MAST, all sectors / quarters / campaigns)" in report.summary_figure(k2)._suptitle.get_text()
+
+
 def test_findings_summarise_patterns(tmp_path):
     from datetime import UTC, datetime
 
