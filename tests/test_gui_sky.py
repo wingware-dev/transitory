@@ -118,7 +118,7 @@ def test_offline_catalog_says_so(qtbot, tmp_path):
     with qtbot.waitSignal(view.catalogLoaded, timeout=10000):
         view.load_hosts()
     text = view.status_text
-    assert text.startswith("Offline: 9 bundled targets (archive data of ")
+    assert text.startswith("Offline: 11 bundled targets (archive data of ")
     assert "connection refused" in text
     assert star_named(view, "KIC 8006161").kind == "null"
     view.close()
